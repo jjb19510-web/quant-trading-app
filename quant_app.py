@@ -5,8 +5,8 @@ import plotly.graph_objects as go
 
 st.set_page_config(page_title="Quant Trading Analyzer", page_icon="📈", layout="wide")
 
-st.title("📈 퀀트 트레이딩 분석기 (Quant Trading Analyzer)")
-st.markdown("RSI 및 이동평균 전략을 활용한 포트폴리오 분석 도구")
+st.title("📈 Quant Trading Analyzer")
+st.markdown("Portfolio Analysis Tool using RSI and Moving Average Strategies")
 st.divider()
 
 with st.sidebar:
