@@ -15,7 +15,20 @@ with st.sidebar:
     start_date = st.date_input("Start date", value=pd.to_datetime("2023-01-01"))
     end_date = st.date_input("End date", value=pd.to_datetime("2025-01-01"))
     strategy = st.selectbox("Strategy", ["RSI", "Moving Average", "Combined"])
-    rsi_threshold = st.slider("RSI Threshold", 10, 70, 40)
+
+    # 전략에 따라 다른 슬라이더 표시
+    if strategy == "RSI":
+        rsi_threshold = st.slider("RSI Threshold", 10, 70, 40)
+        ma_short, ma_long = 20, 60
+    elif strategy == "Moving Average":
+        ma_short = st.slider("Short MA", 5, 60, 20)
+        ma_long = st.slider("Long MA", 20, 120, 60)
+        rsi_threshold = 40
+    else:  # Combined
+        rsi_threshold = st.slider("RSI Threshold", 10, 70, 40)
+        ma_short = st.slider("Short MA", 5, 60, 20)
+        ma_long = st.slider("Long MA", 20, 120, 60)
+
     analyze = st.button("🔍 Analyze", use_container_width=True)
 
 if analyze:
@@ -34,15 +47,15 @@ if analyze:
         return 100 - (100 / (1 + rs))
 
     rsi = df.apply(calculate_rsi)
-    ma20 = df.rolling(20).mean()
-    ma60 = df.rolling(60).mean()
+    ma_s = df.rolling(ma_short).mean()
+    ma_l = df.rolling(ma_long).mean()
 
     if strategy == "RSI":
         signal = (rsi < rsi_threshold).astype(int)
     elif strategy == "Moving Average":
-        signal = (ma20 > ma60).astype(int)
+        signal = (ma_s > ma_l).astype(int)
     else:
-        signal = ((rsi < rsi_threshold) & (ma20 > ma60)).astype(int)
+        signal = ((rsi < rsi_threshold) & (ma_s > ma_l)).astype(int)
 
     signal_count = signal.sum(axis=1).replace(0, 1)
     returns = df.pct_change()
