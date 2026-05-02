@@ -4,14 +4,15 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import datetime as dt
 
 # ── 페이지 설정 ──
 st.set_page_config(page_title="Quantfolio — Backtest Lab", page_icon="📈", layout="wide")
 
 # ── 색상 테마 ──
-ACCENT = "#A78BFA"
+ACCENT = "#3b82f6"    # 파랑 (전략)
+RED = "#ef4444"       # 빨강 (균등)
 GREEN = "#4ade80"
-RED = "#f87171"
 DIM = "#6b7385"
 TEXT = "#e6e9ef"
 SURFACE_1 = "#11151c"
@@ -54,9 +55,7 @@ st.markdown(f"""
 
   .pos {{ color: {GREEN}; }}
   .neg {{ color: {RED}; }}
-  .mono {{ font-family: 'JetBrains Mono', monospace; }}
   div[data-testid="stDataFrame"] {{ background: {SURFACE_1}; border-radius: 8px; }}
-  .js-plotly-plot .plotly .modebar {{ display: none !important; }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -105,7 +104,7 @@ with st.sidebar:
     analyze = st.button("🔍 분석 시작", use_container_width=True)
 
 # ── 전략 설명 ──
-with st.expander("📖 전략 설명 보기", expanded=False):
+with st.expander("📖 전략 & 용어 설명 보기", expanded=False):
     if strategy == "RSI 전략 (RSI)":
         st.info("""
         **RSI 전략 (Relative Strength Index, 상대강도지수)**
@@ -170,6 +169,37 @@ if analyze:
         def calculate_cagr(portfolio, days):
             return ((portfolio.iloc[-1] / portfolio.iloc[0]) ** (365 / days) - 1) * 100
 
+        def style_fig(fig, height=400):
+            fig.update_layout(
+                height=height,
+                margin=dict(l=8, r=20, t=8, b=28),
+                paper_bgcolor=SURFACE_1,
+                plot_bgcolor=SURFACE_1,
+                font=dict(family="Inter, sans-serif", color=TEXT, size=11),
+                showlegend=True,
+                hovermode="x unified",
+                legend=dict(bgcolor=SURFACE_2, bordercolor=LINE, font=dict(size=10)),
+                # 줌인/아웃 버튼 추가
+                xaxis=dict(
+                    rangeslider=dict(visible=False),
+                    rangeselector=dict(
+                        buttons=[
+                            dict(count=1, label="1M", step="month", stepmode="backward"),
+                            dict(count=3, label="3M", step="month", stepmode="backward"),
+                            dict(count=6, label="6M", step="month", stepmode="backward"),
+                            dict(count=1, label="1Y", step="year", stepmode="backward"),
+                            dict(step="all", label="ALL")
+                        ],
+                        bgcolor=SURFACE_2,
+                        activecolor=ACCENT,
+                        font=dict(color=TEXT, size=10)
+                    )
+                )
+            )
+            fig.update_xaxes(gridcolor="#1c222e", linecolor=LINE, zeroline=False, tickfont=dict(color=DIM))
+            fig.update_yaxes(gridcolor="#1c222e", linecolor=LINE, zeroline=False, tickfont=dict(color=DIM))
+            return fig
+
         rsi = df.apply(calculate_rsi)
         ma_s = df.rolling(ma_short).mean()
         ma_l = df.rolling(ma_long).mean()
@@ -193,7 +223,6 @@ if analyze:
         portfolio_equal = (1 + equal_return).cumprod()
 
         days = (df.index[-1] - df.index[0]).days
-
         equal_pct = (portfolio_equal.iloc[-1] - 1) * 100
         strategy_pct = (portfolio_strategy.iloc[-1] - 1) * 100
         diff_pct = strategy_pct - equal_pct
@@ -213,7 +242,6 @@ if analyze:
                 unsafe_allow_html=True
             )
         with right:
-            import datetime as dt
             st.markdown(
                 f"<div class='qf-meta' style='text-align:right; padding-top:18px;'>"
                 f"🟢 Run · {dt.datetime.now():%Y-%m-%d %H:%M}</div>",
@@ -253,37 +281,22 @@ if analyze:
         st.markdown(f"<div class='qf-kpi-grid'>{kpis}</div>", unsafe_allow_html=True)
 
         # ── 전략 지표 그래프 ──
-        def style_fig(fig, height=320):
-            fig.update_layout(
-                height=height,
-                margin=dict(l=8, r=56, t=8, b=28),
-                paper_bgcolor=SURFACE_1,
-                plot_bgcolor=SURFACE_1,
-                font=dict(family="Inter, sans-serif", color=TEXT, size=11),
-                showlegend=True,
-                hovermode="x unified",
-                legend=dict(bgcolor=SURFACE_2, bordercolor=LINE, font=dict(size=10))
-            )
-            fig.update_xaxes(gridcolor="#1c222e", linecolor=LINE, zeroline=False, tickfont=dict(color=DIM))
-            fig.update_yaxes(gridcolor="#1c222e", linecolor=LINE, zeroline=False, tickfont=dict(color=DIM))
-            return fig
-
         ticker_for_chart = tickers[0]
-        st.markdown(f"<div class='qf-card'><h3>📈 전략 지표 그래프</h3><div class='qf-sub'>{ticker_for_chart} 기준</div></div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='qf-card'><h3>📈 전략 지표 그래프</h3><div class='qf-sub'>{ticker_for_chart} 기준 · 드래그로 확대 가능</div></div>", unsafe_allow_html=True)
 
         if strategy == "이동평균선 전략 (Moving Average)":
             fig1 = go.Figure()
             fig1.add_trace(go.Scatter(x=df.index, y=df[ticker_for_chart], name="주가", line=dict(color=TEXT, width=1)))
             fig1.add_trace(go.Scatter(x=ma_s.index, y=ma_s[ticker_for_chart], name=f"MA{ma_short}", line=dict(color="orange", width=1.5)))
             fig1.add_trace(go.Scatter(x=ma_l.index, y=ma_l[ticker_for_chart], name=f"MA{ma_long}", line=dict(color=ACCENT, width=1.5)))
-            st.plotly_chart(style_fig(fig1, 320), use_container_width=True)
+            st.plotly_chart(style_fig(fig1, 400), use_container_width=True)
 
         elif strategy == "RSI 전략 (RSI)":
             fig1 = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.7, 0.3])
             fig1.add_trace(go.Scatter(x=df.index, y=df[ticker_for_chart], name="주가", line=dict(color=TEXT, width=1)), row=1, col=1)
             fig1.add_trace(go.Scatter(x=rsi.index, y=rsi[ticker_for_chart], name="RSI", line=dict(color=ACCENT, width=1.5)), row=2, col=1)
             fig1.add_hline(y=rsi_threshold, line_dash="dash", line_color=RED, row=2, col=1)
-            st.plotly_chart(style_fig(fig1, 400), use_container_width=True)
+            st.plotly_chart(style_fig(fig1, 500), use_container_width=True)
 
         elif strategy == "볼린저 밴드 전략 (Bollinger Bands)":
             fig1 = go.Figure()
@@ -291,7 +304,7 @@ if analyze:
             fig1.add_trace(go.Scatter(x=bb_upper.index, y=bb_upper[ticker_for_chart], name="상단밴드", line=dict(color=RED, width=1, dash="dash")))
             fig1.add_trace(go.Scatter(x=bb_mid.index, y=bb_mid[ticker_for_chart], name="중간선", line=dict(color="yellow", width=1)))
             fig1.add_trace(go.Scatter(x=bb_lower.index, y=bb_lower[ticker_for_chart], name="하단밴드", line=dict(color=GREEN, width=1, dash="dash"), fill="tonexty", fillcolor="rgba(74,222,128,0.05)"))
-            st.plotly_chart(style_fig(fig1, 320), use_container_width=True)
+            st.plotly_chart(style_fig(fig1, 400), use_container_width=True)
 
         elif strategy == "복합 전략 (Combined)":
             fig1 = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.7, 0.3])
@@ -300,59 +313,83 @@ if analyze:
             fig1.add_trace(go.Scatter(x=ma_l.index, y=ma_l[ticker_for_chart], name=f"MA{ma_long}", line=dict(color=ACCENT, width=1.5)), row=1, col=1)
             fig1.add_trace(go.Scatter(x=rsi.index, y=rsi[ticker_for_chart], name="RSI", line=dict(color=ACCENT, width=1.5)), row=2, col=1)
             fig1.add_hline(y=rsi_threshold, line_dash="dash", line_color=RED, row=2, col=1)
-            st.plotly_chart(style_fig(fig1, 400), use_container_width=True)
+            st.plotly_chart(style_fig(fig1, 500), use_container_width=True)
 
         # ── 수익률 비교 그래프 ──
-        st.markdown(f"<div class='qf-card'><h3>💰 수익률 비교</h3><div class='qf-sub'>누적 수익률 (%) · $100 기준</div></div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='qf-card'><h3>💰 수익률 비교</h3><div class='qf-sub'>누적 수익률 (%) · 드래그로 확대 가능</div></div>", unsafe_allow_html=True)
         fig2 = go.Figure()
         fig2.add_trace(go.Scatter(
             x=portfolio_equal.index,
             y=((portfolio_equal - 1) * 100),
-            name="Equal Portfolio",
-            line=dict(color=DIM, width=1.5, dash="dash"),
+            name="균등 포트폴리오",
+            line=dict(color=RED, width=2),
             hovertemplate="%{x}<br>수익률: %{y:.2f}%<extra></extra>"
         ))
         fig2.add_trace(go.Scatter(
             x=portfolio_strategy.index,
             y=((portfolio_strategy - 1) * 100),
-            name=strategy,
-            line=dict(color=ACCENT, width=2.2),
+            name="전략 포트폴리오",
+            line=dict(color=ACCENT, width=2),
             hovertemplate="%{x}<br>수익률: %{y:.2f}%<extra></extra>"
         ))
         fig2.add_hline(y=0, line=dict(color=DIM, width=1, dash="dot"), opacity=0.4)
-        st.plotly_chart(style_fig(fig2, 320), use_container_width=True)
+        st.plotly_chart(style_fig(fig2, 400), use_container_width=True)
 
-        # ── 낙폭(Drawdown) 차트 ──
-        st.markdown(f"<div class='qf-card'><h3>📉 낙폭 (Drawdown)</h3><div class='qf-sub'>고점 대비 하락폭</div></div>", unsafe_allow_html=True)
-        peak = portfolio_strategy.cummax()
-        drawdown = (portfolio_strategy - peak) / peak * 100
-        fig_dd = go.Figure()
-        fig_dd.add_trace(go.Scatter(
-            x=drawdown.index, y=drawdown.values,
-            fill="tozeroy", line=dict(color=RED, width=1.5),
-            fillcolor="rgba(248,113,113,0.18)", name="Drawdown"
-        ))
-        st.plotly_chart(style_fig(fig_dd, 180), use_container_width=True)
+        # ── 낙폭 + 히트맵 나란히 ──
+        col1, col2 = st.columns([1, 1])
 
-        # ── 월별 수익률 히트맵 ──
-        st.markdown(f"<div class='qf-card'><h3>📅 월별 수익률 히트맵</h3><div class='qf-sub'>전략 월별 수익률 (%)</div></div>", unsafe_allow_html=True)
-        monthly = weighted_return.resample("ME").apply(lambda x: (1 + x).prod() - 1) * 100
-        monthly_df = monthly.to_frame("return")
-        monthly_df["year"] = monthly_df.index.year
-        monthly_df["month"] = monthly_df.index.month
-        pivot = monthly_df.pivot(index="year", columns="month", values="return")
+        with col1:
+            st.markdown(f"<div class='qf-card'><h3>📉 낙폭 (Drawdown)</h3><div class='qf-sub'>고점 대비 하락폭 · 전략 기준</div></div>", unsafe_allow_html=True)
+            peak = portfolio_strategy.cummax()
+            drawdown = (portfolio_strategy - peak) / peak * 100
+            fig_dd = go.Figure()
+            fig_dd.add_trace(go.Scatter(
+                x=drawdown.index, y=drawdown.values,
+                fill="tozeroy", line=dict(color=RED, width=1.5),
+                fillcolor="rgba(239,68,68,0.18)", name="Drawdown",
+                hovertemplate="%{x}<br>낙폭: %{y:.2f}%<extra></extra>"
+            ))
+            fig_dd.update_layout(
+                height=300,
+                margin=dict(l=8, r=20, t=8, b=28),
+                paper_bgcolor=SURFACE_1,
+                plot_bgcolor=SURFACE_1,
+                font=dict(family="Inter, sans-serif", color=TEXT, size=11),
+                showlegend=False,
+                hovermode="x unified"
+            )
+            fig_dd.update_xaxes(gridcolor="#1c222e", linecolor=LINE, zeroline=False, tickfont=dict(color=DIM))
+            fig_dd.update_yaxes(gridcolor="#1c222e", linecolor=LINE, zeroline=False, tickfont=dict(color=DIM))
+            st.plotly_chart(fig_dd, use_container_width=True)
 
-        fig_h = go.Figure(go.Heatmap(
-            z=pivot.values,
-            x=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
-            y=pivot.index.astype(str),
-            colorscale=[[0, RED], [0.5, SURFACE_3], [1, GREEN]],
-            zmid=0,
-            text=[[f"{v:+.1f}" if not pd.isna(v) else "" for v in row] for row in pivot.values],
-            texttemplate="%{text}",
-            textfont=dict(family="JetBrains Mono", size=10, color=TEXT),
-            colorbar=dict(thickness=8, len=0.6, tickfont=dict(color=DIM, size=9))
-        ))
-        st.plotly_chart(style_fig(fig_h, 200), use_container_width=True)
+        with col2:
+            st.markdown(f"<div class='qf-card'><h3>📅 월별 수익률 히트맵</h3><div class='qf-sub'>전략 월별 수익률 (%) · 초록=수익 빨강=손실</div></div>", unsafe_allow_html=True)
+            monthly = weighted_return.resample("ME").apply(lambda x: (1 + x).prod() - 1) * 100
+            monthly_df = monthly.to_frame("return")
+            monthly_df["year"] = monthly_df.index.year
+            monthly_df["month"] = monthly_df.index.month
+            pivot = monthly_df.pivot(index="year", columns="month", values="return")
+
+            fig_h = go.Figure(go.Heatmap(
+                z=pivot.values,
+                x=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
+                y=pivot.index.astype(str),
+                colorscale=[[0, RED], [0.5, SURFACE_3], [1, GREEN]],
+                zmid=0,
+                text=[[f"{v:+.1f}" if not pd.isna(v) else "" for v in row] for row in pivot.values],
+                texttemplate="%{text}",
+                textfont=dict(family="JetBrains Mono", size=10, color=TEXT),
+                colorbar=dict(thickness=8, len=0.8, tickfont=dict(color=DIM, size=9))
+            ))
+            fig_h.update_layout(
+                height=300,
+                margin=dict(l=8, r=40, t=8, b=28),
+                paper_bgcolor=SURFACE_1,
+                plot_bgcolor=SURFACE_1,
+                font=dict(family="Inter, sans-serif", color=TEXT, size=11),
+            )
+            fig_h.update_xaxes(tickfont=dict(color=DIM))
+            fig_h.update_yaxes(tickfont=dict(color=DIM))
+            st.plotly_chart(fig_h, use_container_width=True)
 
         st.caption(f"Data: yfinance · {df.index[0].date()} → {df.index[-1].date()} · {len(df)} trading days")
