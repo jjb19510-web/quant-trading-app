@@ -2,6 +2,7 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 st.set_page_config(page_title="Quant Trading Analyzer", page_icon="📈", layout="wide")
 
@@ -45,7 +46,7 @@ with st.sidebar:
         bb_period = st.slider("볼린저 밴드 기간 (Period)", 5, 60, 20)
         rsi_threshold = 40
         ma_short, ma_long = 20, 60
-    else:  # Combined
+    else:
         rsi_threshold = st.slider("RSI 기준값 (RSI Threshold)", 10, 70, 40)
         ma_short = st.slider("단기 이동평균 (Short MA)", 5, 60, 20)
         ma_long = st.slider("장기 이동평균 (Long MA)", 20, 120, 60)
@@ -87,7 +88,7 @@ elif strategy == "볼린저 밴드 전략 (Bollinger Bands)":
     
     3개의 선으로 구성돼요:
     - **중간선** → 20일 이동평균선
-    - **상단 밴드** → 중간선 + (표준편차 × 2) 
+    - **상단 밴드** → 중간선 + (표준편차 × 2)
     - **하단 밴드** → 중간선 - (표준편차 × 2)
     
     📌 전략 원리:
@@ -144,7 +145,7 @@ if analyze:
             std = data.rolling(period).std()
             upper = ma + (std * 2)
             lower = ma - (std * 2)
-            return upper, lower
+            return upper, lower, ma
 
         def calculate_mdd(portfolio):
             peak = portfolio.cummax()
@@ -157,7 +158,7 @@ if analyze:
         rsi = df.apply(calculate_rsi)
         ma_s = df.rolling(ma_short).mean()
         ma_l = df.rolling(ma_long).mean()
-        bb_upper, bb_lower = calculate_bb(df, bb_period)
+        bb_upper, bb_lower, bb_mid = calculate_bb(df, bb_period)
 
         if strategy == "RSI 전략 (RSI)":
             signal = (rsi < rsi_threshold).astype(int)
@@ -204,25 +205,125 @@ if analyze:
 
         st.divider()
 
-        fig = go.Figure()
+        # 전략별 지표 그래프
+        st.subheader("📈 전략 지표 그래프")
+        ticker_for_chart = tickers[0]
 
-        fig.add_trace(go.Scatter(
+        if strategy == "이동평균선 전략 (Moving Average)":
+            fig1 = go.Figure()
+            fig1.add_trace(go.Scatter(
+                x=df.index, y=df[ticker_for_chart],
+                name="주가", line=dict(color="white", width=1)
+            ))
+            fig1.add_trace(go.Scatter(
+                x=ma_s.index, y=ma_s[ticker_for_chart],
+                name=f"MA{ma_short}", line=dict(color="orange", width=1.5)
+            ))
+            fig1.add_trace(go.Scatter(
+                x=ma_l.index, y=ma_l[ticker_for_chart],
+                name=f"MA{ma_long}", line=dict(color="royalblue", width=1.5)
+            ))
+            fig1.update_layout(
+                title=f"{ticker_for_chart} - 이동평균선",
+                template="plotly_dark", height=400,
+                hovermode="x unified"
+            )
+            st.plotly_chart(fig1, use_container_width=True)
+
+        elif strategy == "RSI 전략 (RSI)":
+            fig1 = make_subplots(rows=2, cols=1, shared_xaxes=True,
+                                  row_heights=[0.7, 0.3])
+            fig1.add_trace(go.Scatter(
+                x=df.index, y=df[ticker_for_chart],
+                name="주가", line=dict(color="white", width=1)
+            ), row=1, col=1)
+            fig1.add_trace(go.Scatter(
+                x=rsi.index, y=rsi[ticker_for_chart],
+                name="RSI", line=dict(color="orange", width=1.5)
+            ), row=2, col=1)
+            fig1.add_hline(y=rsi_threshold, line_dash="dash",
+                           line_color="red", row=2, col=1)
+            fig1.update_layout(
+                title=f"{ticker_for_chart} - RSI",
+                template="plotly_dark", height=500,
+                hovermode="x unified"
+            )
+            st.plotly_chart(fig1, use_container_width=True)
+
+        elif strategy == "볼린저 밴드 전략 (Bollinger Bands)":
+            fig1 = go.Figure()
+            fig1.add_trace(go.Scatter(
+                x=df.index, y=df[ticker_for_chart],
+                name="주가", line=dict(color="white", width=1)
+            ))
+            fig1.add_trace(go.Scatter(
+                x=bb_upper.index, y=bb_upper[ticker_for_chart],
+                name="상단 밴드", line=dict(color="red", width=1, dash="dash")
+            ))
+            fig1.add_trace(go.Scatter(
+                x=bb_mid.index, y=bb_mid[ticker_for_chart],
+                name="중간선", line=dict(color="yellow", width=1)
+            ))
+            fig1.add_trace(go.Scatter(
+                x=bb_lower.index, y=bb_lower[ticker_for_chart],
+                name="하단 밴드", line=dict(color="green", width=1, dash="dash"),
+                fill="tonexty", fillcolor="rgba(0,255,0,0.05)"
+            ))
+            fig1.update_layout(
+                title=f"{ticker_for_chart} - 볼린저 밴드",
+                template="plotly_dark", height=400,
+                hovermode="x unified"
+            )
+            st.plotly_chart(fig1, use_container_width=True)
+
+        elif strategy == "복합 전략 (Combined)":
+            fig1 = make_subplots(rows=2, cols=1, shared_xaxes=True,
+                                  row_heights=[0.7, 0.3])
+            fig1.add_trace(go.Scatter(
+                x=df.index, y=df[ticker_for_chart],
+                name="주가", line=dict(color="white", width=1)
+            ), row=1, col=1)
+            fig1.add_trace(go.Scatter(
+                x=ma_s.index, y=ma_s[ticker_for_chart],
+                name=f"MA{ma_short}", line=dict(color="orange", width=1.5)
+            ), row=1, col=1)
+            fig1.add_trace(go.Scatter(
+                x=ma_l.index, y=ma_l[ticker_for_chart],
+                name=f"MA{ma_long}", line=dict(color="royalblue", width=1.5)
+            ), row=1, col=1)
+            fig1.add_trace(go.Scatter(
+                x=rsi.index, y=rsi[ticker_for_chart],
+                name="RSI", line=dict(color="purple", width=1.5)
+            ), row=2, col=1)
+            fig1.add_hline(y=rsi_threshold, line_dash="dash",
+                           line_color="red", row=2, col=1)
+            fig1.update_layout(
+                title=f"{ticker_for_chart} - 복합 전략",
+                template="plotly_dark", height=500,
+                hovermode="x unified"
+            )
+            st.plotly_chart(fig1, use_container_width=True)
+
+        st.divider()
+
+        # 수익률 비교 그래프
+        st.subheader("💰 수익률 비교 그래프")
+        fig2 = go.Figure()
+        fig2.add_trace(go.Scatter(
             x=portfolio_equal.index,
             y=((portfolio_equal - 1) * 100),
             name="Equal Portfolio",
             line=dict(color="royalblue", width=2),
             hovertemplate="%{x}<br>수익률: %{y:.2f}%<extra></extra>"
         ))
-
-        fig.add_trace(go.Scatter(
+        fig2.add_trace(go.Scatter(
             x=portfolio_strategy.index,
             y=((portfolio_strategy - 1) * 100),
             name=strategy,
             line=dict(color="orangered", width=2),
             hovertemplate="%{x}<br>수익률: %{y:.2f}%<extra></extra>"
         ))
-
-        fig.update_layout(
+        fig2.update_layout(
             title=f"포트폴리오 수익률 비교 - {strategy}",
             xaxis_title="날짜",
             yaxis_title="수익률 (%)",
@@ -230,6 +331,5 @@ if analyze:
             template="plotly_dark",
             height=500
         )
-
-        fig.add_hline(y=0, line_dash="dash", line_color="gray")
-        st.plotly_chart(fig, use_container_width=True)
+        fig2.add_hline(y=0, line_dash="dash", line_color="gray")
+        st.plotly_chart(fig2, use_container_width=True)
