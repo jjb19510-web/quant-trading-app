@@ -5,17 +5,15 @@ import plotly.graph_objects as go
 
 st.set_page_config(page_title="Quant Trading Analyzer", page_icon="📈", layout="wide")
 
-st.title("📈 Quant Trading Analyzer")
-st.markdown("Portfolio Analysis Tool using RSI and Moving Average Strategies")
+st.title("📈 퀀트 트레이딩 분석기 (Quant Trading Analyzer)")
+st.markdown("RSI 및 이동평균 전략을 활용한 포트폴리오 분석 도구")
 st.divider()
 
 with st.sidebar:
     st.header("⚙️ Settings")
     
-    # 시장 선택
     market = st.selectbox("시장 선택 (Market)", ["한국주식 (KS)", "미국주식 (US)"])
     
-    # 티커 입력
     if market == "한국주식 (KS)":
         st.caption("예시: 005930, 000660, 373220")
         tickers_raw = st.text_input("종목 코드 입력 (쉼표로 구분)", "")
@@ -29,7 +27,6 @@ with st.sidebar:
     end_date = st.date_input("End date", value=pd.to_datetime("2025-01-01"))
     strategy = st.selectbox("전략 선택 (Strategy)", ["RSI 전략 (RSI)", "이동평균선 전략 (Moving Average)", "복합 전략 (Combined)"])
 
-    # 전략별 슬라이더
     if strategy == "RSI 전략 (RSI)":
         rsi_threshold = st.slider("RSI 기준값 (RSI Threshold)", 10, 70, 40)
         ma_short, ma_long = 20, 60
@@ -37,7 +34,7 @@ with st.sidebar:
         ma_short = st.slider("단기 이동평균 (Short MA)", 5, 60, 20)
         ma_long = st.slider("장기 이동평균 (Long MA)", 20, 120, 60)
         rsi_threshold = 40
-    else:  # Combined
+    else:
         rsi_threshold = st.slider("RSI 기준값 (RSI Threshold)", 10, 70, 40)
         ma_short = st.slider("단기 이동평균 (Short MA)", 5, 60, 20)
         ma_long = st.slider("장기 이동평균 (Long MA)", 20, 120, 60)
@@ -80,7 +77,6 @@ else:
     - 두 조건을 동시에 만족해야 하므로 더 정확해요.
     """)
 
-# 균등 포트폴리오 설명
 st.info("""
 **균등 포트폴리오 (Equal Portfolio)란?**
 
@@ -116,6 +112,14 @@ if analyze:
             rs = avg_gain / avg_loss
             return 100 - (100 / (1 + rs))
 
+        def calculate_mdd(portfolio):
+            peak = portfolio.cummax()
+            drawdown = (portfolio - peak) / peak
+            return drawdown.min() * 100
+
+        def calculate_sharpe(returns):
+            return (returns.mean() / returns.std()) * (252 ** 0.5)
+
         rsi = df.apply(calculate_rsi)
         ma_s = df.rolling(ma_short).mean()
         ma_l = df.rolling(ma_long).mean()
@@ -139,11 +143,28 @@ if analyze:
         strategy_pct = (portfolio_strategy.iloc[-1] - 1) * 100
         diff_pct = strategy_pct - equal_pct
 
+        mdd_equal = calculate_mdd(portfolio_equal)
+        mdd_strategy = calculate_mdd(portfolio_strategy)
+        sharpe_equal = calculate_sharpe(equal_return.dropna())
+        sharpe_strategy = calculate_sharpe(weighted_return.dropna())
+
+        # 성과 지표
+        st.subheader("📊 성과 지표")
         col1, col2 = st.columns(2)
         with col1:
-            st.metric("균등 포트폴리오", f"{equal_pct:.2f}%")
+            st.metric("균등 수익률", f"{equal_pct:.2f}%")
         with col2:
-            st.metric(f"{strategy}", f"{strategy_pct:.2f}%", delta=f"{diff_pct:.2f}%")
+            st.metric("전략 수익률", f"{strategy_pct:.2f}%", delta=f"{diff_pct:.2f}%")
+
+        col3, col4, col5, col6 = st.columns(4)
+        with col3:
+            st.metric("균등 MDD", f"{mdd_equal:.2f}%")
+        with col4:
+            st.metric("전략 MDD", f"{mdd_strategy:.2f}%")
+        with col5:
+            st.metric("균등 샤프지수", f"{sharpe_equal:.2f}")
+        with col6:
+            st.metric("전략 샤프지수", f"{sharpe_strategy:.2f}")
 
         st.divider()
 
