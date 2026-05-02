@@ -1,20 +1,72 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
+import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-st.set_page_config(page_title="Quant Trading Analyzer", page_icon="📈", layout="wide")
+# ── 페이지 설정 ──
+st.set_page_config(page_title="Quantfolio — Backtest Lab", page_icon="📈", layout="wide")
 
-st.title("📈 퀀트 트레이딩 분석기 (Quant Trading Analyzer)")
-st.markdown("RSI 및 이동평균 전략을 활용한 포트폴리오 분석 도구")
-st.divider()
+# ── 색상 테마 ──
+ACCENT = "#A78BFA"
+GREEN = "#4ade80"
+RED = "#f87171"
+DIM = "#6b7385"
+TEXT = "#e6e9ef"
+SURFACE_1 = "#11151c"
+SURFACE_2 = "#161b25"
+SURFACE_3 = "#1d2330"
+LINE = "#232a38"
+BG = "#0b0e14"
 
+st.markdown(f"""
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap');
+  .stApp {{ background: {BG}; color: {TEXT}; font-family: 'Inter', sans-serif; }}
+  section[data-testid="stSidebar"] {{ background: {SURFACE_1}; border-right: 1px solid {LINE}; }}
+  section[data-testid="stSidebar"] * {{ color: {TEXT}; }}
+  h1, h2, h3, h4 {{ letter-spacing: -0.02em; }}
+  .block-container {{ padding-top: 1.4rem; padding-bottom: 3rem; max-width: 1400px; }}
+
+  .qf-eyebrow {{ font-size: 11px; color: {DIM}; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }}
+  .qf-title {{ font-size: 26px; font-weight: 600; margin: 0 0 4px 0; }}
+  .qf-meta {{ font-size: 12px; color: {DIM}; font-family: 'JetBrains Mono', monospace; }}
+
+  .qf-kpi-grid {{
+    display: grid; grid-template-columns: 1.4fr repeat(5, 1fr);
+    gap: 1px; background: {LINE}; border: 1px solid {LINE};
+    border-radius: 8px; overflow: hidden; margin: 12px 0 18px;
+  }}
+  .qf-kpi {{ background: {SURFACE_1}; padding: 12px 14px; }}
+  .qf-kpi.big {{ background: {SURFACE_2}; }}
+  .qf-kpi-label {{ font-size: 10.5px; color: {DIM}; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 500; }}
+  .qf-kpi-klabel {{ font-size: 10px; color: #4d5567; margin-top: 1px; display: block; }}
+  .qf-kpi-value {{ font-family: 'JetBrains Mono', monospace; font-size: 18px; font-weight: 600; letter-spacing: -0.02em; margin-top: 4px; }}
+  .qf-kpi.big .qf-kpi-value {{ font-size: 26px; color: {GREEN}; }}
+  .qf-kpi-delta {{ font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: {DIM}; margin-top: 2px; }}
+  .qf-kpi-delta.pos {{ color: {GREEN}; }}
+  .qf-kpi-delta.neg {{ color: {RED}; }}
+
+  .qf-card {{ background: {SURFACE_1}; border: 1px solid {LINE}; border-radius: 8px; padding: 16px 18px; margin-bottom: 16px; }}
+  .qf-card h3 {{ margin: 0 0 2px; font-size: 13px; font-weight: 600; }}
+  .qf-card .qf-sub {{ font-size: 11px; color: {DIM}; margin-bottom: 10px; }}
+
+  .pos {{ color: {GREEN}; }}
+  .neg {{ color: {RED}; }}
+  .mono {{ font-family: 'JetBrains Mono', monospace; }}
+  div[data-testid="stDataFrame"] {{ background: {SURFACE_1}; border-radius: 8px; }}
+  .js-plotly-plot .plotly .modebar {{ display: none !important; }}
+</style>
+""", unsafe_allow_html=True)
+
+
+# ── 사이드바 ──
 with st.sidebar:
-    st.header("⚙️ Settings")
-    
+    st.markdown(f"<div style='font-size:18px; font-weight:600; margin-bottom:16px;'>⚙️ Settings</div>", unsafe_allow_html=True)
+
     market = st.selectbox("시장 선택 (Market)", ["한국주식 (KS)", "미국주식 (US)"])
-    
+
     if market == "한국주식 (KS)":
         st.caption("예시: 005930, 000660, 373220")
         tickers_raw = st.text_input("종목 코드 입력 (쉼표로 구분)", "")
@@ -24,8 +76,9 @@ with st.sidebar:
         tickers_raw = st.text_input("티커 입력 (쉼표로 구분)", "")
         tickers = [t.strip() for t in tickers_raw.split(",") if t.strip()]
 
-    start_date = st.date_input("Start date", value=pd.to_datetime("2024-01-01"))
-    end_date = st.date_input("End date", value=pd.to_datetime("2026-01-01"))
+    start_date = st.date_input("Start date", value=pd.to_datetime("2023-01-01"))
+    end_date = st.date_input("End date", value=pd.to_datetime("2025-01-01"))
+
     strategy = st.selectbox("전략 선택 (Strategy)", [
         "RSI 전략 (RSI)",
         "이동평균선 전략 (Moving Average)",
@@ -34,92 +87,54 @@ with st.sidebar:
     ])
 
     if strategy == "RSI 전략 (RSI)":
-        rsi_threshold = st.slider("RSI 기준값 (RSI Threshold)", 10, 70, 40)
-        ma_short, ma_long = 20, 60
-        bb_period = 20
+        rsi_threshold = st.slider("RSI 기준값", 10, 70, 40)
+        ma_short, ma_long, bb_period = 20, 60, 20
     elif strategy == "이동평균선 전략 (Moving Average)":
-        ma_short = st.slider("단기 이동평균 (Short MA)", 5, 60, 20)
-        ma_long = st.slider("장기 이동평균 (Long MA)", 20, 120, 60)
-        rsi_threshold = 40
-        bb_period = 20
+        ma_short = st.slider("단기 MA", 5, 60, 20)
+        ma_long = st.slider("장기 MA", 20, 120, 60)
+        rsi_threshold, bb_period = 40, 20
     elif strategy == "볼린저 밴드 전략 (Bollinger Bands)":
-        bb_period = st.slider("볼린저 밴드 기간 (Period)", 5, 60, 20)
-        rsi_threshold = 40
-        ma_short, ma_long = 20, 60
+        bb_period = st.slider("BB 기간", 5, 60, 20)
+        rsi_threshold, ma_short, ma_long = 40, 20, 60
     else:
-        rsi_threshold = st.slider("RSI 기준값 (RSI Threshold)", 10, 70, 40)
-        ma_short = st.slider("단기 이동평균 (Short MA)", 5, 60, 20)
-        ma_long = st.slider("장기 이동평균 (Long MA)", 20, 120, 60)
+        rsi_threshold = st.slider("RSI 기준값", 10, 70, 40)
+        ma_short = st.slider("단기 MA", 5, 60, 20)
+        ma_long = st.slider("장기 MA", 20, 120, 60)
         bb_period = 20
 
-    analyze = st.button("🔍 분석 시작 (Analyze)", use_container_width=True)
+    analyze = st.button("🔍 분석 시작", use_container_width=True)
 
-# 전략 설명
-if strategy == "RSI 전략 (RSI)":
+# ── 전략 설명 ──
+with st.expander("📖 전략 설명 보기", expanded=False):
+    if strategy == "RSI 전략 (RSI)":
+        st.info("""
+        **RSI 전략 (Relative Strength Index, 상대강도지수)**
+        - RSI가 낮을수록 → 너무 많이 떨어진 상태 → **매수 신호**
+        - RSI Threshold(기준값) 이하일 때 매수
+        """)
+    elif strategy == "이동평균선 전략 (Moving Average)":
+        st.info("""
+        **이동평균선 전략 (Moving Average, MA)**
+        - 단기 MA > 장기 MA → **매수 신호** 📈 (골든크로스)
+        - 단기 MA < 장기 MA → **매도 신호** 📉 (데드크로스)
+        """)
+    elif strategy == "볼린저 밴드 전략 (Bollinger Bands)":
+        st.info("""
+        **볼린저 밴드 전략 (Bollinger Bands)**
+        - 주가가 하단 밴드 아래로 떨어지면 → **매수 신호** 📈
+        - 주가가 상단 밴드 위로 올라가면 → **매도 신호** 📉
+        """)
+    else:
+        st.info("""
+        **복합 전략 (Combined Strategy)**
+        - RSI가 기준값 이하 **AND** 단기 MA > 장기 MA → **매수 신호**
+        """)
+
     st.info("""
-    **RSI 전략 (Relative Strength Index, 상대강도지수)**
-    
-    📌 RSI란? 주가가 최근에 얼마나 많이 올랐는지를 0~100 사이 숫자로 표현한 지표예요.
-    
-    - RSI가 낮을수록 → 너무 많이 떨어진 상태 → **매수 신호**
-    - RSI가 높을수록 → 너무 많이 오른 상태 → **매도 신호**
-    
-    📌 RSI Threshold(기준값)란? 매수 신호를 발생시키는 RSI 기준선이에요.
-    - 기준값 40 → RSI가 40 이하일 때 매수
+    **균등 포트폴리오 (Equal Portfolio)**
+    - 전략 없이 모든 종목에 똑같은 비율로 투자하는 기준선이에요.
+    - 전략 수익률 > 균등 → **전략이 효과 있음** ✅
     """)
-elif strategy == "이동평균선 전략 (Moving Average)":
-    st.info("""
-    **이동평균선 전략 (Moving Average, MA)**
-    
-    📌 이동평균선(MA)이란? 특정 기간 동안의 주가 평균을 선으로 이은 거예요.
-    
-    - **단기 MA(Short MA)** → 최근 단기간의 평균
-    - **장기 MA(Long MA)** → 더 긴 기간의 평균
-    
-    📌 전략 원리:
-    - 단기 MA > 장기 MA → **매수 신호** 📈 (골든크로스)
-    - 단기 MA < 장기 MA → **매도 신호** 📉 (데드크로스)
-    """)
-elif strategy == "볼린저 밴드 전략 (Bollinger Bands)":
-    st.info("""
-    **볼린저 밴드 전략 (Bollinger Bands)**
-    
-    📌 볼린저 밴드란? 이동평균선 위아래로 밴드(띠)를 만들어서 주가가 그 범위를 벗어나면 신호를 주는 지표예요.
-    
-    3개의 선으로 구성돼요:
-    - **중간선** → 20일 이동평균선
-    - **상단 밴드** → 중간선 + (표준편차 × 2)
-    - **하단 밴드** → 중간선 - (표준편차 × 2)
-    
-    📌 전략 원리:
-    - 주가가 **하단 밴드 아래**로 떨어지면 → **매수 신호** 📈
-    - 주가가 **상단 밴드 위**로 올라가면 → **매도 신호** 📉
-    """)
-else:
-    st.info("""
-    **복합 전략 (Combined Strategy)**
-    
-    📌 RSI 전략 + 이동평균선 전략을 동시에 사용해요.
-    
-    - RSI가 기준값 이하 **AND** 단기 MA > 장기 MA → **매수 신호**
-    - 두 조건을 동시에 만족해야 하므로 더 정확해요.
-    """)
-
-st.info("""
-**균등 포트폴리오 (Equal Portfolio)란?**
-
-📌 전략 없이 모든 종목에 똑같은 비율로 투자하는 방식이에요.
-
-- 종목이 3개면 → 각각 33%씩 투자
-- 아무 전략 없이 그냥 들고 있는 것
-
-📌 왜 보여주냐면?
-- 내 전략이 **"아무것도 안 하는 것보다 나은가?"** 를 비교하기 위한 기준선이에요.
-- 전략 수익률 > 균등 포트폴리오 → **전략이 효과 있음** ✅
-- 전략 수익률 < 균등 포트폴리오 → **그냥 들고 있는 게 나음** ❌
-""")
-
-st.divider()
 
 if analyze:
     if not tickers:
@@ -143,17 +158,17 @@ if analyze:
         def calculate_bb(data, period=20):
             ma = data.rolling(period).mean()
             std = data.rolling(period).std()
-            upper = ma + (std * 2)
-            lower = ma - (std * 2)
-            return upper, lower, ma
+            return ma + (std * 2), ma - (std * 2), ma
 
         def calculate_mdd(portfolio):
             peak = portfolio.cummax()
-            drawdown = (portfolio - peak) / peak
-            return drawdown.min() * 100
+            return ((portfolio - peak) / peak).min() * 100
 
         def calculate_sharpe(returns):
             return (returns.mean() / returns.std()) * (252 ** 0.5)
+
+        def calculate_cagr(portfolio, days):
+            return ((portfolio.iloc[-1] / portfolio.iloc[0]) ** (365 / days) - 1) * 100
 
         rsi = df.apply(calculate_rsi)
         ma_s = df.rolling(ma_short).mean()
@@ -177,159 +192,167 @@ if analyze:
         portfolio_strategy = (1 + weighted_return).cumprod()
         portfolio_equal = (1 + equal_return).cumprod()
 
+        days = (df.index[-1] - df.index[0]).days
+
         equal_pct = (portfolio_equal.iloc[-1] - 1) * 100
         strategy_pct = (portfolio_strategy.iloc[-1] - 1) * 100
         diff_pct = strategy_pct - equal_pct
+        mdd_s = calculate_mdd(portfolio_strategy)
+        mdd_e = calculate_mdd(portfolio_equal)
+        sharpe_s = calculate_sharpe(weighted_return.dropna())
+        sharpe_e = calculate_sharpe(equal_return.dropna())
+        cagr_s = calculate_cagr(portfolio_strategy, days)
+        cagr_e = calculate_cagr(portfolio_equal, days)
 
-        mdd_equal = calculate_mdd(portfolio_equal)
-        mdd_strategy = calculate_mdd(portfolio_strategy)
-        sharpe_equal = calculate_sharpe(equal_return.dropna())
-        sharpe_strategy = calculate_sharpe(weighted_return.dropna())
+        # ── 헤더 ──
+        left, right = st.columns([3, 2])
+        with left:
+            st.markdown(
+                f"<div class='qf-eyebrow'>{strategy} · {len(tickers)} tickers</div>"
+                f"<h1 class='qf-title'>📈 퀀트 트레이딩 분석기</h1>",
+                unsafe_allow_html=True
+            )
+        with right:
+            import datetime as dt
+            st.markdown(
+                f"<div class='qf-meta' style='text-align:right; padding-top:18px;'>"
+                f"🟢 Run · {dt.datetime.now():%Y-%m-%d %H:%M}</div>",
+                unsafe_allow_html=True
+            )
 
-        st.subheader("📊 성과 지표")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("균등 수익률", f"{equal_pct:.2f}%")
-        with col2:
-            st.metric("전략 수익률", f"{strategy_pct:.2f}%", delta=f"{diff_pct:.2f}%")
+        # ── KPI 스트립 ──
+        def kpi_html(label, klabel, value, delta=None, big=False, positive=True):
+            cls = "qf-kpi big" if big else "qf-kpi"
+            delta_html = ""
+            if delta:
+                d_cls = "pos" if positive else "neg"
+                delta_html = f"<div class='qf-kpi-delta {d_cls}'>{delta}</div>"
+            return (
+                f"<div class='{cls}'>"
+                f"<div class='qf-kpi-label'>{label}<span class='qf-kpi-klabel'>{klabel}</span></div>"
+                f"<div class='qf-kpi-value'>{value}</div>{delta_html}</div>"
+            )
 
-        col3, col4, col5, col6 = st.columns(4)
-        with col3:
-            st.metric("균등 MDD", f"{mdd_equal:.2f}%")
-        with col4:
-            st.metric("전략 MDD", f"{mdd_strategy:.2f}%")
-        with col5:
-            st.metric("균등 샤프지수", f"{sharpe_equal:.2f}")
-        with col6:
-            st.metric("전략 샤프지수", f"{sharpe_strategy:.2f}")
+        kpis = (
+            kpi_html("Total Return", "총 수익률",
+                     f"{strategy_pct:+.2f}%",
+                     f"vs {equal_pct:+.2f}% equal",
+                     big=True, positive=strategy_pct >= equal_pct)
+            + kpi_html("CAGR", "연복리수익률", f"{cagr_s:.1f}%",
+                       f"{cagr_s - cagr_e:+.1f}pp",
+                       positive=cagr_s >= cagr_e)
+            + kpi_html("Sharpe", "샤프지수", f"{sharpe_s:.2f}",
+                       f"{sharpe_s - sharpe_e:+.2f}",
+                       positive=sharpe_s >= sharpe_e)
+            + kpi_html("Max DD", "최대낙폭", f"{mdd_s:.1f}%",
+                       f"vs {mdd_e:.1f}%",
+                       positive=mdd_s >= mdd_e)
+            + kpi_html("Equal Return", "균등수익률", f"{equal_pct:+.2f}%")
+            + kpi_html("Equal Sharpe", "균등샤프", f"{sharpe_e:.2f}")
+        )
+        st.markdown(f"<div class='qf-kpi-grid'>{kpis}</div>", unsafe_allow_html=True)
 
-        st.divider()
+        # ── 전략 지표 그래프 ──
+        def style_fig(fig, height=320):
+            fig.update_layout(
+                height=height,
+                margin=dict(l=8, r=56, t=8, b=28),
+                paper_bgcolor=SURFACE_1,
+                plot_bgcolor=SURFACE_1,
+                font=dict(family="Inter, sans-serif", color=TEXT, size=11),
+                showlegend=True,
+                hovermode="x unified",
+                legend=dict(bgcolor=SURFACE_2, bordercolor=LINE, font=dict(size=10))
+            )
+            fig.update_xaxes(gridcolor="#1c222e", linecolor=LINE, zeroline=False, tickfont=dict(color=DIM))
+            fig.update_yaxes(gridcolor="#1c222e", linecolor=LINE, zeroline=False, tickfont=dict(color=DIM))
+            return fig
 
-        # 전략별 지표 그래프
-        st.subheader("📈 전략 지표 그래프")
         ticker_for_chart = tickers[0]
+        st.markdown(f"<div class='qf-card'><h3>📈 전략 지표 그래프</h3><div class='qf-sub'>{ticker_for_chart} 기준</div></div>", unsafe_allow_html=True)
 
         if strategy == "이동평균선 전략 (Moving Average)":
             fig1 = go.Figure()
-            fig1.add_trace(go.Scatter(
-                x=df.index, y=df[ticker_for_chart],
-                name="주가", line=dict(color="white", width=1)
-            ))
-            fig1.add_trace(go.Scatter(
-                x=ma_s.index, y=ma_s[ticker_for_chart],
-                name=f"MA{ma_short}", line=dict(color="orange", width=1.5)
-            ))
-            fig1.add_trace(go.Scatter(
-                x=ma_l.index, y=ma_l[ticker_for_chart],
-                name=f"MA{ma_long}", line=dict(color="royalblue", width=1.5)
-            ))
-            fig1.update_layout(
-                title=f"{ticker_for_chart} - 이동평균선",
-                template="plotly_dark", height=400,
-                hovermode="x unified"
-            )
-            st.plotly_chart(fig1, use_container_width=True)
+            fig1.add_trace(go.Scatter(x=df.index, y=df[ticker_for_chart], name="주가", line=dict(color=TEXT, width=1)))
+            fig1.add_trace(go.Scatter(x=ma_s.index, y=ma_s[ticker_for_chart], name=f"MA{ma_short}", line=dict(color="orange", width=1.5)))
+            fig1.add_trace(go.Scatter(x=ma_l.index, y=ma_l[ticker_for_chart], name=f"MA{ma_long}", line=dict(color=ACCENT, width=1.5)))
+            st.plotly_chart(style_fig(fig1, 320), use_container_width=True)
 
         elif strategy == "RSI 전략 (RSI)":
-            fig1 = make_subplots(rows=2, cols=1, shared_xaxes=True,
-                                  row_heights=[0.7, 0.3])
-            fig1.add_trace(go.Scatter(
-                x=df.index, y=df[ticker_for_chart],
-                name="주가", line=dict(color="white", width=1)
-            ), row=1, col=1)
-            fig1.add_trace(go.Scatter(
-                x=rsi.index, y=rsi[ticker_for_chart],
-                name="RSI", line=dict(color="orange", width=1.5)
-            ), row=2, col=1)
-            fig1.add_hline(y=rsi_threshold, line_dash="dash",
-                           line_color="red", row=2, col=1)
-            fig1.update_layout(
-                title=f"{ticker_for_chart} - RSI",
-                template="plotly_dark", height=500,
-                hovermode="x unified"
-            )
-            st.plotly_chart(fig1, use_container_width=True)
+            fig1 = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.7, 0.3])
+            fig1.add_trace(go.Scatter(x=df.index, y=df[ticker_for_chart], name="주가", line=dict(color=TEXT, width=1)), row=1, col=1)
+            fig1.add_trace(go.Scatter(x=rsi.index, y=rsi[ticker_for_chart], name="RSI", line=dict(color=ACCENT, width=1.5)), row=2, col=1)
+            fig1.add_hline(y=rsi_threshold, line_dash="dash", line_color=RED, row=2, col=1)
+            st.plotly_chart(style_fig(fig1, 400), use_container_width=True)
 
         elif strategy == "볼린저 밴드 전략 (Bollinger Bands)":
             fig1 = go.Figure()
-            fig1.add_trace(go.Scatter(
-                x=df.index, y=df[ticker_for_chart],
-                name="주가", line=dict(color="white", width=1)
-            ))
-            fig1.add_trace(go.Scatter(
-                x=bb_upper.index, y=bb_upper[ticker_for_chart],
-                name="상단 밴드", line=dict(color="red", width=1, dash="dash")
-            ))
-            fig1.add_trace(go.Scatter(
-                x=bb_mid.index, y=bb_mid[ticker_for_chart],
-                name="중간선", line=dict(color="yellow", width=1)
-            ))
-            fig1.add_trace(go.Scatter(
-                x=bb_lower.index, y=bb_lower[ticker_for_chart],
-                name="하단 밴드", line=dict(color="green", width=1, dash="dash"),
-                fill="tonexty", fillcolor="rgba(0,255,0,0.05)"
-            ))
-            fig1.update_layout(
-                title=f"{ticker_for_chart} - 볼린저 밴드",
-                template="plotly_dark", height=400,
-                hovermode="x unified"
-            )
-            st.plotly_chart(fig1, use_container_width=True)
+            fig1.add_trace(go.Scatter(x=df.index, y=df[ticker_for_chart], name="주가", line=dict(color=TEXT, width=1)))
+            fig1.add_trace(go.Scatter(x=bb_upper.index, y=bb_upper[ticker_for_chart], name="상단밴드", line=dict(color=RED, width=1, dash="dash")))
+            fig1.add_trace(go.Scatter(x=bb_mid.index, y=bb_mid[ticker_for_chart], name="중간선", line=dict(color="yellow", width=1)))
+            fig1.add_trace(go.Scatter(x=bb_lower.index, y=bb_lower[ticker_for_chart], name="하단밴드", line=dict(color=GREEN, width=1, dash="dash"), fill="tonexty", fillcolor="rgba(74,222,128,0.05)"))
+            st.plotly_chart(style_fig(fig1, 320), use_container_width=True)
 
         elif strategy == "복합 전략 (Combined)":
-            fig1 = make_subplots(rows=2, cols=1, shared_xaxes=True,
-                                  row_heights=[0.7, 0.3])
-            fig1.add_trace(go.Scatter(
-                x=df.index, y=df[ticker_for_chart],
-                name="주가", line=dict(color="white", width=1)
-            ), row=1, col=1)
-            fig1.add_trace(go.Scatter(
-                x=ma_s.index, y=ma_s[ticker_for_chart],
-                name=f"MA{ma_short}", line=dict(color="orange", width=1.5)
-            ), row=1, col=1)
-            fig1.add_trace(go.Scatter(
-                x=ma_l.index, y=ma_l[ticker_for_chart],
-                name=f"MA{ma_long}", line=dict(color="royalblue", width=1.5)
-            ), row=1, col=1)
-            fig1.add_trace(go.Scatter(
-                x=rsi.index, y=rsi[ticker_for_chart],
-                name="RSI", line=dict(color="purple", width=1.5)
-            ), row=2, col=1)
-            fig1.add_hline(y=rsi_threshold, line_dash="dash",
-                           line_color="red", row=2, col=1)
-            fig1.update_layout(
-                title=f"{ticker_for_chart} - 복합 전략",
-                template="plotly_dark", height=500,
-                hovermode="x unified"
-            )
-            st.plotly_chart(fig1, use_container_width=True)
+            fig1 = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.7, 0.3])
+            fig1.add_trace(go.Scatter(x=df.index, y=df[ticker_for_chart], name="주가", line=dict(color=TEXT, width=1)), row=1, col=1)
+            fig1.add_trace(go.Scatter(x=ma_s.index, y=ma_s[ticker_for_chart], name=f"MA{ma_short}", line=dict(color="orange", width=1.5)), row=1, col=1)
+            fig1.add_trace(go.Scatter(x=ma_l.index, y=ma_l[ticker_for_chart], name=f"MA{ma_long}", line=dict(color=ACCENT, width=1.5)), row=1, col=1)
+            fig1.add_trace(go.Scatter(x=rsi.index, y=rsi[ticker_for_chart], name="RSI", line=dict(color=ACCENT, width=1.5)), row=2, col=1)
+            fig1.add_hline(y=rsi_threshold, line_dash="dash", line_color=RED, row=2, col=1)
+            st.plotly_chart(style_fig(fig1, 400), use_container_width=True)
 
-        st.divider()
-
-        # 수익률 비교 그래프
-        st.subheader("💰 수익률 비교 그래프")
+        # ── 수익률 비교 그래프 ──
+        st.markdown(f"<div class='qf-card'><h3>💰 수익률 비교</h3><div class='qf-sub'>누적 수익률 (%) · $100 기준</div></div>", unsafe_allow_html=True)
         fig2 = go.Figure()
         fig2.add_trace(go.Scatter(
             x=portfolio_equal.index,
             y=((portfolio_equal - 1) * 100),
             name="Equal Portfolio",
-            line=dict(color="royalblue", width=2),
+            line=dict(color=DIM, width=1.5, dash="dash"),
             hovertemplate="%{x}<br>수익률: %{y:.2f}%<extra></extra>"
         ))
         fig2.add_trace(go.Scatter(
             x=portfolio_strategy.index,
             y=((portfolio_strategy - 1) * 100),
             name=strategy,
-            line=dict(color="orangered", width=2),
+            line=dict(color=ACCENT, width=2.2),
             hovertemplate="%{x}<br>수익률: %{y:.2f}%<extra></extra>"
         ))
-        fig2.update_layout(
-            title=f"포트폴리오 수익률 비교 - {strategy}",
-            xaxis_title="날짜",
-            yaxis_title="수익률 (%)",
-            hovermode="x unified",
-            template="plotly_dark",
-            height=500
-        )
-        fig2.add_hline(y=0, line_dash="dash", line_color="gray")
-        st.plotly_chart(fig2, use_container_width=True)
+        fig2.add_hline(y=0, line=dict(color=DIM, width=1, dash="dot"), opacity=0.4)
+        st.plotly_chart(style_fig(fig2, 320), use_container_width=True)
+
+        # ── 낙폭(Drawdown) 차트 ──
+        st.markdown(f"<div class='qf-card'><h3>📉 낙폭 (Drawdown)</h3><div class='qf-sub'>고점 대비 하락폭</div></div>", unsafe_allow_html=True)
+        peak = portfolio_strategy.cummax()
+        drawdown = (portfolio_strategy - peak) / peak * 100
+        fig_dd = go.Figure()
+        fig_dd.add_trace(go.Scatter(
+            x=drawdown.index, y=drawdown.values,
+            fill="tozeroy", line=dict(color=RED, width=1.5),
+            fillcolor="rgba(248,113,113,0.18)", name="Drawdown"
+        ))
+        st.plotly_chart(style_fig(fig_dd, 180), use_container_width=True)
+
+        # ── 월별 수익률 히트맵 ──
+        st.markdown(f"<div class='qf-card'><h3>📅 월별 수익률 히트맵</h3><div class='qf-sub'>전략 월별 수익률 (%)</div></div>", unsafe_allow_html=True)
+        monthly = weighted_return.resample("ME").apply(lambda x: (1 + x).prod() - 1) * 100
+        monthly_df = monthly.to_frame("return")
+        monthly_df["year"] = monthly_df.index.year
+        monthly_df["month"] = monthly_df.index.month
+        pivot = monthly_df.pivot(index="year", columns="month", values="return")
+
+        fig_h = go.Figure(go.Heatmap(
+            z=pivot.values,
+            x=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
+            y=pivot.index.astype(str),
+            colorscale=[[0, RED], [0.5, SURFACE_3], [1, GREEN]],
+            zmid=0,
+            text=[[f"{v:+.1f}" if not pd.isna(v) else "" for v in row] for row in pivot.values],
+            texttemplate="%{text}",
+            textfont=dict(family="JetBrains Mono", size=10, color=TEXT),
+            colorbar=dict(thickness=8, len=0.6, tickfont=dict(color=DIM, size=9))
+        ))
+        st.plotly_chart(style_fig(fig_h, 200), use_container_width=True)
+
+        st.caption(f"Data: yfinance · {df.index[0].date()} → {df.index[-1].date()} · {len(df)} trading days")
