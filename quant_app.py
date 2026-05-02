@@ -23,21 +23,33 @@ with st.sidebar:
         tickers_raw = st.text_input("티커 입력 (쉼표로 구분)", "")
         tickers = [t.strip() for t in tickers_raw.split(",") if t.strip()]
 
-    start_date = st.date_input("Start date", value=pd.to_datetime("2023-01-01"))
-    end_date = st.date_input("End date", value=pd.to_datetime("2025-01-01"))
-    strategy = st.selectbox("전략 선택 (Strategy)", ["RSI 전략 (RSI)", "이동평균선 전략 (Moving Average)", "복합 전략 (Combined)"])
+    start_date = st.date_input("Start date", value=pd.to_datetime("2024-01-01"))
+    end_date = st.date_input("End date", value=pd.to_datetime("2026-01-01"))
+    strategy = st.selectbox("전략 선택 (Strategy)", [
+        "RSI 전략 (RSI)",
+        "이동평균선 전략 (Moving Average)",
+        "볼린저 밴드 전략 (Bollinger Bands)",
+        "복합 전략 (Combined)"
+    ])
 
     if strategy == "RSI 전략 (RSI)":
         rsi_threshold = st.slider("RSI 기준값 (RSI Threshold)", 10, 70, 40)
         ma_short, ma_long = 20, 60
+        bb_period = 20
     elif strategy == "이동평균선 전략 (Moving Average)":
         ma_short = st.slider("단기 이동평균 (Short MA)", 5, 60, 20)
         ma_long = st.slider("장기 이동평균 (Long MA)", 20, 120, 60)
         rsi_threshold = 40
-    else:
+        bb_period = 20
+    elif strategy == "볼린저 밴드 전략 (Bollinger Bands)":
+        bb_period = st.slider("볼린저 밴드 기간 (Period)", 5, 60, 20)
+        rsi_threshold = 40
+        ma_short, ma_long = 20, 60
+    else:  # Combined
         rsi_threshold = st.slider("RSI 기준값 (RSI Threshold)", 10, 70, 40)
         ma_short = st.slider("단기 이동평균 (Short MA)", 5, 60, 20)
         ma_long = st.slider("장기 이동평균 (Long MA)", 20, 120, 60)
+        bb_period = 20
 
     analyze = st.button("🔍 분석 시작 (Analyze)", use_container_width=True)
 
@@ -66,6 +78,21 @@ elif strategy == "이동평균선 전략 (Moving Average)":
     📌 전략 원리:
     - 단기 MA > 장기 MA → **매수 신호** 📈 (골든크로스)
     - 단기 MA < 장기 MA → **매도 신호** 📉 (데드크로스)
+    """)
+elif strategy == "볼린저 밴드 전략 (Bollinger Bands)":
+    st.info("""
+    **볼린저 밴드 전략 (Bollinger Bands)**
+    
+    📌 볼린저 밴드란? 이동평균선 위아래로 밴드(띠)를 만들어서 주가가 그 범위를 벗어나면 신호를 주는 지표예요.
+    
+    3개의 선으로 구성돼요:
+    - **중간선** → 20일 이동평균선
+    - **상단 밴드** → 중간선 + (표준편차 × 2) 
+    - **하단 밴드** → 중간선 - (표준편차 × 2)
+    
+    📌 전략 원리:
+    - 주가가 **하단 밴드 아래**로 떨어지면 → **매수 신호** 📈
+    - 주가가 **상단 밴드 위**로 올라가면 → **매도 신호** 📉
     """)
 else:
     st.info("""
@@ -112,6 +139,13 @@ if analyze:
             rs = avg_gain / avg_loss
             return 100 - (100 / (1 + rs))
 
+        def calculate_bb(data, period=20):
+            ma = data.rolling(period).mean()
+            std = data.rolling(period).std()
+            upper = ma + (std * 2)
+            lower = ma - (std * 2)
+            return upper, lower
+
         def calculate_mdd(portfolio):
             peak = portfolio.cummax()
             drawdown = (portfolio - peak) / peak
@@ -123,11 +157,14 @@ if analyze:
         rsi = df.apply(calculate_rsi)
         ma_s = df.rolling(ma_short).mean()
         ma_l = df.rolling(ma_long).mean()
+        bb_upper, bb_lower = calculate_bb(df, bb_period)
 
         if strategy == "RSI 전략 (RSI)":
             signal = (rsi < rsi_threshold).astype(int)
         elif strategy == "이동평균선 전략 (Moving Average)":
             signal = (ma_s > ma_l).astype(int)
+        elif strategy == "볼린저 밴드 전략 (Bollinger Bands)":
+            signal = (df < bb_lower).astype(int)
         else:
             signal = ((rsi < rsi_threshold) & (ma_s > ma_l)).astype(int)
 
@@ -148,7 +185,6 @@ if analyze:
         sharpe_equal = calculate_sharpe(equal_return.dropna())
         sharpe_strategy = calculate_sharpe(weighted_return.dropna())
 
-        # 성과 지표
         st.subheader("📊 성과 지표")
         col1, col2 = st.columns(2)
         with col1:
