@@ -206,7 +206,6 @@ if analyze:
         else:
             signal = ((rsi < rsi_threshold) & (ma_s > ma_l)).astype(int)
 
-        # 매수/매도 시점 계산
         sig = signal.iloc[:, 0]
         buy_idx = sig[(sig == 1) & (sig.shift(1) == 0)].index
         sell_idx = sig[(sig == 0) & (sig.shift(1) == 1)].index
@@ -390,5 +389,48 @@ if analyze:
             fig_h.update_xaxes(tickfont=dict(color=DIM))
             fig_h.update_yaxes(tickfont=dict(color=DIM))
             st.plotly_chart(fig_h, use_container_width=True)
+
+        # ── 종목별 성과 테이블 ──
+        st.markdown(f"<div class='qf-card'><h3>📊 종목별 성과</h3><div class='qf-sub'>기간 수익률 및 현재 포지션</div></div>", unsafe_allow_html=True)
+
+        period_returns = (df.iloc[-1] / df.iloc[0] - 1) * 100
+        volatility = df.pct_change().std() * (252 ** 0.5) * 100
+        last_signal = signal.iloc[-1]
+
+        def color_val(val):
+            try:
+                v = float(val)
+                if v > 0: return f"color: {GREEN};"
+                if v < 0: return f"color: {RED};"
+            except:
+                return ""
+            return ""
+
+        if len(tickers) == 1:
+            holdings = pd.DataFrame({
+                "종목": df.columns,
+                "수익률 (%)": period_returns.values.round(2),
+                "변동성 (%)": volatility.values.round(1),
+                "현재 포지션": ["보유중 ✅" if s == 1 else "현금 ❌" for s in last_signal.values]
+            })
+            st.dataframe(
+                holdings.style.map(color_val, subset=["수익률 (%)"]),
+                use_container_width=True,
+                hide_index=True
+            )
+        else:
+            weights = 1 / len(tickers)
+            holdings = pd.DataFrame({
+                "종목": df.columns,
+                "수익률 (%)": period_returns.values.round(2),
+                "기여도 (pp)": (period_returns.values * weights).round(2),
+                "변동성 (%)": volatility.values.round(1),
+                "현재 포지션": ["보유중 ✅" if s == 1 else "현금 ❌" for s in last_signal.values]
+            })
+            st.dataframe(
+                holdings.style.map(color_val, subset=["수익률 (%)", "기여도 (pp)"]),
+                use_container_width=True,
+                hide_index=True
+            )
 
         st.caption(f"Data: yfinance · {df.index[0].date()} → {df.index[-1].date()} · {len(df)} trading days")
