@@ -135,6 +135,10 @@ if analyze:
         if isinstance(df, pd.Series):
             df = df.to_frame()
 
+        # 컬럼명 정리
+        df.columns = [str(c) for c in df.columns]
+        chart_col = df.columns[0]
+
         def calculate_rsi(data, period=14):
             delta = data.diff()
             gain = delta.where(delta > 0, 0)
@@ -211,7 +215,6 @@ if analyze:
         portfolio_strategy = (1 + weighted_return).cumprod()
         portfolio_equal = (1 + equal_return).cumprod()
 
-        # 오류 수정: days 계산
         days = max((df.index[-1] - df.index[0]).days, 1)
 
         equal_pct = (portfolio_equal.iloc[-1] - 1) * 100
@@ -269,37 +272,36 @@ if analyze:
         )
         st.markdown(f"<div class='qf-kpi-grid'>{kpis}</div>", unsafe_allow_html=True)
 
-        ticker_for_chart = tickers[0]
-        st.markdown(f"<div class='qf-card'><h3>📈 전략 지표 그래프</h3><div class='qf-sub'>{ticker_for_chart} 기준 · 드래그로 확대 가능</div></div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='qf-card'><h3>📈 전략 지표 그래프</h3><div class='qf-sub'>{chart_col} 기준 · 드래그로 확대 가능</div></div>", unsafe_allow_html=True)
 
         if strategy == "이동평균선 전략 (Moving Average)":
             fig1 = go.Figure()
-            fig1.add_trace(go.Scatter(x=df.index, y=df[ticker_for_chart], name="주가", line=dict(color=TEXT, width=1)))
-            fig1.add_trace(go.Scatter(x=ma_s.index, y=ma_s[ticker_for_chart], name=f"MA{ma_short}", line=dict(color="orange", width=1.5)))
-            fig1.add_trace(go.Scatter(x=ma_l.index, y=ma_l[ticker_for_chart], name=f"MA{ma_long}", line=dict(color=ACCENT, width=1.5)))
+            fig1.add_trace(go.Scatter(x=df.index, y=df[chart_col], name="주가", line=dict(color=TEXT, width=1)))
+            fig1.add_trace(go.Scatter(x=ma_s.index, y=ma_s[chart_col], name=f"MA{ma_short}", line=dict(color="orange", width=1.5)))
+            fig1.add_trace(go.Scatter(x=ma_l.index, y=ma_l[chart_col], name=f"MA{ma_long}", line=dict(color=ACCENT, width=1.5)))
             st.plotly_chart(style_fig(fig1, 400), use_container_width=True)
 
         elif strategy == "RSI 전략 (RSI)":
             fig1 = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.7, 0.3])
-            fig1.add_trace(go.Scatter(x=df.index, y=df[ticker_for_chart], name="주가", line=dict(color=TEXT, width=1)), row=1, col=1)
-            fig1.add_trace(go.Scatter(x=rsi.index, y=rsi[ticker_for_chart], name="RSI", line=dict(color=ACCENT, width=1.5)), row=2, col=1)
+            fig1.add_trace(go.Scatter(x=df.index, y=df[chart_col], name="주가", line=dict(color=TEXT, width=1)), row=1, col=1)
+            fig1.add_trace(go.Scatter(x=rsi.index, y=rsi[chart_col], name="RSI", line=dict(color=ACCENT, width=1.5)), row=2, col=1)
             fig1.add_hline(y=rsi_threshold, line_dash="dash", line_color=RED, row=2, col=1)
             st.plotly_chart(style_fig(fig1, 500), use_container_width=True)
 
         elif strategy == "볼린저 밴드 전략 (Bollinger Bands)":
             fig1 = go.Figure()
-            fig1.add_trace(go.Scatter(x=df.index, y=df[ticker_for_chart], name="주가", line=dict(color=TEXT, width=1)))
-            fig1.add_trace(go.Scatter(x=bb_upper.index, y=bb_upper[ticker_for_chart], name="상단밴드", line=dict(color=RED, width=1, dash="dash")))
-            fig1.add_trace(go.Scatter(x=bb_mid.index, y=bb_mid[ticker_for_chart], name="중간선", line=dict(color="yellow", width=1)))
-            fig1.add_trace(go.Scatter(x=bb_lower.index, y=bb_lower[ticker_for_chart], name="하단밴드", line=dict(color=GREEN, width=1, dash="dash"), fill="tonexty", fillcolor="rgba(74,222,128,0.05)"))
+            fig1.add_trace(go.Scatter(x=df.index, y=df[chart_col], name="주가", line=dict(color=TEXT, width=1)))
+            fig1.add_trace(go.Scatter(x=bb_upper.index, y=bb_upper[chart_col], name="상단밴드", line=dict(color=RED, width=1, dash="dash")))
+            fig1.add_trace(go.Scatter(x=bb_mid.index, y=bb_mid[chart_col], name="중간선", line=dict(color="yellow", width=1)))
+            fig1.add_trace(go.Scatter(x=bb_lower.index, y=bb_lower[chart_col], name="하단밴드", line=dict(color=GREEN, width=1, dash="dash"), fill="tonexty", fillcolor="rgba(74,222,128,0.05)"))
             st.plotly_chart(style_fig(fig1, 400), use_container_width=True)
 
         elif strategy == "복합 전략 (Combined)":
             fig1 = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.7, 0.3])
-            fig1.add_trace(go.Scatter(x=df.index, y=df[ticker_for_chart], name="주가", line=dict(color=TEXT, width=1)), row=1, col=1)
-            fig1.add_trace(go.Scatter(x=ma_s.index, y=ma_s[ticker_for_chart], name=f"MA{ma_short}", line=dict(color="orange", width=1.5)), row=1, col=1)
-            fig1.add_trace(go.Scatter(x=ma_l.index, y=ma_l[ticker_for_chart], name=f"MA{ma_long}", line=dict(color=ACCENT, width=1.5)), row=1, col=1)
-            fig1.add_trace(go.Scatter(x=rsi.index, y=rsi[ticker_for_chart], name="RSI", line=dict(color=ACCENT, width=1.5)), row=2, col=1)
+            fig1.add_trace(go.Scatter(x=df.index, y=df[chart_col], name="주가", line=dict(color=TEXT, width=1)), row=1, col=1)
+            fig1.add_trace(go.Scatter(x=ma_s.index, y=ma_s[chart_col], name=f"MA{ma_short}", line=dict(color="orange", width=1.5)), row=1, col=1)
+            fig1.add_trace(go.Scatter(x=ma_l.index, y=ma_l[chart_col], name=f"MA{ma_long}", line=dict(color=ACCENT, width=1.5)), row=1, col=1)
+            fig1.add_trace(go.Scatter(x=rsi.index, y=rsi[chart_col], name="RSI", line=dict(color=ACCENT, width=1.5)), row=2, col=1)
             fig1.add_hline(y=rsi_threshold, line_dash="dash", line_color=RED, row=2, col=1)
             st.plotly_chart(style_fig(fig1, 500), use_container_width=True)
 
