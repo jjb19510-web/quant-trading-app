@@ -50,6 +50,14 @@ st.markdown(f"""
   .pos {{ color: {GREEN}; }}
   .neg {{ color: {RED}; }}
   div[data-testid="stDataFrame"] {{ background: {SURFACE_1}; border-radius: 8px; }}
+  .price-card {{
+    background: {SURFACE_2}; border: 1px solid {LINE}; border-radius: 8px;
+    padding: 14px 18px; margin-bottom: 8px;
+    display: flex; justify-content: space-between; align-items: center;
+  }}
+  .price-ticker {{ font-size: 13px; font-weight: 600; color: {TEXT}; }}
+  .price-value {{ font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: 600; }}
+  .price-change {{ font-family: 'JetBrains Mono', monospace; font-size: 12px; margin-top: 2px; }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -243,6 +251,45 @@ if analyze:
                 unsafe_allow_html=True
             )
 
+        # ── 현재가 카드 ──
+        st.markdown(f"<div class='qf-card'><h3>💹 현재가</h3><div class='qf-sub'>실시간 주가 · yfinance 기준</div></div>", unsafe_allow_html=True)
+
+        price_cols = st.columns(len(tickers))
+        for i, ticker in enumerate(tickers):
+            with price_cols[i]:
+                try:
+                    info = yf.Ticker(ticker)
+                    hist = info.history(period="2d")
+                    if len(hist) >= 2:
+                        current = hist["Close"].iloc[-1]
+                        prev = hist["Close"].iloc[-2]
+                        change = current - prev
+                        change_pct = (change / prev) * 100
+                        color = GREEN if change >= 0 else RED
+                        arrow = "▲" if change >= 0 else "▼"
+                        st.markdown(f"""
+                        <div style='background:{SURFACE_2}; border:1px solid {LINE}; border-radius:8px; padding:14px 18px; margin-bottom:8px;'>
+                            <div style='font-size:12px; color:{DIM}; margin-bottom:4px;'>{ticker}</div>
+                            <div style='font-family:JetBrains Mono; font-size:22px; font-weight:600;'>{current:,.2f}</div>
+                            <div style='font-family:JetBrains Mono; font-size:12px; color:{color}; margin-top:2px;'>{arrow} {change:+.2f} ({change_pct:+.2f}%)</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    else:
+                        st.markdown(f"""
+                        <div style='background:{SURFACE_2}; border:1px solid {LINE}; border-radius:8px; padding:14px 18px; margin-bottom:8px;'>
+                            <div style='font-size:12px; color:{DIM};'>{ticker}</div>
+                            <div style='font-size:14px; color:{DIM};'>데이터 없음</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                except:
+                    st.markdown(f"""
+                    <div style='background:{SURFACE_2}; border:1px solid {LINE}; border-radius:8px; padding:14px 18px; margin-bottom:8px;'>
+                        <div style='font-size:12px; color:{DIM};'>{ticker}</div>
+                        <div style='font-size:14px; color:{DIM};'>조회 실패</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+        # ── KPI 스트립 ──
         def kpi_html(label, klabel, value, delta=None, big=False, positive=True):
             cls = "qf-kpi big" if big else "qf-kpi"
             delta_html = ""
