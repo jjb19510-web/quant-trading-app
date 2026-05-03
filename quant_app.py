@@ -6,12 +6,10 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import datetime as dt
 
-# ── 페이지 설정 ──
 st.set_page_config(page_title="Quantfolio — Backtest Lab", page_icon="📈", layout="wide")
 
-# ── 색상 테마 ──
-ACCENT = "#3b82f6"    # 파랑 (전략)
-RED = "#ef4444"       # 빨강 (균등)
+ACCENT = "#3b82f6"
+RED = "#ef4444"
 GREEN = "#4ade80"
 DIM = "#6b7385"
 TEXT = "#e6e9ef"
@@ -29,11 +27,9 @@ st.markdown(f"""
   section[data-testid="stSidebar"] * {{ color: {TEXT}; }}
   h1, h2, h3, h4 {{ letter-spacing: -0.02em; }}
   .block-container {{ padding-top: 1.4rem; padding-bottom: 3rem; max-width: 1400px; }}
-
   .qf-eyebrow {{ font-size: 11px; color: {DIM}; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }}
   .qf-title {{ font-size: 26px; font-weight: 600; margin: 0 0 4px 0; }}
   .qf-meta {{ font-size: 12px; color: {DIM}; font-family: 'JetBrains Mono', monospace; }}
-
   .qf-kpi-grid {{
     display: grid; grid-template-columns: 1.4fr repeat(5, 1fr);
     gap: 1px; background: {LINE}; border: 1px solid {LINE};
@@ -48,21 +44,17 @@ st.markdown(f"""
   .qf-kpi-delta {{ font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: {DIM}; margin-top: 2px; }}
   .qf-kpi-delta.pos {{ color: {GREEN}; }}
   .qf-kpi-delta.neg {{ color: {RED}; }}
-
   .qf-card {{ background: {SURFACE_1}; border: 1px solid {LINE}; border-radius: 8px; padding: 16px 18px; margin-bottom: 16px; }}
   .qf-card h3 {{ margin: 0 0 2px; font-size: 13px; font-weight: 600; }}
   .qf-card .qf-sub {{ font-size: 11px; color: {DIM}; margin-bottom: 10px; }}
-
   .pos {{ color: {GREEN}; }}
   .neg {{ color: {RED}; }}
   div[data-testid="stDataFrame"] {{ background: {SURFACE_1}; border-radius: 8px; }}
 </style>
 """, unsafe_allow_html=True)
 
-
-# ── 사이드바 ──
 with st.sidebar:
-    st.markdown(f"<div style='font-size:18px; font-weight:600; margin-bottom:16px;'>⚙️ Settings</div>", unsafe_allow_html=True)
+    st.markdown("<div style='font-size:18px; font-weight:600; margin-bottom:16px;'>⚙️ Settings</div>", unsafe_allow_html=True)
 
     market = st.selectbox("시장 선택 (Market)", ["한국주식 (KS)", "미국주식 (US)"])
 
@@ -103,7 +95,6 @@ with st.sidebar:
 
     analyze = st.button("🔍 분석 시작", use_container_width=True)
 
-# ── 전략 설명 ──
 with st.expander("📖 전략 & 용어 설명 보기", expanded=False):
     if strategy == "RSI 전략 (RSI)":
         st.info("""
@@ -128,7 +119,6 @@ with st.expander("📖 전략 & 용어 설명 보기", expanded=False):
         **복합 전략 (Combined Strategy)**
         - RSI가 기준값 이하 **AND** 단기 MA > 장기 MA → **매수 신호**
         """)
-
     st.info("""
     **균등 포트폴리오 (Equal Portfolio)**
     - 전략 없이 모든 종목에 똑같은 비율로 투자하는 기준선이에요.
@@ -179,7 +169,6 @@ if analyze:
                 showlegend=True,
                 hovermode="x unified",
                 legend=dict(bgcolor=SURFACE_2, bordercolor=LINE, font=dict(size=10)),
-                # 줌인/아웃 버튼 추가
                 xaxis=dict(
                     rangeslider=dict(visible=False),
                     rangeselector=dict(
@@ -222,7 +211,9 @@ if analyze:
         portfolio_strategy = (1 + weighted_return).cumprod()
         portfolio_equal = (1 + equal_return).cumprod()
 
-        days = (df.index[-1] - df.index[0]).days
+        # 오류 수정: days 계산
+        days = max((df.index[-1] - df.index[0]).days, 1)
+
         equal_pct = (portfolio_equal.iloc[-1] - 1) * 100
         strategy_pct = (portfolio_strategy.iloc[-1] - 1) * 100
         diff_pct = strategy_pct - equal_pct
@@ -233,7 +224,6 @@ if analyze:
         cagr_s = calculate_cagr(portfolio_strategy, days)
         cagr_e = calculate_cagr(portfolio_equal, days)
 
-        # ── 헤더 ──
         left, right = st.columns([3, 2])
         with left:
             st.markdown(
@@ -248,7 +238,6 @@ if analyze:
                 unsafe_allow_html=True
             )
 
-        # ── KPI 스트립 ──
         def kpi_html(label, klabel, value, delta=None, big=False, positive=True):
             cls = "qf-kpi big" if big else "qf-kpi"
             delta_html = ""
@@ -280,7 +269,6 @@ if analyze:
         )
         st.markdown(f"<div class='qf-kpi-grid'>{kpis}</div>", unsafe_allow_html=True)
 
-        # ── 전략 지표 그래프 ──
         ticker_for_chart = tickers[0]
         st.markdown(f"<div class='qf-card'><h3>📈 전략 지표 그래프</h3><div class='qf-sub'>{ticker_for_chart} 기준 · 드래그로 확대 가능</div></div>", unsafe_allow_html=True)
 
@@ -315,7 +303,6 @@ if analyze:
             fig1.add_hline(y=rsi_threshold, line_dash="dash", line_color=RED, row=2, col=1)
             st.plotly_chart(style_fig(fig1, 500), use_container_width=True)
 
-        # ── 수익률 비교 그래프 ──
         st.markdown(f"<div class='qf-card'><h3>💰 수익률 비교</h3><div class='qf-sub'>누적 수익률 (%) · 드래그로 확대 가능</div></div>", unsafe_allow_html=True)
         fig2 = go.Figure()
         fig2.add_trace(go.Scatter(
@@ -335,7 +322,6 @@ if analyze:
         fig2.add_hline(y=0, line=dict(color=DIM, width=1, dash="dot"), opacity=0.4)
         st.plotly_chart(style_fig(fig2, 400), use_container_width=True)
 
-        # ── 낙폭 + 히트맵 나란히 ──
         col1, col2 = st.columns([1, 1])
 
         with col1:
