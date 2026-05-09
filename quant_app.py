@@ -598,5 +598,36 @@ if analyze:
                 "현재 포지션": ["보유중 ✅" if s == 1 else "현금 ❌" for s in last_signal.values]
             })
             st.dataframe(holdings.style.map(color_val, subset=["수익률 (%)", "기여도 (pp)"]), use_container_width=True, hide_index=True)
+        # ── 포트폴리오 비중 파이차트 ──
+        st.markdown(f"<div class='qf-card'><h3>🥧 현재 포트폴리오 비중</h3><div class='qf-sub'>현재 포지션 기준 · 매수 신호 종목만 투자</div></div>", unsafe_allow_html=True)
 
+        active = [tickers[i] for i, s in enumerate(last_signal.values) if s == 1]
+        cash_count = len(tickers) - len(active)
+
+        if len(active) > 0:
+            labels = active + (["현금"] if cash_count > 0 else [])
+            values = [100 / len(tickers)] * len(active) + ([cash_count * 100 / len(tickers)] if cash_count > 0 else [])
+            colors = [GREEN] * len(active) + ([DIM] if cash_count > 0 else [])
+        else:
+            labels = ["현금 (전량)"]
+            values = [100]
+            colors = [DIM]
+
+        fig_pie = go.Figure(go.Pie(
+            labels=labels,
+            values=values,
+            marker=dict(colors=colors, line=dict(color=BG, width=2)),
+            textinfo="label+percent",
+            textfont=dict(size=12, color=TEXT),
+            hole=0.4
+        ))
+        fig_pie.update_layout(
+            height=350,
+            margin=dict(l=8, r=8, t=8, b=8),
+            paper_bgcolor=SURFACE_1,
+            font=dict(family="Inter, sans-serif", color=TEXT),
+            showlegend=True,
+            legend=dict(bgcolor=SURFACE_2, bordercolor=LINE, font=dict(size=10))
+        )
+        st.plotly_chart(fig_pie, use_container_width=True)
         st.caption(f"Data: yfinance · {df.index[0].date()} → {df.index[-1].date()} · {len(df)} trading days")
