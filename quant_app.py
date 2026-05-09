@@ -5,6 +5,8 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import datetime as dt
+from strategies import calculate_rsi, calculate_bb, calculate_mdd, calculate_sharpe, calculate_cagr, run_strategy
+from optimization import optimize_parameters, walk_forward_test
 
 st.set_page_config(page_title="Quantfolio — Backtest Lab", page_icon="📈", layout="wide")
 
@@ -100,52 +102,7 @@ with st.sidebar:
 
     analyze = st.button("🔍 분석 시작", use_container_width=True)
     optimize = st.button("⚡ 최적값 자동 탐색", use_container_width=True)
-
-def calculate_rsi(data, period=14):
-    delta = data.diff()
-    gain = delta.where(delta > 0, 0)
-    loss = -delta.where(delta < 0, 0)
-    avg_gain = gain.rolling(period).mean()
-    avg_loss = loss.rolling(period).mean()
-    rs = avg_gain / avg_loss
-    return 100 - (100 / (1 + rs))
-
-def calculate_bb(data, period=20):
-    ma = data.rolling(period).mean()
-    std = data.rolling(period).std()
-    return ma + (std * 2), ma - (std * 2), ma
-
-def calculate_mdd(portfolio):
-    peak = portfolio.cummax()
-    return ((portfolio - peak) / peak).min() * 100
-
-def calculate_sharpe(returns):
-    return (returns.mean() / returns.std()) * (252 ** 0.5)
-
-def calculate_cagr(portfolio, days):
-    return ((portfolio.iloc[-1] / portfolio.iloc[0]) ** (365 / days) - 1) * 100
-
-def run_strategy(df, strategy, rsi_threshold, ma_short, ma_long, bb_period):
-    rsi = df.apply(calculate_rsi)
-    ma_s = df.rolling(ma_short).mean()
-    ma_l = df.rolling(ma_long).mean()
-    bb_upper, bb_lower, bb_mid = calculate_bb(df, bb_period)
-
-    if strategy == "RSI 전략 (RSI)":
-        signal = (rsi < rsi_threshold).astype(int)
-    elif strategy == "이동평균선 전략 (Moving Average)":
-        signal = (ma_s > ma_l).astype(int)
-    elif strategy == "볼린저 밴드 전략 (Bollinger Bands)":
-        signal = (df < bb_lower).astype(int)
-    else:
-        signal = ((rsi < rsi_threshold) & (ma_s > ma_l)).astype(int)
-
-    signal_count = signal.sum(axis=1).replace(0, 1)
-    returns = df.pct_change()
-    weighted_return = (returns * signal.shift(1)).sum(axis=1) / signal_count.shift(1)
-    portfolio = (1 + weighted_return).cumprod()
-    total_return = (portfolio.iloc[-1] - 1) * 100
-    return total_return, weighted_return, signal, rsi, ma_s, ma_l, bb_upper, bb_lower, bb_mid
+    wf_test = st.button("🔄 워크포워드 테스트", use_container_width=True)
 
 def style_fig(fig, height=400):
     fig.update_layout(
@@ -177,6 +134,78 @@ def style_fig(fig, height=400):
     fig.update_yaxes(gridcolor="#1c222e", linecolor=LINE, zeroline=False, tickfont=dict(color=DIM))
     return fig
 
+# ── 워크포워드 테스트 ──
+if wf_test:
+    if not tickers:
+        st.warning("종목을 입력해주세요!")
+    else:
+        with st.spinner("데이터 불러오는 중..."):
+            df = yf.download(tickers, start=start_date, end=end_date)["Close"]
+        if isinstance(df, pd.Series):
+            df = df.to_frame()
+        df.columns = [str(c) for c in df.columns]
+
+        st.markdown(f"<div class='qf-card'><h3>🔄 워크포워드 테스트 결과</h3><div class='qf-sub'>과거로 최적화 → 미래로 검증 · 반복</div></div>", unsafe_allow_html=True)
+
+        col_a, col_b = st.columns(2)
+        with col_a:
+            train_months = st.slider("학습 기간 (개월)", 12, 36, 24)
+        with col_b:
+            test_months = st.slider("검증 기간 (개월)", 3, 12, 6)
+
+        with st.spinner("워크포워드 테스트 진행 중... 시간이 좀 걸려요!"):
+            wf_result = walk_forward_test(df, strategy, train_months, test_months)
+
+        if wf_result.empty:
+            st.warning("데이터 기간이 너무 짧아요. 더 긴 기간을 선택해주세요!")
+        else:
+            avg_return = wf_result["검증 수익률 (%)"].mean()
+            positive_count = (wf_result["검증 수익률 (%)"] > 0).sum()
+            total_count = len(wf_result)
+
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("평균 검증 수익률", f"{avg_return:+.2f}%")
+            with col2:
+                st.metric("수익 구간", f"{positive_count}/{total_count}")
+            with col3:
+                win_rate = positive_count / total_count * 100
+                st.metric("승률", f"{win_rate:.1f}%")
+
+            def color_val(val):
+                try:
+                    v = float(val)
+                    if v > 0: return f"color: {GREEN};"
+                    if v < 0: return f"color: {RED};"
+                except:
+                    return ""
+                return ""
+
+            st.dataframe(
+                wf_result.style.map(color_val, subset=["검증 수익률 (%)"]),
+                use_container_width=True,
+                hide_index=True
+            )
+
+            fig_wf = go.Figure()
+            fig_wf.add_trace(go.Bar(
+                x=list(range(1, len(wf_result)+1)),
+                y=wf_result["검증 수익률 (%)"],
+                marker=dict(color=[GREEN if v > 0 else RED for v in wf_result["검증 수익률 (%)"]]),
+                text=[f"{v:+.1f}%" for v in wf_result["검증 수익률 (%)"]],
+                textposition="outside"
+            ))
+            fig_wf.add_hline(y=0, line=dict(color=DIM, width=1, dash="dot"))
+            fig_wf.update_layout(
+                height=300, margin=dict(l=8, r=20, t=8, b=28),
+                paper_bgcolor=SURFACE_1, plot_bgcolor=SURFACE_1,
+                font=dict(color=TEXT, size=11),
+                xaxis_title="검증 구간", yaxis_title="수익률 (%)"
+            )
+            st.plotly_chart(fig_wf, use_container_width=True)
+            st.warning("⚠️ 과거 데이터 기반 테스트예요. 미래 수익률을 보장하지 않아요!")
+
+# ── 최적화 ──
 if optimize:
     if not tickers:
         st.warning("종목을 입력해주세요!")
@@ -190,13 +219,10 @@ if optimize:
         st.markdown(f"<div class='qf-card'><h3>⚡ 파라미터 최적화 결과</h3><div class='qf-sub'>과거 데이터 기준 최적값 탐색 · 과최적화 주의!</div></div>", unsafe_allow_html=True)
 
         with st.spinner("최적값 탐색 중..."):
+            result_df = optimize_parameters(df, strategy)
+            best = result_df.loc[result_df["수익률 (%)"].idxmax()]
+
             if strategy == "RSI 전략 (RSI)":
-                results = []
-                for val in range(10, 71, 5):
-                    ret, _, _, _, _, _, _, _, _ = run_strategy(df, strategy, val, 20, 60, 20)
-                    results.append({"RSI 기준값": val, "수익률 (%)": round(ret, 2)})
-                result_df = pd.DataFrame(results)
-                best = result_df.loc[result_df["수익률 (%)"].idxmax()]
                 st.success(f"✅ 최적 RSI 기준값: **{int(best['RSI 기준값'])}** → 수익률 **{best['수익률 (%)']:+.2f}%**")
                 fig_opt = go.Figure()
                 fig_opt.add_trace(go.Bar(
@@ -208,28 +234,11 @@ if optimize:
                 ))
                 fig_opt.update_layout(height=300, margin=dict(l=8, r=20, t=8, b=28), paper_bgcolor=SURFACE_1, plot_bgcolor=SURFACE_1, font=dict(color=TEXT, size=11), xaxis_title="RSI 기준값", yaxis_title="수익률 (%)")
                 st.plotly_chart(fig_opt, use_container_width=True)
-                st.dataframe(result_df.style.map(lambda v: f"color: {GREEN};" if isinstance(v, float) and v > 0 else f"color: {RED};" if isinstance(v, float) and v < 0 else "", subset=["수익률 (%)"]), use_container_width=True, hide_index=True)
 
             elif strategy == "이동평균선 전략 (Moving Average)":
-                results = []
-                for short in range(5, 31, 5):
-                    for long in range(30, 121, 10):
-                        if short >= long:
-                            continue
-                        ret, _, _, _, _, _, _, _, _ = run_strategy(df, strategy, 40, short, long, 20)
-                        results.append({"단기 MA": short, "장기 MA": long, "수익률 (%)": round(ret, 2)})
-                result_df = pd.DataFrame(results)
-                best = result_df.loc[result_df["수익률 (%)"].idxmax()]
                 st.success(f"✅ 최적 MA: 단기 **{int(best['단기 MA'])}** / 장기 **{int(best['장기 MA'])}** → 수익률 **{best['수익률 (%)']:+.2f}%**")
-                st.dataframe(result_df.sort_values("수익률 (%)", ascending=False).head(10).style.map(lambda v: f"color: {GREEN};" if isinstance(v, float) and v > 0 else f"color: {RED};" if isinstance(v, float) and v < 0 else "", subset=["수익률 (%)"]), use_container_width=True, hide_index=True)
 
             elif strategy == "볼린저 밴드 전략 (Bollinger Bands)":
-                results = []
-                for val in range(5, 61, 5):
-                    ret, _, _, _, _, _, _, _, _ = run_strategy(df, strategy, 40, 20, 60, val)
-                    results.append({"BB 기간": val, "수익률 (%)": round(ret, 2)})
-                result_df = pd.DataFrame(results)
-                best = result_df.loc[result_df["수익률 (%)"].idxmax()]
                 st.success(f"✅ 최적 BB 기간: **{int(best['BB 기간'])}** → 수익률 **{best['수익률 (%)']:+.2f}%**")
                 fig_opt = go.Figure()
                 fig_opt.add_trace(go.Bar(
@@ -241,30 +250,32 @@ if optimize:
                 ))
                 fig_opt.update_layout(height=300, margin=dict(l=8, r=20, t=8, b=28), paper_bgcolor=SURFACE_1, plot_bgcolor=SURFACE_1, font=dict(color=TEXT, size=11), xaxis_title="BB 기간", yaxis_title="수익률 (%)")
                 st.plotly_chart(fig_opt, use_container_width=True)
-                st.dataframe(result_df.style.map(lambda v: f"color: {GREEN};" if isinstance(v, float) and v > 0 else f"color: {RED};" if isinstance(v, float) and v < 0 else "", subset=["수익률 (%)"]), use_container_width=True, hide_index=True)
 
             else:
-                results = []
-                for rsi_val in range(10, 71, 10):
-                    for short in range(5, 31, 5):
-                        for long in range(30, 121, 10):
-                            if short >= long:
-                                continue
-                            ret, _, _, _, _, _, _, _, _ = run_strategy(df, strategy, rsi_val, short, long, 20)
-                            results.append({"RSI": rsi_val, "단기 MA": short, "장기 MA": long, "수익률 (%)": round(ret, 2)})
-                result_df = pd.DataFrame(results)
-                best = result_df.loc[result_df["수익률 (%)"].idxmax()]
                 st.success(f"✅ 최적값: RSI **{int(best['RSI'])}** / 단기MA **{int(best['단기 MA'])}** / 장기MA **{int(best['장기 MA'])}** → 수익률 **{best['수익률 (%)']:+.2f}%**")
-                st.dataframe(result_df.sort_values("수익률 (%)", ascending=False).head(10).style.map(lambda v: f"color: {GREEN};" if isinstance(v, float) and v > 0 else f"color: {RED};" if isinstance(v, float) and v < 0 else "", subset=["수익률 (%)"]), use_container_width=True, hide_index=True)
+
+            def color_val(val):
+                try:
+                    v = float(val)
+                    if v > 0: return f"color: {GREEN};"
+                    if v < 0: return f"color: {RED};"
+                except:
+                    return ""
+                return ""
+
+            st.dataframe(
+                result_df.sort_values("수익률 (%)", ascending=False).head(10).style.map(color_val, subset=["수익률 (%)"]),
+                use_container_width=True, hide_index=True
+            )
 
         st.warning("⚠️ 과최적화 주의: 위 결과는 과거 데이터 기준이에요. 미래 수익률을 보장하지 않아요!")
 
+# ── 분석 ──
 if analyze:
     if not tickers:
         st.warning("종목을 입력해주세요!")
     else:
         with st.spinner("데이터 불러오는 중..."):
-            # OHLC 데이터 가져오기 (캔들스틱용)
             ohlc = yf.download(tickers, start=start_date, end=end_date)
             df = ohlc["Close"]
             if isinstance(df, pd.Series):
@@ -272,7 +283,6 @@ if analyze:
             df.columns = [str(c) for c in df.columns]
             chart_col = df.columns[0]
 
-            # 캔들스틱용 단일 종목 OHLC
             if len(tickers) == 1:
                 ticker_ohlc = yf.download(tickers[0], start=start_date, end=end_date)
                 open_p = ticker_ohlc["Open"].squeeze()
@@ -400,7 +410,7 @@ if analyze:
         )
         st.markdown(f"<div class='qf-kpi-grid'>{kpis}</div>", unsafe_allow_html=True)
 
-        # 전략 설명 (KPI 아래로 이동)
+        # 전략 설명
         with st.expander("📖 전략 & 용어 설명 보기", expanded=False):
             if strategy == "RSI 전략 (RSI)":
                 st.info("""
@@ -431,31 +441,12 @@ if analyze:
             - 전략 수익률 > 균등 → **전략이 효과 있음** ✅
             """)
 
-        # 전략 지표 그래프 (캔들스틱 적용)
+        # 전략 지표 그래프 (캔들스틱)
         st.markdown(f"<div class='qf-card'><h3>📈 전략 지표 그래프</h3><div class='qf-sub'>{chart_col} 기준 · ▲매수 ▼매도 시점 표시</div></div>", unsafe_allow_html=True)
-
-        def add_candlestick(fig, row=1):
-            fig.add_trace(go.Candlestick(
-                x=close_p.index,
-                open=open_p,
-                high=high_p,
-                low=low_p,
-                close=close_p,
-                name="캔들",
-                increasing_line_color=GREEN,
-                decreasing_line_color=RED,
-                increasing_fillcolor=GREEN,
-                decreasing_fillcolor=RED,
-            ), row=row, col=1) if hasattr(fig.data, '__len__') and isinstance(fig, go.Figure) and len(fig.data) >= 0 else None
-            return fig
 
         if strategy == "이동평균선 전략 (Moving Average)":
             fig1 = make_subplots(rows=1, cols=1)
-            fig1.add_trace(go.Candlestick(
-                x=close_p.index, open=open_p, high=high_p, low=low_p, close=close_p,
-                name="캔들", increasing_line_color=GREEN, decreasing_line_color=RED,
-                increasing_fillcolor=GREEN, decreasing_fillcolor=RED
-            ), row=1, col=1)
+            fig1.add_trace(go.Candlestick(x=close_p.index, open=open_p, high=high_p, low=low_p, close=close_p, name="캔들", increasing_line_color=GREEN, decreasing_line_color=RED, increasing_fillcolor=GREEN, decreasing_fillcolor=RED), row=1, col=1)
             fig1.add_trace(go.Scatter(x=ma_s.index, y=ma_s[chart_col], name=f"MA{ma_short}", line=dict(color="orange", width=1.5)), row=1, col=1)
             fig1.add_trace(go.Scatter(x=ma_l.index, y=ma_l[chart_col], name=f"MA{ma_long}", line=dict(color=ACCENT, width=1.5)), row=1, col=1)
             fig1.add_trace(go.Scatter(x=buy_idx, y=df.loc[buy_idx, chart_col], mode="markers", name="매수▲", marker=dict(symbol="triangle-up", size=12, color="#00ffff")), row=1, col=1)
@@ -465,11 +456,7 @@ if analyze:
 
         elif strategy == "RSI 전략 (RSI)":
             fig1 = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.7, 0.3])
-            fig1.add_trace(go.Candlestick(
-                x=close_p.index, open=open_p, high=high_p, low=low_p, close=close_p,
-                name="캔들", increasing_line_color=GREEN, decreasing_line_color=RED,
-                increasing_fillcolor=GREEN, decreasing_fillcolor=RED
-            ), row=1, col=1)
+            fig1.add_trace(go.Candlestick(x=close_p.index, open=open_p, high=high_p, low=low_p, close=close_p, name="캔들", increasing_line_color=GREEN, decreasing_line_color=RED, increasing_fillcolor=GREEN, decreasing_fillcolor=RED), row=1, col=1)
             fig1.add_trace(go.Scatter(x=buy_idx, y=df.loc[buy_idx, chart_col], mode="markers", name="매수▲", marker=dict(symbol="triangle-up", size=12, color="#00ffff")), row=1, col=1)
             fig1.add_trace(go.Scatter(x=sell_idx, y=df.loc[sell_idx, chart_col], mode="markers", name="매도▼", marker=dict(symbol="triangle-down", size=12, color="#ffff00")), row=1, col=1)
             fig1.add_trace(go.Scatter(x=rsi.index, y=rsi[chart_col], name="RSI", line=dict(color=ACCENT, width=1.5)), row=2, col=1)
@@ -479,11 +466,7 @@ if analyze:
 
         elif strategy == "볼린저 밴드 전략 (Bollinger Bands)":
             fig1 = make_subplots(rows=1, cols=1)
-            fig1.add_trace(go.Candlestick(
-                x=close_p.index, open=open_p, high=high_p, low=low_p, close=close_p,
-                name="캔들", increasing_line_color=GREEN, decreasing_line_color=RED,
-                increasing_fillcolor=GREEN, decreasing_fillcolor=RED
-            ), row=1, col=1)
+            fig1.add_trace(go.Candlestick(x=close_p.index, open=open_p, high=high_p, low=low_p, close=close_p, name="캔들", increasing_line_color=GREEN, decreasing_line_color=RED, increasing_fillcolor=GREEN, decreasing_fillcolor=RED), row=1, col=1)
             fig1.add_trace(go.Scatter(x=bb_upper.index, y=bb_upper[chart_col], name="상단밴드", line=dict(color=RED, width=1, dash="dash")), row=1, col=1)
             fig1.add_trace(go.Scatter(x=bb_mid.index, y=bb_mid[chart_col], name="중간선", line=dict(color="yellow", width=1)), row=1, col=1)
             fig1.add_trace(go.Scatter(x=bb_lower.index, y=bb_lower[chart_col], name="하단밴드", line=dict(color=GREEN, width=1, dash="dash")), row=1, col=1)
@@ -494,11 +477,7 @@ if analyze:
 
         elif strategy == "복합 전략 (Combined)":
             fig1 = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.7, 0.3])
-            fig1.add_trace(go.Candlestick(
-                x=close_p.index, open=open_p, high=high_p, low=low_p, close=close_p,
-                name="캔들", increasing_line_color=GREEN, decreasing_line_color=RED,
-                increasing_fillcolor=GREEN, decreasing_fillcolor=RED
-            ), row=1, col=1)
+            fig1.add_trace(go.Candlestick(x=close_p.index, open=open_p, high=high_p, low=low_p, close=close_p, name="캔들", increasing_line_color=GREEN, decreasing_line_color=RED, increasing_fillcolor=GREEN, decreasing_fillcolor=RED), row=1, col=1)
             fig1.add_trace(go.Scatter(x=ma_s.index, y=ma_s[chart_col], name=f"MA{ma_short}", line=dict(color="orange", width=1.5)), row=1, col=1)
             fig1.add_trace(go.Scatter(x=ma_l.index, y=ma_l[chart_col], name=f"MA{ma_long}", line=dict(color=ACCENT, width=1.5)), row=1, col=1)
             fig1.add_trace(go.Scatter(x=buy_idx, y=df.loc[buy_idx, chart_col], mode="markers", name="매수▲", marker=dict(symbol="triangle-up", size=12, color="#00ffff")), row=1, col=1)
@@ -511,16 +490,8 @@ if analyze:
         # 수익률 비교 그래프
         st.markdown(f"<div class='qf-card'><h3>💰 수익률 비교</h3><div class='qf-sub'>누적 수익률 (%) · 드래그로 확대 가능</div></div>", unsafe_allow_html=True)
         fig2 = go.Figure()
-        fig2.add_trace(go.Scatter(
-            x=portfolio_equal.index, y=((portfolio_equal - 1) * 100),
-            name="균등 포트폴리오", line=dict(color=RED, width=2),
-            hovertemplate="%{x}<br>수익률: %{y:.2f}%<extra></extra>"
-        ))
-        fig2.add_trace(go.Scatter(
-            x=portfolio_strategy.index, y=((portfolio_strategy - 1) * 100),
-            name="전략 포트폴리오", line=dict(color=ACCENT, width=2),
-            hovertemplate="%{x}<br>수익률: %{y:.2f}%<extra></extra>"
-        ))
+        fig2.add_trace(go.Scatter(x=portfolio_equal.index, y=((portfolio_equal - 1) * 100), name="균등 포트폴리오", line=dict(color=RED, width=2), hovertemplate="%{x}<br>수익률: %{y:.2f}%<extra></extra>"))
+        fig2.add_trace(go.Scatter(x=portfolio_strategy.index, y=((portfolio_strategy - 1) * 100), name="전략 포트폴리오", line=dict(color=ACCENT, width=2), hovertemplate="%{x}<br>수익률: %{y:.2f}%<extra></extra>"))
         fig2.add_hline(y=0, line=dict(color=DIM, width=1, dash="dot"), opacity=0.4)
         st.plotly_chart(style_fig(fig2, 400), use_container_width=True)
 
@@ -531,12 +502,7 @@ if analyze:
             peak = portfolio_strategy.cummax()
             drawdown = (portfolio_strategy - peak) / peak * 100
             fig_dd = go.Figure()
-            fig_dd.add_trace(go.Scatter(
-                x=drawdown.index, y=drawdown.values,
-                fill="tozeroy", line=dict(color=RED, width=1.5),
-                fillcolor="rgba(239,68,68,0.18)", name="Drawdown",
-                hovertemplate="%{x}<br>낙폭: %{y:.2f}%<extra></extra>"
-            ))
+            fig_dd.add_trace(go.Scatter(x=drawdown.index, y=drawdown.values, fill="tozeroy", line=dict(color=RED, width=1.5), fillcolor="rgba(239,68,68,0.18)", name="Drawdown", hovertemplate="%{x}<br>낙폭: %{y:.2f}%<extra></extra>"))
             fig_dd.update_layout(height=300, margin=dict(l=8, r=20, t=8, b=28), paper_bgcolor=SURFACE_1, plot_bgcolor=SURFACE_1, font=dict(family="Inter, sans-serif", color=TEXT, size=11), showlegend=False, hovermode="x unified")
             fig_dd.update_xaxes(gridcolor="#1c222e", linecolor=LINE, zeroline=False, tickfont=dict(color=DIM))
             fig_dd.update_yaxes(gridcolor="#1c222e", linecolor=LINE, zeroline=False, tickfont=dict(color=DIM))
@@ -598,7 +564,8 @@ if analyze:
                 "현재 포지션": ["보유중 ✅" if s == 1 else "현금 ❌" for s in last_signal.values]
             })
             st.dataframe(holdings.style.map(color_val, subset=["수익률 (%)", "기여도 (pp)"]), use_container_width=True, hide_index=True)
-        # ── 포트폴리오 비중 파이차트 ──
+
+        # 포트폴리오 파이차트
         st.markdown(f"<div class='qf-card'><h3>🥧 현재 포트폴리오 비중</h3><div class='qf-sub'>현재 포지션 기준 · 매수 신호 종목만 투자</div></div>", unsafe_allow_html=True)
 
         active = [tickers[i] for i, s in enumerate(last_signal.values) if s == 1]
@@ -614,25 +581,23 @@ if analyze:
             colors = [DIM]
 
         fig_pie = go.Figure(go.Pie(
-            labels=labels,
-            values=values,
+            labels=labels, values=values,
             marker=dict(colors=colors, line=dict(color=BG, width=2)),
             textinfo="label+percent",
             textfont=dict(size=12, color=TEXT),
             hole=0.4
         ))
         fig_pie.update_layout(
-            height=350,
-            margin=dict(l=8, r=8, t=8, b=8),
+            height=350, margin=dict(l=8, r=8, t=8, b=8),
             paper_bgcolor=SURFACE_1,
             font=dict(family="Inter, sans-serif", color=TEXT),
             showlegend=True,
             legend=dict(bgcolor=SURFACE_2, bordercolor=LINE, font=dict(size=10))
         )
         st.plotly_chart(fig_pie, use_container_width=True)
-        # ── 금액 배분 테이블 ──
-        st.markdown(f"<div class='qf-card'><h3>💵 금액 배분</h3><div class='qf-sub'>전략 신호 기준 · 투입금액 {investment:,}만원</div></div>", unsafe_allow_html=True)
 
+        # 금액 배분 테이블
+        st.markdown(f"<div class='qf-card'><h3>💵 금액 배분</h3><div class='qf-sub'>전략 신호 기준 · 투입금액 {investment:,}만원</div></div>", unsafe_allow_html=True)
         alloc_data = []
         active_count = len(active)
         for t in tickers:
@@ -649,4 +614,5 @@ if analyze:
 
         alloc_df = pd.DataFrame(alloc_data)
         st.dataframe(alloc_df, use_container_width=True, hide_index=True)
+
         st.caption(f"Data: yfinance · {df.index[0].date()} → {df.index[-1].date()} · {len(df)} trading days")
