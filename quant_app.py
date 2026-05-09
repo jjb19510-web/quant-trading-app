@@ -93,6 +93,11 @@ with st.sidebar:
         ma_long = st.slider("장기 MA", 20, 120, 60)
         bb_period = 20
 
+    st.divider()
+    st.markdown("<div style='font-size:13px; font-weight:600; margin-bottom:8px;'>💰 투입금액 설정</div>", unsafe_allow_html=True)
+    investment = st.number_input("투입금액 (만원)", min_value=0, value=1000, step=100)
+    st.caption(f"= {investment:,}만원 ({investment * 10000:,}원)")
+
     analyze = st.button("🔍 분석 시작", use_container_width=True)
     optimize = st.button("⚡ 최적값 자동 탐색", use_container_width=True)
 
@@ -126,7 +131,6 @@ with st.expander("📖 전략 & 용어 설명 보기", expanded=False):
     - 전략 수익률 > 균등 → **전략이 효과 있음** ✅
     """)
 
-# ── 공통 함수 ──
 def calculate_rsi(data, period=14):
     delta = data.diff()
     gain = delta.where(delta > 0, 0)
@@ -203,7 +207,6 @@ def style_fig(fig, height=400):
     fig.update_yaxes(gridcolor="#1c222e", linecolor=LINE, zeroline=False, tickfont=dict(color=DIM))
     return fig
 
-# ── 최적화 ──
 if optimize:
     if not tickers:
         st.warning("종목을 입력해주세요!")
@@ -216,7 +219,7 @@ if optimize:
 
         st.markdown(f"<div class='qf-card'><h3>⚡ 파라미터 최적화 결과</h3><div class='qf-sub'>과거 데이터 기준 최적값 탐색 · 과최적화 주의!</div></div>", unsafe_allow_html=True)
 
-        with st.spinner("최적값 탐색 중... 잠시만 기다려주세요!"):
+        with st.spinner("최적값 탐색 중..."):
             if strategy == "RSI 전략 (RSI)":
                 results = []
                 for val in range(10, 71, 5):
@@ -225,7 +228,6 @@ if optimize:
                 result_df = pd.DataFrame(results)
                 best = result_df.loc[result_df["수익률 (%)"].idxmax()]
                 st.success(f"✅ 최적 RSI 기준값: **{int(best['RSI 기준값'])}** → 수익률 **{best['수익률 (%)']:+.2f}%**")
-
                 fig_opt = go.Figure()
                 fig_opt.add_trace(go.Bar(
                     x=result_df["RSI 기준값"],
@@ -234,17 +236,9 @@ if optimize:
                     text=[f"{v:+.1f}%" for v in result_df["수익률 (%)"]],
                     textposition="outside"
                 ))
-                fig_opt.update_layout(
-                    height=300, margin=dict(l=8, r=20, t=8, b=28),
-                    paper_bgcolor=SURFACE_1, plot_bgcolor=SURFACE_1,
-                    font=dict(color=TEXT, size=11),
-                    xaxis_title="RSI 기준값", yaxis_title="수익률 (%)"
-                )
+                fig_opt.update_layout(height=300, margin=dict(l=8, r=20, t=8, b=28), paper_bgcolor=SURFACE_1, plot_bgcolor=SURFACE_1, font=dict(color=TEXT, size=11), xaxis_title="RSI 기준값", yaxis_title="수익률 (%)")
                 st.plotly_chart(fig_opt, use_container_width=True)
-                st.dataframe(result_df.style.map(
-                    lambda v: f"color: {GREEN};" if isinstance(v, float) and v > 0 else f"color: {RED};" if isinstance(v, float) and v < 0 else "",
-                    subset=["수익률 (%)"]
-                ), use_container_width=True, hide_index=True)
+                st.dataframe(result_df.style.map(lambda v: f"color: {GREEN};" if isinstance(v, float) and v > 0 else f"color: {RED};" if isinstance(v, float) and v < 0 else "", subset=["수익률 (%)"]), use_container_width=True, hide_index=True)
 
             elif strategy == "이동평균선 전략 (Moving Average)":
                 results = []
@@ -257,10 +251,7 @@ if optimize:
                 result_df = pd.DataFrame(results)
                 best = result_df.loc[result_df["수익률 (%)"].idxmax()]
                 st.success(f"✅ 최적 MA: 단기 **{int(best['단기 MA'])}** / 장기 **{int(best['장기 MA'])}** → 수익률 **{best['수익률 (%)']:+.2f}%**")
-                st.dataframe(result_df.sort_values("수익률 (%)", ascending=False).head(10).style.map(
-                    lambda v: f"color: {GREEN};" if isinstance(v, float) and v > 0 else f"color: {RED};" if isinstance(v, float) and v < 0 else "",
-                    subset=["수익률 (%)"]
-                ), use_container_width=True, hide_index=True)
+                st.dataframe(result_df.sort_values("수익률 (%)", ascending=False).head(10).style.map(lambda v: f"color: {GREEN};" if isinstance(v, float) and v > 0 else f"color: {RED};" if isinstance(v, float) and v < 0 else "", subset=["수익률 (%)"]), use_container_width=True, hide_index=True)
 
             elif strategy == "볼린저 밴드 전략 (Bollinger Bands)":
                 results = []
@@ -270,7 +261,6 @@ if optimize:
                 result_df = pd.DataFrame(results)
                 best = result_df.loc[result_df["수익률 (%)"].idxmax()]
                 st.success(f"✅ 최적 BB 기간: **{int(best['BB 기간'])}** → 수익률 **{best['수익률 (%)']:+.2f}%**")
-
                 fig_opt = go.Figure()
                 fig_opt.add_trace(go.Bar(
                     x=result_df["BB 기간"],
@@ -279,19 +269,11 @@ if optimize:
                     text=[f"{v:+.1f}%" for v in result_df["수익률 (%)"]],
                     textposition="outside"
                 ))
-                fig_opt.update_layout(
-                    height=300, margin=dict(l=8, r=20, t=8, b=28),
-                    paper_bgcolor=SURFACE_1, plot_bgcolor=SURFACE_1,
-                    font=dict(color=TEXT, size=11),
-                    xaxis_title="BB 기간", yaxis_title="수익률 (%)"
-                )
+                fig_opt.update_layout(height=300, margin=dict(l=8, r=20, t=8, b=28), paper_bgcolor=SURFACE_1, plot_bgcolor=SURFACE_1, font=dict(color=TEXT, size=11), xaxis_title="BB 기간", yaxis_title="수익률 (%)")
                 st.plotly_chart(fig_opt, use_container_width=True)
-                st.dataframe(result_df.style.map(
-                    lambda v: f"color: {GREEN};" if isinstance(v, float) and v > 0 else f"color: {RED};" if isinstance(v, float) and v < 0 else "",
-                    subset=["수익률 (%)"]
-                ), use_container_width=True, hide_index=True)
+                st.dataframe(result_df.style.map(lambda v: f"color: {GREEN};" if isinstance(v, float) and v > 0 else f"color: {RED};" if isinstance(v, float) and v < 0 else "", subset=["수익률 (%)"]), use_container_width=True, hide_index=True)
 
-            else:  # Combined
+            else:
                 results = []
                 for rsi_val in range(10, 71, 10):
                     for short in range(5, 31, 5):
@@ -303,14 +285,10 @@ if optimize:
                 result_df = pd.DataFrame(results)
                 best = result_df.loc[result_df["수익률 (%)"].idxmax()]
                 st.success(f"✅ 최적값: RSI **{int(best['RSI'])}** / 단기MA **{int(best['단기 MA'])}** / 장기MA **{int(best['장기 MA'])}** → 수익률 **{best['수익률 (%)']:+.2f}%**")
-                st.dataframe(result_df.sort_values("수익률 (%)", ascending=False).head(10).style.map(
-                    lambda v: f"color: {GREEN};" if isinstance(v, float) and v > 0 else f"color: {RED};" if isinstance(v, float) and v < 0 else "",
-                    subset=["수익률 (%)"]
-                ), use_container_width=True, hide_index=True)
+                st.dataframe(result_df.sort_values("수익률 (%)", ascending=False).head(10).style.map(lambda v: f"color: {GREEN};" if isinstance(v, float) and v > 0 else f"color: {RED};" if isinstance(v, float) and v < 0 else "", subset=["수익률 (%)"]), use_container_width=True, hide_index=True)
 
         st.warning("⚠️ 과최적화 주의: 위 결과는 과거 데이터 기준이에요. 미래 수익률을 보장하지 않아요!")
 
-# ── 분석 ──
 if analyze:
     if not tickers:
         st.warning("종목을 입력해주세요!")
@@ -337,13 +315,19 @@ if analyze:
 
         days = max((df.index[-1] - df.index[0]).days, 1)
         equal_pct = (portfolio_equal.iloc[-1] - 1) * 100
-        diff_pct = strategy_pct - equal_pct
         mdd_s = calculate_mdd(portfolio_strategy)
         mdd_e = calculate_mdd(portfolio_equal)
         sharpe_s = calculate_sharpe(weighted_return.dropna())
         sharpe_e = calculate_sharpe(equal_return.dropna())
         cagr_s = calculate_cagr(portfolio_strategy, days)
         cagr_e = calculate_cagr(portfolio_equal, days)
+
+        # 투입금액 계산
+        invest_won = investment * 10000
+        strategy_profit = invest_won * (strategy_pct / 100)
+        strategy_final = invest_won + strategy_profit
+        equal_profit = invest_won * (equal_pct / 100)
+        equal_final = invest_won + equal_profit
 
         left, right = st.columns([3, 2])
         with left:
@@ -388,6 +372,20 @@ if analyze:
                         <div style='font-size:14px; color:{DIM};'>조회 실패</div>
                     </div>
                     """, unsafe_allow_html=True)
+
+        # 💰 투입금액 수익금 카드
+        st.markdown(f"<div class='qf-card'><h3>💰 투입금액 수익 분석</h3><div class='qf-sub'>투입금액 {investment:,}만원 기준</div></div>", unsafe_allow_html=True)
+        m1, m2, m3, m4 = st.columns(4)
+        with m1:
+            st.metric("투입금액", f"{investment:,}만원")
+        with m2:
+            profit_color = "normal" if strategy_profit >= 0 else "inverse"
+            st.metric("전략 수익금", f"{strategy_profit/10000:+,.0f}만원", delta=f"{strategy_pct:+.2f}%")
+        with m3:
+            st.metric("전략 최종금액", f"{strategy_final/10000:,.0f}만원")
+        with m4:
+            diff = strategy_profit - equal_profit
+            st.metric("균등 대비 초과수익", f"{diff/10000:+,.0f}만원")
 
         # KPI 스트립
         def kpi_html(label, klabel, value, delta=None, big=False, positive=True):
@@ -494,12 +492,7 @@ if analyze:
                 fillcolor="rgba(239,68,68,0.18)", name="Drawdown",
                 hovertemplate="%{x}<br>낙폭: %{y:.2f}%<extra></extra>"
             ))
-            fig_dd.update_layout(
-                height=300, margin=dict(l=8, r=20, t=8, b=28),
-                paper_bgcolor=SURFACE_1, plot_bgcolor=SURFACE_1,
-                font=dict(family="Inter, sans-serif", color=TEXT, size=11),
-                showlegend=False, hovermode="x unified"
-            )
+            fig_dd.update_layout(height=300, margin=dict(l=8, r=20, t=8, b=28), paper_bgcolor=SURFACE_1, plot_bgcolor=SURFACE_1, font=dict(family="Inter, sans-serif", color=TEXT, size=11), showlegend=False, hovermode="x unified")
             fig_dd.update_xaxes(gridcolor="#1c222e", linecolor=LINE, zeroline=False, tickfont=dict(color=DIM))
             fig_dd.update_yaxes(gridcolor="#1c222e", linecolor=LINE, zeroline=False, tickfont=dict(color=DIM))
             st.plotly_chart(fig_dd, use_container_width=True)
@@ -522,16 +515,11 @@ if analyze:
                 textfont=dict(family="JetBrains Mono", size=10, color=TEXT),
                 colorbar=dict(thickness=8, len=0.8, tickfont=dict(color=DIM, size=9))
             ))
-            fig_h.update_layout(
-                height=300, margin=dict(l=8, r=40, t=8, b=28),
-                paper_bgcolor=SURFACE_1, plot_bgcolor=SURFACE_1,
-                font=dict(family="Inter, sans-serif", color=TEXT, size=11),
-            )
+            fig_h.update_layout(height=300, margin=dict(l=8, r=40, t=8, b=28), paper_bgcolor=SURFACE_1, plot_bgcolor=SURFACE_1, font=dict(family="Inter, sans-serif", color=TEXT, size=11))
             fig_h.update_xaxes(tickfont=dict(color=DIM))
             fig_h.update_yaxes(tickfont=dict(color=DIM))
             st.plotly_chart(fig_h, use_container_width=True)
 
-        # 종목별 성과 테이블
         st.markdown(f"<div class='qf-card'><h3>📊 종목별 성과</h3><div class='qf-sub'>기간 수익률 및 현재 포지션</div></div>", unsafe_allow_html=True)
         period_returns = (df.iloc[-1] / df.iloc[0] - 1) * 100
         volatility = df.pct_change().std() * (252 ** 0.5) * 100
