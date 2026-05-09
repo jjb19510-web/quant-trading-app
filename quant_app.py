@@ -101,36 +101,6 @@ with st.sidebar:
     analyze = st.button("🔍 분석 시작", use_container_width=True)
     optimize = st.button("⚡ 최적값 자동 탐색", use_container_width=True)
 
-with st.expander("📖 전략 & 용어 설명 보기", expanded=False):
-    if strategy == "RSI 전략 (RSI)":
-        st.info("""
-        **RSI 전략 (Relative Strength Index, 상대강도지수)**
-        - RSI가 낮을수록 → 너무 많이 떨어진 상태 → **매수 신호**
-        - RSI Threshold(기준값) 이하일 때 매수
-        """)
-    elif strategy == "이동평균선 전략 (Moving Average)":
-        st.info("""
-        **이동평균선 전략 (Moving Average, MA)**
-        - 단기 MA > 장기 MA → **매수 신호** 📈 (골든크로스)
-        - 단기 MA < 장기 MA → **매도 신호** 📉 (데드크로스)
-        """)
-    elif strategy == "볼린저 밴드 전략 (Bollinger Bands)":
-        st.info("""
-        **볼린저 밴드 전략 (Bollinger Bands)**
-        - 주가가 하단 밴드 아래로 떨어지면 → **매수 신호** 📈
-        - 주가가 상단 밴드 위로 올라가면 → **매도 신호** 📉
-        """)
-    else:
-        st.info("""
-        **복합 전략 (Combined Strategy)**
-        - RSI가 기준값 이하 **AND** 단기 MA > 장기 MA → **매수 신호**
-        """)
-    st.info("""
-    **균등 포트폴리오 (Equal Portfolio)**
-    - 전략 없이 모든 종목에 똑같은 비율로 투자하는 기준선이에요.
-    - 전략 수익률 > 균등 → **전략이 효과 있음** ✅
-    """)
-
 def calculate_rsi(data, period=14):
     delta = data.diff()
     gain = delta.where(delta > 0, 0)
@@ -294,12 +264,26 @@ if analyze:
         st.warning("종목을 입력해주세요!")
     else:
         with st.spinner("데이터 불러오는 중..."):
-            df = yf.download(tickers, start=start_date, end=end_date)["Close"]
+            # OHLC 데이터 가져오기 (캔들스틱용)
+            ohlc = yf.download(tickers, start=start_date, end=end_date)
+            df = ohlc["Close"]
+            if isinstance(df, pd.Series):
+                df = df.to_frame()
+            df.columns = [str(c) for c in df.columns]
+            chart_col = df.columns[0]
 
-        if isinstance(df, pd.Series):
-            df = df.to_frame()
-        df.columns = [str(c) for c in df.columns]
-        chart_col = df.columns[0]
+            # 캔들스틱용 단일 종목 OHLC
+            if len(tickers) == 1:
+                ticker_ohlc = yf.download(tickers[0], start=start_date, end=end_date)
+                open_p = ticker_ohlc["Open"].squeeze()
+                high_p = ticker_ohlc["High"].squeeze()
+                low_p = ticker_ohlc["Low"].squeeze()
+                close_p = ticker_ohlc["Close"].squeeze()
+            else:
+                open_p = ohlc["Open"][chart_col] if isinstance(ohlc["Open"], pd.DataFrame) else ohlc["Open"]
+                high_p = ohlc["High"][chart_col] if isinstance(ohlc["High"], pd.DataFrame) else ohlc["High"]
+                low_p = ohlc["Low"][chart_col] if isinstance(ohlc["Low"], pd.DataFrame) else ohlc["Low"]
+                close_p = df[chart_col]
 
         strategy_pct, weighted_return, signal, rsi, ma_s, ma_l, bb_upper, bb_lower, bb_mid = run_strategy(
             df, strategy, rsi_threshold, ma_short, ma_long, bb_period
@@ -322,12 +306,10 @@ if analyze:
         cagr_s = calculate_cagr(portfolio_strategy, days)
         cagr_e = calculate_cagr(portfolio_equal, days)
 
-        # 투입금액 계산
         invest_won = investment * 10000
         strategy_profit = invest_won * (strategy_pct / 100)
         strategy_final = invest_won + strategy_profit
         equal_profit = invest_won * (equal_pct / 100)
-        equal_final = invest_won + equal_profit
 
         left, right = st.columns([3, 2])
         with left:
@@ -373,13 +355,12 @@ if analyze:
                     </div>
                     """, unsafe_allow_html=True)
 
-        # 💰 투입금액 수익금 카드
+        # 투입금액 카드
         st.markdown(f"<div class='qf-card'><h3>💰 투입금액 수익 분석</h3><div class='qf-sub'>투입금액 {investment:,}만원 기준</div></div>", unsafe_allow_html=True)
         m1, m2, m3, m4 = st.columns(4)
         with m1:
             st.metric("투입금액", f"{investment:,}만원")
         with m2:
-            profit_color = "normal" if strategy_profit >= 0 else "inverse"
             st.metric("전략 수익금", f"{strategy_profit/10000:+,.0f}만원", delta=f"{strategy_pct:+.2f}%")
         with m3:
             st.metric("전략 최종금액", f"{strategy_final/10000:,.0f}만원")
@@ -419,61 +400,125 @@ if analyze:
         )
         st.markdown(f"<div class='qf-kpi-grid'>{kpis}</div>", unsafe_allow_html=True)
 
+        # 전략 설명 (KPI 아래로 이동)
+        with st.expander("📖 전략 & 용어 설명 보기", expanded=False):
+            if strategy == "RSI 전략 (RSI)":
+                st.info("""
+                **RSI 전략 (Relative Strength Index, 상대강도지수)**
+                - RSI가 낮을수록 → 너무 많이 떨어진 상태 → **매수 신호**
+                - RSI Threshold(기준값) 이하일 때 매수
+                """)
+            elif strategy == "이동평균선 전략 (Moving Average)":
+                st.info("""
+                **이동평균선 전략 (Moving Average, MA)**
+                - 단기 MA > 장기 MA → **매수 신호** 📈 (골든크로스)
+                - 단기 MA < 장기 MA → **매도 신호** 📉 (데드크로스)
+                """)
+            elif strategy == "볼린저 밴드 전략 (Bollinger Bands)":
+                st.info("""
+                **볼린저 밴드 전략 (Bollinger Bands)**
+                - 주가가 하단 밴드 아래로 떨어지면 → **매수 신호** 📈
+                - 주가가 상단 밴드 위로 올라가면 → **매도 신호** 📉
+                """)
+            else:
+                st.info("""
+                **복합 전략 (Combined Strategy)**
+                - RSI가 기준값 이하 **AND** 단기 MA > 장기 MA → **매수 신호**
+                """)
+            st.info("""
+            **균등 포트폴리오 (Equal Portfolio)**
+            - 전략 없이 모든 종목에 똑같은 비율로 투자하는 기준선이에요.
+            - 전략 수익률 > 균등 → **전략이 효과 있음** ✅
+            """)
+
+        # 전략 지표 그래프 (캔들스틱 적용)
         st.markdown(f"<div class='qf-card'><h3>📈 전략 지표 그래프</h3><div class='qf-sub'>{chart_col} 기준 · ▲매수 ▼매도 시점 표시</div></div>", unsafe_allow_html=True)
 
+        def add_candlestick(fig, row=1):
+            fig.add_trace(go.Candlestick(
+                x=close_p.index,
+                open=open_p,
+                high=high_p,
+                low=low_p,
+                close=close_p,
+                name="캔들",
+                increasing_line_color=GREEN,
+                decreasing_line_color=RED,
+                increasing_fillcolor=GREEN,
+                decreasing_fillcolor=RED,
+            ), row=row, col=1) if hasattr(fig.data, '__len__') and isinstance(fig, go.Figure) and len(fig.data) >= 0 else None
+            return fig
+
         if strategy == "이동평균선 전략 (Moving Average)":
-            fig1 = go.Figure()
-            fig1.add_trace(go.Scatter(x=df.index, y=df[chart_col], name="주가", line=dict(color=TEXT, width=1)))
-            fig1.add_trace(go.Scatter(x=ma_s.index, y=ma_s[chart_col], name=f"MA{ma_short}", line=dict(color="orange", width=1.5)))
-            fig1.add_trace(go.Scatter(x=ma_l.index, y=ma_l[chart_col], name=f"MA{ma_long}", line=dict(color=ACCENT, width=1.5)))
-            fig1.add_trace(go.Scatter(x=buy_idx, y=df.loc[buy_idx, chart_col], mode="markers", name="매수▲", marker=dict(symbol="triangle-up", size=10, color=GREEN)))
-            fig1.add_trace(go.Scatter(x=sell_idx, y=df.loc[sell_idx, chart_col], mode="markers", name="매도▼", marker=dict(symbol="triangle-down", size=10, color=RED)))
-            st.plotly_chart(style_fig(fig1, 400), use_container_width=True)
+            fig1 = make_subplots(rows=1, cols=1)
+            fig1.add_trace(go.Candlestick(
+                x=close_p.index, open=open_p, high=high_p, low=low_p, close=close_p,
+                name="캔들", increasing_line_color=GREEN, decreasing_line_color=RED,
+                increasing_fillcolor=GREEN, decreasing_fillcolor=RED
+            ), row=1, col=1)
+            fig1.add_trace(go.Scatter(x=ma_s.index, y=ma_s[chart_col], name=f"MA{ma_short}", line=dict(color="orange", width=1.5)), row=1, col=1)
+            fig1.add_trace(go.Scatter(x=ma_l.index, y=ma_l[chart_col], name=f"MA{ma_long}", line=dict(color=ACCENT, width=1.5)), row=1, col=1)
+            fig1.add_trace(go.Scatter(x=buy_idx, y=df.loc[buy_idx, chart_col], mode="markers", name="매수▲", marker=dict(symbol="triangle-up", size=10, color=GREEN)), row=1, col=1)
+            fig1.add_trace(go.Scatter(x=sell_idx, y=df.loc[sell_idx, chart_col], mode="markers", name="매도▼", marker=dict(symbol="triangle-down", size=10, color=RED)), row=1, col=1)
+            fig1.update_layout(xaxis_rangeslider_visible=False)
+            st.plotly_chart(style_fig(fig1, 450), use_container_width=True)
 
         elif strategy == "RSI 전략 (RSI)":
             fig1 = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.7, 0.3])
-            fig1.add_trace(go.Scatter(x=df.index, y=df[chart_col], name="주가", line=dict(color=TEXT, width=1)), row=1, col=1)
+            fig1.add_trace(go.Candlestick(
+                x=close_p.index, open=open_p, high=high_p, low=low_p, close=close_p,
+                name="캔들", increasing_line_color=GREEN, decreasing_line_color=RED,
+                increasing_fillcolor=GREEN, decreasing_fillcolor=RED
+            ), row=1, col=1)
             fig1.add_trace(go.Scatter(x=buy_idx, y=df.loc[buy_idx, chart_col], mode="markers", name="매수▲", marker=dict(symbol="triangle-up", size=10, color=GREEN)), row=1, col=1)
             fig1.add_trace(go.Scatter(x=sell_idx, y=df.loc[sell_idx, chart_col], mode="markers", name="매도▼", marker=dict(symbol="triangle-down", size=10, color=RED)), row=1, col=1)
             fig1.add_trace(go.Scatter(x=rsi.index, y=rsi[chart_col], name="RSI", line=dict(color=ACCENT, width=1.5)), row=2, col=1)
             fig1.add_hline(y=rsi_threshold, line_dash="dash", line_color=RED, row=2, col=1)
-            st.plotly_chart(style_fig(fig1, 500), use_container_width=True)
+            fig1.update_layout(xaxis_rangeslider_visible=False)
+            st.plotly_chart(style_fig(fig1, 550), use_container_width=True)
 
         elif strategy == "볼린저 밴드 전략 (Bollinger Bands)":
-            fig1 = go.Figure()
-            fig1.add_trace(go.Scatter(x=df.index, y=df[chart_col], name="주가", line=dict(color=TEXT, width=1)))
-            fig1.add_trace(go.Scatter(x=bb_upper.index, y=bb_upper[chart_col], name="상단밴드", line=dict(color=RED, width=1, dash="dash")))
-            fig1.add_trace(go.Scatter(x=bb_mid.index, y=bb_mid[chart_col], name="중간선", line=dict(color="yellow", width=1)))
-            fig1.add_trace(go.Scatter(x=bb_lower.index, y=bb_lower[chart_col], name="하단밴드", line=dict(color=GREEN, width=1, dash="dash"), fill="tonexty", fillcolor="rgba(74,222,128,0.05)"))
-            fig1.add_trace(go.Scatter(x=buy_idx, y=df.loc[buy_idx, chart_col], mode="markers", name="매수▲", marker=dict(symbol="triangle-up", size=10, color=GREEN)))
-            fig1.add_trace(go.Scatter(x=sell_idx, y=df.loc[sell_idx, chart_col], mode="markers", name="매도▼", marker=dict(symbol="triangle-down", size=10, color=RED)))
-            st.plotly_chart(style_fig(fig1, 400), use_container_width=True)
+            fig1 = make_subplots(rows=1, cols=1)
+            fig1.add_trace(go.Candlestick(
+                x=close_p.index, open=open_p, high=high_p, low=low_p, close=close_p,
+                name="캔들", increasing_line_color=GREEN, decreasing_line_color=RED,
+                increasing_fillcolor=GREEN, decreasing_fillcolor=RED
+            ), row=1, col=1)
+            fig1.add_trace(go.Scatter(x=bb_upper.index, y=bb_upper[chart_col], name="상단밴드", line=dict(color=RED, width=1, dash="dash")), row=1, col=1)
+            fig1.add_trace(go.Scatter(x=bb_mid.index, y=bb_mid[chart_col], name="중간선", line=dict(color="yellow", width=1)), row=1, col=1)
+            fig1.add_trace(go.Scatter(x=bb_lower.index, y=bb_lower[chart_col], name="하단밴드", line=dict(color=GREEN, width=1, dash="dash")), row=1, col=1)
+            fig1.add_trace(go.Scatter(x=buy_idx, y=df.loc[buy_idx, chart_col], mode="markers", name="매수▲", marker=dict(symbol="triangle-up", size=10, color=GREEN)), row=1, col=1)
+            fig1.add_trace(go.Scatter(x=sell_idx, y=df.loc[sell_idx, chart_col], mode="markers", name="매도▼", marker=dict(symbol="triangle-down", size=10, color=RED)), row=1, col=1)
+            fig1.update_layout(xaxis_rangeslider_visible=False)
+            st.plotly_chart(style_fig(fig1, 450), use_container_width=True)
 
         elif strategy == "복합 전략 (Combined)":
             fig1 = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.7, 0.3])
-            fig1.add_trace(go.Scatter(x=df.index, y=df[chart_col], name="주가", line=dict(color=TEXT, width=1)), row=1, col=1)
+            fig1.add_trace(go.Candlestick(
+                x=close_p.index, open=open_p, high=high_p, low=low_p, close=close_p,
+                name="캔들", increasing_line_color=GREEN, decreasing_line_color=RED,
+                increasing_fillcolor=GREEN, decreasing_fillcolor=RED
+            ), row=1, col=1)
             fig1.add_trace(go.Scatter(x=ma_s.index, y=ma_s[chart_col], name=f"MA{ma_short}", line=dict(color="orange", width=1.5)), row=1, col=1)
             fig1.add_trace(go.Scatter(x=ma_l.index, y=ma_l[chart_col], name=f"MA{ma_long}", line=dict(color=ACCENT, width=1.5)), row=1, col=1)
             fig1.add_trace(go.Scatter(x=buy_idx, y=df.loc[buy_idx, chart_col], mode="markers", name="매수▲", marker=dict(symbol="triangle-up", size=10, color=GREEN)), row=1, col=1)
             fig1.add_trace(go.Scatter(x=sell_idx, y=df.loc[sell_idx, chart_col], mode="markers", name="매도▼", marker=dict(symbol="triangle-down", size=10, color=RED)), row=1, col=1)
             fig1.add_trace(go.Scatter(x=rsi.index, y=rsi[chart_col], name="RSI", line=dict(color=ACCENT, width=1.5)), row=2, col=1)
             fig1.add_hline(y=rsi_threshold, line_dash="dash", line_color=RED, row=2, col=1)
-            st.plotly_chart(style_fig(fig1, 500), use_container_width=True)
+            fig1.update_layout(xaxis_rangeslider_visible=False)
+            st.plotly_chart(style_fig(fig1, 550), use_container_width=True)
 
+        # 수익률 비교 그래프
         st.markdown(f"<div class='qf-card'><h3>💰 수익률 비교</h3><div class='qf-sub'>누적 수익률 (%) · 드래그로 확대 가능</div></div>", unsafe_allow_html=True)
         fig2 = go.Figure()
         fig2.add_trace(go.Scatter(
-            x=portfolio_equal.index,
-            y=((portfolio_equal - 1) * 100),
-            name="균등 포트폴리오",
-            line=dict(color=RED, width=2),
+            x=portfolio_equal.index, y=((portfolio_equal - 1) * 100),
+            name="균등 포트폴리오", line=dict(color=RED, width=2),
             hovertemplate="%{x}<br>수익률: %{y:.2f}%<extra></extra>"
         ))
         fig2.add_trace(go.Scatter(
-            x=portfolio_strategy.index,
-            y=((portfolio_strategy - 1) * 100),
-            name="전략 포트폴리오",
-            line=dict(color=ACCENT, width=2),
+            x=portfolio_strategy.index, y=((portfolio_strategy - 1) * 100),
+            name="전략 포트폴리오", line=dict(color=ACCENT, width=2),
             hovertemplate="%{x}<br>수익률: %{y:.2f}%<extra></extra>"
         ))
         fig2.add_hline(y=0, line=dict(color=DIM, width=1, dash="dot"), opacity=0.4)
@@ -520,6 +565,7 @@ if analyze:
             fig_h.update_yaxes(tickfont=dict(color=DIM))
             st.plotly_chart(fig_h, use_container_width=True)
 
+        # 종목별 성과 테이블
         st.markdown(f"<div class='qf-card'><h3>📊 종목별 성과</h3><div class='qf-sub'>기간 수익률 및 현재 포지션</div></div>", unsafe_allow_html=True)
         period_returns = (df.iloc[-1] / df.iloc[0] - 1) * 100
         volatility = df.pct_change().std() * (252 ** 0.5) * 100
