@@ -630,4 +630,23 @@ if analyze:
             legend=dict(bgcolor=SURFACE_2, bordercolor=LINE, font=dict(size=10))
         )
         st.plotly_chart(fig_pie, use_container_width=True)
+        # ── 금액 배분 테이블 ──
+        st.markdown(f"<div class='qf-card'><h3>💵 금액 배분</h3><div class='qf-sub'>전략 신호 기준 · 투입금액 {investment:,}만원</div></div>", unsafe_allow_html=True)
+
+        alloc_data = []
+        active_count = len(active)
+        for t in tickers:
+            if t in active:
+                weight = 1 / active_count if active_count > 0 else 0
+                amount = invest_won * weight / 10000
+                alloc_data.append({"종목": t, "포지션": "보유중 ✅", "비중": f"{weight*100:.1f}%", "투자금액": f"{amount:,.0f}만원"})
+            else:
+                alloc_data.append({"종목": t, "포지션": "현금 ❌", "비중": "0%", "투자금액": "0만원"})
+
+        if active_count < len(tickers):
+            cash_amount = invest_won * (len(tickers) - active_count) / len(tickers) / 10000
+            alloc_data.append({"종목": "현금", "포지션": "-", "비중": f"{(len(tickers)-active_count)/len(tickers)*100:.1f}%", "투자금액": f"{cash_amount:,.0f}만원"})
+
+        alloc_df = pd.DataFrame(alloc_data)
+        st.dataframe(alloc_df, use_container_width=True, hide_index=True)
         st.caption(f"Data: yfinance · {df.index[0].date()} → {df.index[-1].date()} · {len(df)} trading days")
