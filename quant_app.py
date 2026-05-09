@@ -459,7 +459,7 @@ if analyze:
             fig1.add_trace(go.Scatter(x=ma_s.index, y=ma_s[chart_col], name=f"MA{ma_short}", line=dict(color="orange", width=1.5)), row=1, col=1)
             fig1.add_trace(go.Scatter(x=ma_l.index, y=ma_l[chart_col], name=f"MA{ma_long}", line=dict(color=ACCENT, width=1.5)), row=1, col=1)
             fig1.add_trace(go.Scatter(x=buy_idx, y=df.loc[buy_idx, chart_col], mode="markers", name="매수▲", marker=dict(symbol="triangle-up", size=12, color="#00ffff")), row=1, col=1)
-            fig1.add_trace(go.Scatter(x=sell_idx, y=df.loc[sell_idx, chart_col], mode="markers", name="매도▼", marker=dict(symbol="triangle-down", size=10, color=RED)), row=1, col=1)
+            fig1.add_trace(go.Scatter(x=sell_idx, y=df.loc[sell_idx, chart_col], mode="markers", name="매도▼", marker=dict(symbol="triangle-down", size=12, color="#ffff00")), row=1, col=1)
             fig1.update_layout(xaxis_rangeslider_visible=False)
             st.plotly_chart(style_fig(fig1, 450), use_container_width=True)
 
@@ -470,8 +470,8 @@ if analyze:
                 name="캔들", increasing_line_color=GREEN, decreasing_line_color=RED,
                 increasing_fillcolor=GREEN, decreasing_fillcolor=RED
             ), row=1, col=1)
-            fig1.add_trace(go.Scatter(x=buy_idx, y=df.loc[buy_idx, chart_col], mode="markers", name="매수▲", marker=dict(symbol="triangle-up", size=10, color=GREEN)), row=1, col=1)
-            fig1.add_trace(go.Scatter(x=sell_idx, y=df.loc[sell_idx, chart_col], mode="markers", name="매도▼", marker=dict(symbol="triangle-down", size=10, color=RED)), row=1, col=1)
+            fig1.add_trace(go.Scatter(x=buy_idx, y=df.loc[buy_idx, chart_col], mode="markers", name="매수▲", marker=dict(symbol="triangle-up", size=12, color="#00ffff")), row=1, col=1)
+            fig1.add_trace(go.Scatter(x=sell_idx, y=df.loc[sell_idx, chart_col], mode="markers", name="매도▼", marker=dict(symbol="triangle-down", size=12, color="#ffff00")), row=1, col=1)
             fig1.add_trace(go.Scatter(x=rsi.index, y=rsi[chart_col], name="RSI", line=dict(color=ACCENT, width=1.5)), row=2, col=1)
             fig1.add_hline(y=rsi_threshold, line_dash="dash", line_color=RED, row=2, col=1)
             fig1.update_layout(xaxis_rangeslider_visible=False)
@@ -487,8 +487,8 @@ if analyze:
             fig1.add_trace(go.Scatter(x=bb_upper.index, y=bb_upper[chart_col], name="상단밴드", line=dict(color=RED, width=1, dash="dash")), row=1, col=1)
             fig1.add_trace(go.Scatter(x=bb_mid.index, y=bb_mid[chart_col], name="중간선", line=dict(color="yellow", width=1)), row=1, col=1)
             fig1.add_trace(go.Scatter(x=bb_lower.index, y=bb_lower[chart_col], name="하단밴드", line=dict(color=GREEN, width=1, dash="dash")), row=1, col=1)
-            fig1.add_trace(go.Scatter(x=buy_idx, y=df.loc[buy_idx, chart_col], mode="markers", name="매수▲", marker=dict(symbol="triangle-up", size=10, color=GREEN)), row=1, col=1)
-            fig1.add_trace(go.Scatter(x=sell_idx, y=df.loc[sell_idx, chart_col], mode="markers", name="매도▼", marker=dict(symbol="triangle-down", size=10, color=RED)), row=1, col=1)
+            fig1.add_trace(go.Scatter(x=buy_idx, y=df.loc[buy_idx, chart_col], mode="markers", name="매수▲", marker=dict(symbol="triangle-up", size=12, color="#00ffff")), row=1, col=1)
+            fig1.add_trace(go.Scatter(x=sell_idx, y=df.loc[sell_idx, chart_col], mode="markers", name="매도▼", marker=dict(symbol="triangle-down", size=12, color="#ffff00")), row=1, col=1)
             fig1.update_layout(xaxis_rangeslider_visible=False)
             st.plotly_chart(style_fig(fig1, 450), use_container_width=True)
 
@@ -501,8 +501,8 @@ if analyze:
             ), row=1, col=1)
             fig1.add_trace(go.Scatter(x=ma_s.index, y=ma_s[chart_col], name=f"MA{ma_short}", line=dict(color="orange", width=1.5)), row=1, col=1)
             fig1.add_trace(go.Scatter(x=ma_l.index, y=ma_l[chart_col], name=f"MA{ma_long}", line=dict(color=ACCENT, width=1.5)), row=1, col=1)
-            fig1.add_trace(go.Scatter(x=buy_idx, y=df.loc[buy_idx, chart_col], mode="markers", name="매수▲", marker=dict(symbol="triangle-up", size=10, color=GREEN)), row=1, col=1)
-            fig1.add_trace(go.Scatter(x=sell_idx, y=df.loc[sell_idx, chart_col], mode="markers", name="매도▼", marker=dict(symbol="triangle-down", size=10, color=RED)), row=1, col=1)
+            fig1.add_trace(go.Scatter(x=buy_idx, y=df.loc[buy_idx, chart_col], mode="markers", name="매수▲", marker=dict(symbol="triangle-up", size=12, color="#00ffff")), row=1, col=1)
+            fig1.add_trace(go.Scatter(x=sell_idx, y=df.loc[sell_idx, chart_col], mode="markers", name="매도▼", marker=dict(symbol="triangle-down", size=12, color="#ffff00")), row=1, col=1)
             fig1.add_trace(go.Scatter(x=rsi.index, y=rsi[chart_col], name="RSI", line=dict(color=ACCENT, width=1.5)), row=2, col=1)
             fig1.add_hline(y=rsi_threshold, line_dash="dash", line_color=RED, row=2, col=1)
             fig1.update_layout(xaxis_rangeslider_visible=False)
