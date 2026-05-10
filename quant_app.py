@@ -3,60 +3,25 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import datetime as dt
-from strategies import calculate_rsi, calculate_bb, calculate_mdd, calculate_sharpe, calculate_cagr, run_strategy
+
+from strategies import calculate_mdd, calculate_sharpe, calculate_cagr, run_strategy
 from optimization import optimize_parameters, walk_forward_test
+from ui_components import (
+    apply_custom_css, card, render_kpi_strip, render_strategy_expander,
+    color_val, style_fig,
+    ACCENT, RED, GREEN, CANDLE_UP, CANDLE_DOWN,
+    DIM, TEXT, SURFACE_1, SURFACE_2, LINE, BG
+)
+from charts import (
+    make_candlestick_fig, make_return_chart,
+    make_drawdown_chart, make_heatmap_chart, make_pie_chart
+)
 
 st.set_page_config(page_title="Quantfolio — Backtest Lab", page_icon="📈", layout="wide")
+apply_custom_css()
 
-ACCENT = "#3b82f6"
-RED = "#ef4444"
-GREEN = "#4ade80"
-CANDLE_UP = "#ef4444"    # 한국식 상승 빨강
-CANDLE_DOWN = "#3b82f6"  # 한국식 하락 파랑
-DIM = "#6b7385"
-TEXT = "#e6e9ef"
-SURFACE_1 = "#0d0d0f"
-SURFACE_2 = "#111318"
-SURFACE_3 = "#1d2330"
-LINE = "#1c2030"
-BG = "#080a0f"
-
-st.markdown(f"""
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap');
-  .stApp {{ background: {BG}; color: {TEXT}; font-family: 'Inter', sans-serif; }}
-  section[data-testid="stSidebar"] {{ background: {SURFACE_1}; border-right: 1px solid {LINE}; }}
-  section[data-testid="stSidebar"] * {{ color: {TEXT}; }}
-  h1, h2, h3, h4 {{ letter-spacing: -0.02em; }}
-  .block-container {{ padding-top: 1.4rem; padding-bottom: 3rem; max-width: 1400px; }}
-  .qf-eyebrow {{ font-size: 11px; color: {DIM}; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }}
-  .qf-title {{ font-size: 26px; font-weight: 600; margin: 0 0 4px 0; }}
-  .qf-meta {{ font-size: 12px; color: {DIM}; font-family: 'JetBrains Mono', monospace; }}
-  .qf-kpi-grid {{
-    display: grid; grid-template-columns: 1.4fr repeat(5, 1fr);
-    gap: 1px; background: {LINE}; border: 1px solid {LINE};
-    border-radius: 8px; overflow: hidden; margin: 12px 0 18px;
-  }}
-  .qf-kpi {{ background: {SURFACE_1}; padding: 12px 14px; }}
-  .qf-kpi.big {{ background: {SURFACE_2}; }}
-  .qf-kpi-label {{ font-size: 10.5px; color: {DIM}; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 500; }}
-  .qf-kpi-klabel {{ font-size: 10px; color: #4d5567; margin-top: 1px; display: block; }}
-  .qf-kpi-value {{ font-family: 'JetBrains Mono', monospace; font-size: 18px; font-weight: 600; letter-spacing: -0.02em; margin-top: 4px; }}
-  .qf-kpi.big .qf-kpi-value {{ font-size: 26px; color: {CANDLE_UP}; }}
-  .qf-kpi-delta {{ font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: {DIM}; margin-top: 2px; }}
-  .qf-kpi-delta.pos {{ color: {CANDLE_UP}; }}
-  .qf-kpi-delta.neg {{ color: {CANDLE_DOWN}; }}
-  .qf-card {{ background: {SURFACE_1}; border: 1px solid {LINE}; border-radius: 8px; padding: 16px 18px; margin-bottom: 16px; }}
-  .qf-card h3 {{ margin: 0 0 2px; font-size: 13px; font-weight: 600; }}
-  .qf-card .qf-sub {{ font-size: 11px; color: {DIM}; margin-bottom: 10px; }}
-  .pos {{ color: {CANDLE_UP}; }}
-  .neg {{ color: {CANDLE_DOWN}; }}
-  div[data-testid="stDataFrame"] {{ background: {SURFACE_1}; border-radius: 8px; }}
-</style>
-""", unsafe_allow_html=True)
-
+# ── 사이드바 ──
 with st.sidebar:
     st.markdown("<div style='font-size:18px; font-weight:600; margin-bottom:16px;'>⚙️ Settings</div>", unsafe_allow_html=True)
 
@@ -106,153 +71,6 @@ with st.sidebar:
     optimize = st.button("⚡ 최적값 자동 탐색", use_container_width=True)
     wf_test = st.button("🔄 워크포워드 테스트", use_container_width=True)
 
-def style_fig(fig, height=400, has_secondary=False):
-    fig.update_layout(
-        height=height,
-        margin=dict(l=0, r=60, t=8, b=28),
-        paper_bgcolor=BG,
-        plot_bgcolor=BG,
-        font=dict(family="Inter, sans-serif", color=TEXT, size=11),
-        showlegend=True,
-        hovermode="x unified",
-        legend=dict(
-            bgcolor="rgba(0,0,0,0)",
-            bordercolor="rgba(0,0,0,0)",
-            font=dict(size=10),
-            orientation="h",
-            yanchor="bottom",
-            y=1.02,
-            xanchor="left",
-            x=0
-        ),
-        xaxis=dict(
-            rangeslider=dict(visible=False),
-            rangeselector=dict(
-                buttons=[
-                    dict(count=1, label="1M", step="month", stepmode="backward"),
-                    dict(count=3, label="3M", step="month", stepmode="backward"),
-                    dict(count=6, label="6M", step="month", stepmode="backward"),
-                    dict(count=1, label="1Y", step="year", stepmode="backward"),
-                    dict(step="all", label="ALL")
-                ],
-                bgcolor=SURFACE_1,
-                activecolor=ACCENT,
-                font=dict(color=TEXT, size=10),
-                bordercolor=LINE
-            ),
-            showgrid=True,
-            gridcolor="rgba(255,255,255,0.03)",
-            linecolor=LINE,
-            zeroline=False,
-            tickfont=dict(color=DIM, size=10),
-        ),
-        yaxis=dict(
-            showgrid=True,
-            gridcolor="rgba(255,255,255,0.03)",
-            linecolor=LINE,
-            zeroline=False,
-            tickfont=dict(color=DIM, size=10),
-            side="right",
-        )
-    )
-    return fig
-
-def make_candlestick_fig(close_p, open_p, high_p, low_p, volume=None, has_rsi=False, rsi_data=None, rsi_threshold=40, extra_traces=None, buy_idx=None, sell_idx=None, chart_col=None):
-    
-    # rows 계산
-    rows = 1
-    row_heights = [1.0]
-    
-    if volume is not None and has_rsi:
-        rows = 3
-        row_heights = [0.6, 0.2, 0.2]
-    elif volume is not None:
-        rows = 2
-        row_heights = [0.7, 0.3]
-    elif has_rsi:
-        rows = 2
-        row_heights = [0.7, 0.3]
-
-    fig = make_subplots(
-        rows=rows, cols=1,
-        shared_xaxes=True,
-        row_heights=row_heights,
-        vertical_spacing=0.02
-    )
-
-    # 캔들스틱 (항상 row 1)
-    fig.add_trace(go.Candlestick(
-        x=close_p.index,
-        open=open_p, high=high_p, low=low_p, close=close_p,
-        name="캔들",
-        increasing=dict(line=dict(color=CANDLE_UP, width=1), fillcolor=CANDLE_UP),
-        decreasing=dict(line=dict(color=CANDLE_DOWN, width=1), fillcolor=CANDLE_DOWN),
-        whiskerwidth=0.3,
-    ), row=1, col=1)
-
-    # 추가 라인들
-    if extra_traces:
-        for trace in extra_traces:
-            fig.add_trace(trace, row=1, col=1)
-
-    # 매수/매도 마커
-    if buy_idx is not None and len(buy_idx) > 0:
-        close_df = close_p.to_frame() if isinstance(close_p, pd.Series) else close_p
-        fig.add_trace(go.Scatter(
-            x=buy_idx,
-            y=close_df.loc[buy_idx].iloc[:, 0] * 0.98,
-            mode="markers", name="매수▲",
-            marker=dict(symbol="triangle-up", size=10, color="#00ffff"),
-            hovertemplate="%{x}<br>매수<extra></extra>"
-        ), row=1, col=1)
-
-    if sell_idx is not None and len(sell_idx) > 0:
-        close_df = close_p.to_frame() if isinstance(close_p, pd.Series) else close_p
-        fig.add_trace(go.Scatter(
-            x=sell_idx,
-            y=close_df.loc[sell_idx].iloc[:, 0] * 1.02,
-            mode="markers", name="매도▼",
-            marker=dict(symbol="triangle-down", size=10, color="#ffff00"),
-            hovertemplate="%{x}<br>매도<extra></extra>"
-        ), row=1, col=1)
-
-    # 거래량 (row 2)
-    if volume is not None:
-        colors = [CANDLE_UP if c >= o else CANDLE_DOWN 
-                  for c, o in zip(close_p, open_p)]
-        fig.add_trace(go.Bar(
-            x=close_p.index, y=volume,
-            name="거래량",
-            marker=dict(color=colors, opacity=0.7),
-            showlegend=False
-        ), row=2, col=1)
-
-    # RSI
-    if has_rsi and rsi_data is not None:
-        rsi_row = 3 if volume is not None else 2
-        fig.add_trace(go.Scatter(
-            x=rsi_data.index, y=rsi_data,
-            name="RSI", line=dict(color=ACCENT, width=1.5)
-        ), row=rsi_row, col=1)
-        fig.add_hline(y=rsi_threshold, line_dash="dash", line_color=CANDLE_UP, opacity=0.5, row=rsi_row, col=1)
-        fig.add_hline(y=70, line_dash="dash", line_color=CANDLE_DOWN, opacity=0.5, row=rsi_row, col=1)
-
-    fig.update_layout(
-        height=400 + (rows * 100),
-        margin=dict(l=0, r=60, t=8, b=28),
-        paper_bgcolor=BG, plot_bgcolor=BG,
-        font=dict(family="Inter, sans-serif", color=TEXT, size=11),
-        showlegend=True,
-        hovermode="x unified",
-        legend=dict(bgcolor="rgba(0,0,0,0)", bordercolor="rgba(0,0,0,0)", font=dict(size=10), orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
-        xaxis=dict(rangeslider=dict(visible=False)),
-    )
-
-    for i in range(1, rows + 1):
-        fig.update_xaxes(showgrid=True, gridcolor="rgba(255,255,255,0.03)", linecolor=LINE, zeroline=False, tickfont=dict(color=DIM, size=10), row=i, col=1)
-        fig.update_yaxes(showgrid=True, gridcolor="rgba(255,255,255,0.03)", linecolor=LINE, zeroline=False, tickfont=dict(color=DIM, size=10), side="right", row=i, col=1)
-
-    return fig
 # ── 워크포워드 테스트 ──
 if wf_test:
     if not tickers:
@@ -264,7 +82,7 @@ if wf_test:
             df = df.to_frame()
         df.columns = [str(c) for c in df.columns]
 
-        st.markdown(f"<div class='qf-card'><h3>🔄 워크포워드 테스트 결과</h3><div class='qf-sub'>과거로 최적화 → 미래로 검증 · 반복</div></div>", unsafe_allow_html=True)
+        card("🔄 워크포워드 테스트 결과", "과거로 최적화 → 미래로 검증 · 반복")
 
         col_a, col_b = st.columns(2)
         with col_a:
@@ -290,15 +108,6 @@ if wf_test:
             with col3:
                 st.metric("승률", f"{positive_count/total_count*100:.1f}%")
 
-            def color_val(val):
-                try:
-                    v = float(val)
-                    if v > 0: return f"color: {CANDLE_UP};"
-                    if v < 0: return f"color: {CANDLE_DOWN};"
-                except:
-                    return ""
-                return ""
-
             st.dataframe(wf_result.style.map(color_val, subset=["검증 수익률 (%)"]), use_container_width=True, hide_index=True)
 
             fig_wf = go.Figure()
@@ -310,7 +119,7 @@ if wf_test:
                 textposition="outside"
             ))
             fig_wf.add_hline(y=0, line=dict(color=DIM, width=1, dash="dot"))
-            fig_wf.update_layout(height=300, margin=dict(l=8, r=20, t=8, b=28), paper_bgcolor=SURFACE_1, plot_bgcolor=SURFACE_1, font=dict(color=TEXT, size=11), xaxis_title="검증 구간", yaxis_title="수익률 (%)")
+            fig_wf.update_layout(height=300, margin=dict(l=8, r=20, t=8, b=28), paper_bgcolor=SURFACE_1, plot_bgcolor=SURFACE_1, font=dict(color=TEXT, size=11))
             st.plotly_chart(fig_wf, use_container_width=True)
             st.warning("⚠️ 과거 데이터 기반 테스트예요. 미래 수익률을 보장하지 않아요!")
 
@@ -325,7 +134,7 @@ if optimize:
             df = df.to_frame()
         df.columns = [str(c) for c in df.columns]
 
-        st.markdown(f"<div class='qf-card'><h3>⚡ 파라미터 최적화 결과</h3><div class='qf-sub'>과거 데이터 기준 최적값 탐색 · 과최적화 주의!</div></div>", unsafe_allow_html=True)
+        card("⚡ 파라미터 최적화 결과", "과거 데이터 기준 최적값 탐색 · 과최적화 주의!")
 
         with st.spinner("최적값 탐색 중..."):
             result_df = optimize_parameters(df, strategy)
@@ -335,13 +144,12 @@ if optimize:
                 st.success(f"✅ 최적 RSI 기준값: **{int(best['RSI 기준값'])}** → 수익률 **{best['수익률 (%)']:+.2f}%**")
                 fig_opt = go.Figure()
                 fig_opt.add_trace(go.Bar(
-                    x=result_df["RSI 기준값"],
-                    y=result_df["수익률 (%)"],
+                    x=result_df["RSI 기준값"], y=result_df["수익률 (%)"],
                     marker=dict(color=[CANDLE_UP if v == best["RSI 기준값"] else ACCENT for v in result_df["RSI 기준값"]]),
                     text=[f"{v:+.1f}%" for v in result_df["수익률 (%)"]],
                     textposition="outside"
                 ))
-                fig_opt.update_layout(height=300, margin=dict(l=8, r=20, t=8, b=28), paper_bgcolor=SURFACE_1, plot_bgcolor=SURFACE_1, font=dict(color=TEXT, size=11), xaxis_title="RSI 기준값", yaxis_title="수익률 (%)")
+                fig_opt.update_layout(height=300, margin=dict(l=8, r=20, t=8, b=28), paper_bgcolor=SURFACE_1, plot_bgcolor=SURFACE_1, font=dict(color=TEXT, size=11))
                 st.plotly_chart(fig_opt, use_container_width=True)
 
             elif strategy == "이동평균선 전략 (Moving Average)":
@@ -351,26 +159,16 @@ if optimize:
                 st.success(f"✅ 최적 BB 기간: **{int(best['BB 기간'])}** → 수익률 **{best['수익률 (%)']:+.2f}%**")
                 fig_opt = go.Figure()
                 fig_opt.add_trace(go.Bar(
-                    x=result_df["BB 기간"],
-                    y=result_df["수익률 (%)"],
+                    x=result_df["BB 기간"], y=result_df["수익률 (%)"],
                     marker=dict(color=[CANDLE_UP if v == best["BB 기간"] else ACCENT for v in result_df["BB 기간"]]),
                     text=[f"{v:+.1f}%" for v in result_df["수익률 (%)"]],
                     textposition="outside"
                 ))
-                fig_opt.update_layout(height=300, margin=dict(l=8, r=20, t=8, b=28), paper_bgcolor=SURFACE_1, plot_bgcolor=SURFACE_1, font=dict(color=TEXT, size=11), xaxis_title="BB 기간", yaxis_title="수익률 (%)")
+                fig_opt.update_layout(height=300, margin=dict(l=8, r=20, t=8, b=28), paper_bgcolor=SURFACE_1, plot_bgcolor=SURFACE_1, font=dict(color=TEXT, size=11))
                 st.plotly_chart(fig_opt, use_container_width=True)
 
             else:
                 st.success(f"✅ 최적값: RSI **{int(best['RSI'])}** / 단기MA **{int(best['단기 MA'])}** / 장기MA **{int(best['장기 MA'])}** → 수익률 **{best['수익률 (%)']:+.2f}%**")
-
-            def color_val(val):
-                try:
-                    v = float(val)
-                    if v > 0: return f"color: {CANDLE_UP};"
-                    if v < 0: return f"color: {CANDLE_DOWN};"
-                except:
-                    return ""
-                return ""
 
             st.dataframe(result_df.sort_values("수익률 (%)", ascending=False).head(10).style.map(color_val, subset=["수익률 (%)"]), use_container_width=True, hide_index=True)
 
@@ -429,6 +227,7 @@ if analyze:
         strategy_final = invest_won + strategy_profit
         equal_profit = invest_won * (equal_pct / 100)
 
+        # ── 헤더 ──
         left, right = st.columns([3, 2])
         with left:
             st.markdown(
@@ -443,14 +242,13 @@ if analyze:
                 unsafe_allow_html=True
             )
 
-        # 현재가 카드
-        st.markdown(f"<div class='qf-card'><h3>💹 현재가</h3><div class='qf-sub'>실시간 주가 · yfinance 기준</div></div>", unsafe_allow_html=True)
+        # ── 현재가 ──
+        card("💹 현재가", "실시간 주가 · yfinance 기준")
         price_cols = st.columns(len(tickers))
         for i, ticker in enumerate(tickers):
             with price_cols[i]:
                 try:
-                    info = yf.Ticker(ticker)
-                    hist = info.history(period="2d")
+                    hist = yf.Ticker(ticker).history(period="2d")
                     if len(hist) >= 2:
                         current = hist["Close"].iloc[-1]
                         prev = hist["Close"].iloc[-2]
@@ -473,8 +271,8 @@ if analyze:
                     </div>
                     """, unsafe_allow_html=True)
 
-        # 투입금액 카드
-        st.markdown(f"<div class='qf-card'><h3>💰 투입금액 수익 분석</h3><div class='qf-sub'>투입금액 {investment:,}만원 기준</div></div>", unsafe_allow_html=True)
+        # ── 투입금액 ──
+        card("💰 투입금액 수익 분석", f"투입금액 {investment:,}만원 기준")
         m1, m2, m3, m4 = st.columns(4)
         with m1:
             st.metric("투입금액", f"{investment:,}만원")
@@ -483,75 +281,16 @@ if analyze:
         with m3:
             st.metric("전략 최종금액", f"{strategy_final/10000:,.0f}만원")
         with m4:
-            diff = strategy_profit - equal_profit
-            st.metric("균등 대비 초과수익", f"{diff/10000:+,.0f}만원")
+            st.metric("균등 대비 초과수익", f"{(strategy_profit-equal_profit)/10000:+,.0f}만원")
 
-        # KPI 스트립
-        def kpi_html(label, klabel, value, delta=None, big=False, positive=True):
-            cls = "qf-kpi big" if big else "qf-kpi"
-            delta_html = ""
-            if delta:
-                d_cls = "pos" if positive else "neg"
-                delta_html = f"<div class='qf-kpi-delta {d_cls}'>{delta}</div>"
-            return (
-                f"<div class='{cls}'>"
-                f"<div class='qf-kpi-label'>{label}<span class='qf-kpi-klabel'>{klabel}</span></div>"
-                f"<div class='qf-kpi-value'>{value}</div>{delta_html}</div>"
-            )
+        # ── KPI ──
+        render_kpi_strip(strategy_pct, equal_pct, cagr_s, cagr_e, sharpe_s, sharpe_e, mdd_s, mdd_e)
 
-        kpis = (
-            kpi_html("Total Return", "총 수익률",
-                     f"{strategy_pct:+.2f}%",
-                     f"vs {equal_pct:+.2f}% equal",
-                     big=True, positive=strategy_pct >= equal_pct)
-            + kpi_html("CAGR", "연복리수익률", f"{cagr_s:.1f}%",
-                       f"{cagr_s - cagr_e:+.1f}pp",
-                       positive=cagr_s >= cagr_e)
-            + kpi_html("Sharpe", "샤프지수", f"{sharpe_s:.2f}",
-                       f"{sharpe_s - sharpe_e:+.2f}",
-                       positive=sharpe_s >= sharpe_e)
-            + kpi_html("Max DD", "최대낙폭", f"{mdd_s:.1f}%",
-                       f"vs {mdd_e:.1f}%",
-                       positive=mdd_s >= mdd_e)
-            + kpi_html("Equal Return", "균등수익률", f"{equal_pct:+.2f}%")
-            + kpi_html("Equal Sharpe", "균등샤프", f"{sharpe_e:.2f}")
-        )
-        st.markdown(f"<div class='qf-kpi-grid'>{kpis}</div>", unsafe_allow_html=True)
+        # ── 전략 설명 ──
+        render_strategy_expander(strategy)
 
-        # 전략 설명
-        with st.expander("📖 전략 & 용어 설명 보기", expanded=False):
-            if strategy == "RSI 전략 (RSI)":
-                st.info("""
-                **RSI 전략 (Relative Strength Index, 상대강도지수)**
-                - RSI가 낮을수록 → 너무 많이 떨어진 상태 → **매수 신호**
-                - RSI Threshold(기준값) 이하일 때 매수
-                """)
-            elif strategy == "이동평균선 전략 (Moving Average)":
-                st.info("""
-                **이동평균선 전략 (Moving Average, MA)**
-                - 단기 MA > 장기 MA → **매수 신호** 📈 (골든크로스)
-                - 단기 MA < 장기 MA → **매도 신호** 📉 (데드크로스)
-                """)
-            elif strategy == "볼린저 밴드 전략 (Bollinger Bands)":
-                st.info("""
-                **볼린저 밴드 전략 (Bollinger Bands)**
-                - 주가가 하단 밴드 아래로 떨어지면 → **매수 신호** 📈
-                - 주가가 상단 밴드 위로 올라가면 → **매도 신호** 📉
-                """)
-            else:
-                st.info("""
-                **복합 전략 (Combined Strategy)**
-                - RSI가 기준값 이하 **AND** 단기 MA > 장기 MA → **매수 신호**
-                """)
-            st.info("""
-            **균등 포트폴리오 (Equal Portfolio)**
-            - 전략 없이 모든 종목에 똑같은 비율로 투자하는 기준선이에요.
-            - 전략 수익률 > 균등 → **전략이 효과 있음** ✅
-            """)
-
-        # 전략 지표 그래프 (토스증권 스타일)
-        st.markdown(f"<div class='qf-card'><h3>📈 전략 지표 그래프</h3><div class='qf-sub'>{chart_col} · 상승 🔴 하락 🔵 · ▲매수 ▼매도</div></div>", unsafe_allow_html=True)
-
+        # ── 전략 지표 그래프 ──
+        card("📈 전략 지표 그래프", f"{chart_col} · 상승 🔴 하락 🔵 · ▲매수 ▼매도")
         rsi_chart = rsi[chart_col] if isinstance(rsi, pd.DataFrame) else rsi
 
         if strategy == "이동평균선 전략 (Moving Average)":
@@ -572,7 +311,7 @@ if analyze:
             ]
             fig1 = make_candlestick_fig(close_p, open_p, high_p, low_p, volume=volume, extra_traces=extra, buy_idx=buy_idx, sell_idx=sell_idx, chart_col=chart_col)
 
-        else:  # Combined
+        else:
             extra = [
                 go.Scatter(x=ma_s.index, y=ma_s[chart_col], name=f"MA{ma_short}", line=dict(color="orange", width=1.2)),
                 go.Scatter(x=ma_l.index, y=ma_l[chart_col], name=f"MA{ma_long}", line=dict(color=ACCENT, width=1.2)),
@@ -581,88 +320,24 @@ if analyze:
 
         st.plotly_chart(fig1, use_container_width=True)
 
-        # 수익률 비교 그래프
-        st.markdown(f"<div class='qf-card'><h3>💰 수익률 비교</h3><div class='qf-sub'>누적 수익률 (%)</div></div>", unsafe_allow_html=True)
-        fig2 = go.Figure()
-        fig2.add_trace(go.Scatter(
-            x=portfolio_equal.index, y=((portfolio_equal - 1) * 100),
-            name="균등 포트폴리오",
-            line=dict(color=CANDLE_DOWN, width=1.5),
-            hovertemplate="%{x}<br>수익률: %{y:.2f}%<extra></extra>"
-        ))
-        fig2.add_trace(go.Scatter(
-            x=portfolio_strategy.index, y=((portfolio_strategy - 1) * 100),
-            name="전략 포트폴리오",
-            line=dict(color=CANDLE_UP, width=2),
-            hovertemplate="%{x}<br>수익률: %{y:.2f}%<extra></extra>"
-        ))
-        fig2.add_hline(y=0, line=dict(color=DIM, width=1, dash="dot"), opacity=0.4)
-        st.plotly_chart(style_fig(fig2, 350), use_container_width=True)
+        # ── 수익률 비교 ──
+        card("💰 수익률 비교", "누적 수익률 (%)")
+        st.plotly_chart(make_return_chart(portfolio_equal, portfolio_strategy, strategy), use_container_width=True)
 
+        # ── 낙폭 + 히트맵 ──
         col1, col2 = st.columns([1, 1])
-
         with col1:
-            st.markdown(f"<div class='qf-card'><h3>📉 낙폭 (Drawdown)</h3><div class='qf-sub'>고점 대비 하락폭</div></div>", unsafe_allow_html=True)
-            peak = portfolio_strategy.cummax()
-            drawdown = (portfolio_strategy - peak) / peak * 100
-            fig_dd = go.Figure()
-            fig_dd.add_trace(go.Scatter(
-                x=drawdown.index, y=drawdown.values,
-                fill="tozeroy", line=dict(color=CANDLE_DOWN, width=1.5),
-                fillcolor="rgba(59,130,246,0.15)", name="Drawdown",
-                hovertemplate="%{x}<br>낙폭: %{y:.2f}%<extra></extra>"
-            ))
-            fig_dd.update_layout(
-                height=280, margin=dict(l=0, r=60, t=8, b=28),
-                paper_bgcolor=BG, plot_bgcolor=BG,
-                font=dict(family="Inter, sans-serif", color=TEXT, size=11),
-                showlegend=False, hovermode="x unified"
-            )
-            fig_dd.update_xaxes(showgrid=True, gridcolor="rgba(255,255,255,0.03)", linecolor=LINE, zeroline=False, tickfont=dict(color=DIM, size=10))
-            fig_dd.update_yaxes(showgrid=True, gridcolor="rgba(255,255,255,0.03)", linecolor=LINE, zeroline=False, tickfont=dict(color=DIM, size=10), side="right")
-            st.plotly_chart(fig_dd, use_container_width=True)
-
+            card("📉 낙폭 (Drawdown)", "고점 대비 하락폭")
+            st.plotly_chart(make_drawdown_chart(portfolio_strategy), use_container_width=True)
         with col2:
-            st.markdown(f"<div class='qf-card'><h3>📅 월별 수익률</h3><div class='qf-sub'>🔴 수익 · 🔵 손실</div></div>", unsafe_allow_html=True)
-            monthly = weighted_return.resample("ME").apply(lambda x: (1 + x).prod() - 1) * 100
-            monthly_df = monthly.to_frame("return")
-            monthly_df["year"] = monthly_df.index.year
-            monthly_df["month"] = monthly_df.index.month
-            pivot = monthly_df.pivot(index="year", columns="month", values="return")
-            fig_h = go.Figure(go.Heatmap(
-                z=pivot.values,
-                x=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
-                y=pivot.index.astype(str),
-                colorscale=[[0, CANDLE_DOWN], [0.5, "#111318"], [1, CANDLE_UP]],
-                zmid=0,
-                text=[[f"{v:+.1f}" if not pd.isna(v) else "" for v in row] for row in pivot.values],
-                texttemplate="%{text}",
-                textfont=dict(family="JetBrains Mono", size=11, color="white"),
-                colorbar=dict(thickness=6, len=0.8, tickfont=dict(color=DIM, size=9))
-            ))
-            fig_h.update_layout(
-                height=280, margin=dict(l=0, r=60, t=8, b=28),
-                paper_bgcolor=BG, plot_bgcolor=BG,
-                font=dict(family="Inter, sans-serif", color=TEXT, size=11),
-            )
-            fig_h.update_xaxes(tickfont=dict(color=DIM, size=10))
-            fig_h.update_yaxes(tickfont=dict(color=DIM, size=10), side="right")
-            st.plotly_chart(fig_h, use_container_width=True)
+            card("📅 월별 수익률", "🔴 수익 · 🔵 손실")
+            st.plotly_chart(make_heatmap_chart(weighted_return), use_container_width=True)
 
-        # 종목별 성과 테이블
-        st.markdown(f"<div class='qf-card'><h3>📊 종목별 성과</h3><div class='qf-sub'>기간 수익률 및 현재 포지션</div></div>", unsafe_allow_html=True)
+        # ── 종목별 성과 ──
+        card("📊 종목별 성과", "기간 수익률 및 현재 포지션")
         period_returns = (df.iloc[-1] / df.iloc[0] - 1) * 100
         volatility = df.pct_change().std() * (252 ** 0.5) * 100
         last_signal = signal.iloc[-1]
-
-        def color_val(val):
-            try:
-                v = float(val)
-                if v > 0: return f"color: {CANDLE_UP};"
-                if v < 0: return f"color: {CANDLE_DOWN};"
-            except:
-                return ""
-            return ""
 
         if len(tickers) == 1:
             holdings = pd.DataFrame({
@@ -683,40 +358,15 @@ if analyze:
             })
             st.dataframe(holdings.style.map(color_val, subset=["수익률 (%)", "기여도 (pp)"]), use_container_width=True, hide_index=True)
 
-        # 포트폴리오 파이차트
-        st.markdown(f"<div class='qf-card'><h3>🥧 현재 포트폴리오 비중</h3><div class='qf-sub'>현재 포지션 기준</div></div>", unsafe_allow_html=True)
+        # ── 파이차트 ──
         active = [tickers[i] for i, s in enumerate(last_signal.values) if s == 1]
-        cash_count = len(tickers) - len(active)
+        card("🥧 현재 포트폴리오 비중", "현재 포지션 기준")
+        st.plotly_chart(make_pie_chart(active, tickers), use_container_width=True)
 
-        if len(active) > 0:
-            labels = active + (["현금"] if cash_count > 0 else [])
-            values = [100 / len(tickers)] * len(active) + ([cash_count * 100 / len(tickers)] if cash_count > 0 else [])
-            colors = [CANDLE_UP] * len(active) + ([DIM] if cash_count > 0 else [])
-        else:
-            labels = ["현금 (전량)"]
-            values = [100]
-            colors = [DIM]
-
-        fig_pie = go.Figure(go.Pie(
-            labels=labels, values=values,
-            marker=dict(colors=colors, line=dict(color=BG, width=2)),
-            textinfo="label+percent",
-            textfont=dict(size=12, color=TEXT),
-            hole=0.4
-        ))
-        fig_pie.update_layout(
-            height=320, margin=dict(l=8, r=8, t=8, b=8),
-            paper_bgcolor=SURFACE_1,
-            font=dict(family="Inter, sans-serif", color=TEXT),
-            showlegend=True,
-            legend=dict(bgcolor="rgba(0,0,0,0)", font=dict(size=10))
-        )
-        st.plotly_chart(fig_pie, use_container_width=True)
-
-        # 금액 배분 테이블
-        st.markdown(f"<div class='qf-card'><h3>💵 금액 배분</h3><div class='qf-sub'>전략 신호 기준 · 투입금액 {investment:,}만원</div></div>", unsafe_allow_html=True)
-        alloc_data = []
+        # ── 금액 배분 ──
+        card("💵 금액 배분", f"전략 신호 기준 · 투입금액 {investment:,}만원")
         active_count = len(active)
+        alloc_data = []
         for t in tickers:
             if t in active:
                 weight = 1 / active_count if active_count > 0 else 0
