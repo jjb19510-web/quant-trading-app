@@ -19,7 +19,7 @@ from charts import (
 )
 
 try:
-    from broker import get_access_token, get_current_price as kis_get_price
+    from broker import get_access_token, get_current_price as kis_get_price, buy_order, sell_order
     KIS_AVAILABLE = True
 except:
     KIS_AVAILABLE = False
@@ -27,7 +27,6 @@ except:
 st.set_page_config(page_title="Quantfolio — Backtest Lab", page_icon="📈", layout="wide")
 apply_custom_css()
 
-# ── KIS 토큰 캐시 ──
 @st.cache_data(ttl=3600)
 def get_kis_token():
     try:
@@ -35,7 +34,6 @@ def get_kis_token():
     except:
         return None
 
-# ── 사이드바 ──
 with st.sidebar:
     st.markdown("<div style='font-size:18px; font-weight:600; margin-bottom:16px;'>⚙️ Settings</div>", unsafe_allow_html=True)
 
@@ -85,7 +83,6 @@ with st.sidebar:
     optimize = st.button("⚡ 최적값 자동 탐색", use_container_width=True)
     wf_test = st.button("🔄 워크포워드 테스트", use_container_width=True)
 
-# ── 워크포워드 테스트 ──
 if wf_test:
     if not tickers:
         st.warning("종목을 입력해주세요!")
@@ -137,7 +134,6 @@ if wf_test:
             st.plotly_chart(fig_wf, use_container_width=True)
             st.warning("⚠️ 과거 데이터 기반 테스트예요. 미래 수익률을 보장하지 않아요!")
 
-# ── 최적화 ──
 if optimize:
     if not tickers:
         st.warning("종목을 입력해주세요!")
@@ -165,10 +161,8 @@ if optimize:
                 ))
                 fig_opt.update_layout(height=300, margin=dict(l=8, r=20, t=8, b=28), paper_bgcolor=SURFACE_1, plot_bgcolor=SURFACE_1, font=dict(color=TEXT, size=11))
                 st.plotly_chart(fig_opt, use_container_width=True)
-
             elif strategy == "이동평균선 전략 (Moving Average)":
                 st.success(f"✅ 최적 MA: 단기 **{int(best['단기 MA'])}** / 장기 **{int(best['장기 MA'])}** → 수익률 **{best['수익률 (%)']:+.2f}%**")
-
             elif strategy == "볼린저 밴드 전략 (Bollinger Bands)":
                 st.success(f"✅ 최적 BB 기간: **{int(best['BB 기간'])}** → 수익률 **{best['수익률 (%)']:+.2f}%**")
                 fig_opt = go.Figure()
@@ -180,7 +174,6 @@ if optimize:
                 ))
                 fig_opt.update_layout(height=300, margin=dict(l=8, r=20, t=8, b=28), paper_bgcolor=SURFACE_1, plot_bgcolor=SURFACE_1, font=dict(color=TEXT, size=11))
                 st.plotly_chart(fig_opt, use_container_width=True)
-
             else:
                 st.success(f"✅ 최적값: RSI **{int(best['RSI'])}** / 단기MA **{int(best['단기 MA'])}** / 장기MA **{int(best['장기 MA'])}** → 수익률 **{best['수익률 (%)']:+.2f}%**")
 
@@ -188,7 +181,6 @@ if optimize:
 
         st.warning("⚠️ 과최적화 주의: 위 결과는 과거 데이터 기준이에요. 미래 수익률을 보장하지 않아요!")
 
-# ── 분석 ──
 if analyze:
     if not tickers:
         st.warning("종목을 입력해주세요!")
@@ -241,7 +233,6 @@ if analyze:
         strategy_final = invest_won + strategy_profit
         equal_profit = invest_won * (equal_pct / 100)
 
-        # ── 헤더 ──
         left, right = st.columns([3, 2])
         with left:
             st.markdown(
@@ -256,25 +247,19 @@ if analyze:
                 unsafe_allow_html=True
             )
 
-        # ── 현재가 (KIS API 우선, 실패시 yfinance) ──
         card("💹 현재가", "실시간 주가 · KIS API 기준" if KIS_AVAILABLE else "주가 · yfinance 기준")
         price_cols = st.columns(len(tickers))
-
         kis_token = get_kis_token() if KIS_AVAILABLE else None
 
         for i, ticker in enumerate(tickers):
             with price_cols[i]:
                 price_data = None
-
-                # KIS API로 현재가 조회 (한국 주식만)
                 if KIS_AVAILABLE and kis_token and market == "한국주식 (KS)":
                     try:
                         raw_ticker = ticker.replace(".KS", "")
                         price_data = kis_get_price(raw_ticker, kis_token)
                     except:
                         pass
-
-                # KIS 실패시 yfinance로 폴백
                 if not price_data:
                     try:
                         hist = yf.Ticker(ticker).history(period="2d")
@@ -283,11 +268,7 @@ if analyze:
                             prev = hist["Close"].iloc[-2]
                             change = current - prev
                             change_pct = (change / prev) * 100
-                            price_data = {
-                                "current": current,
-                                "change": change,
-                                "change_pct": change_pct
-                            }
+                            price_data = {"current": current, "change": change, "change_pct": change_pct}
                     except:
                         pass
 
@@ -312,7 +293,6 @@ if analyze:
                     </div>
                     """, unsafe_allow_html=True)
 
-        # ── 투입금액 ──
         card("💰 투입금액 수익 분석", f"투입금액 {investment:,}만원 기준")
         m1, m2, m3, m4 = st.columns(4)
         with m1:
@@ -324,13 +304,9 @@ if analyze:
         with m4:
             st.metric("균등 대비 초과수익", f"{(strategy_profit-equal_profit)/10000:+,.0f}만원")
 
-        # ── KPI ──
         render_kpi_strip(strategy_pct, equal_pct, cagr_s, cagr_e, sharpe_s, sharpe_e, mdd_s, mdd_e)
-
-        # ── 전략 설명 ──
         render_strategy_expander(strategy)
 
-        # ── 전략 지표 그래프 ──
         card("📈 전략 지표 그래프", f"{chart_col} · 상승 🔴 하락 🔵 · ▲매수 ▼매도")
         rsi_chart = rsi[chart_col] if isinstance(rsi, pd.DataFrame) else rsi
 
@@ -340,18 +316,15 @@ if analyze:
                 go.Scatter(x=ma_l.index, y=ma_l[chart_col], name=f"MA{ma_long}", line=dict(color=ACCENT, width=1.2)),
             ]
             fig1 = make_candlestick_fig(close_p, open_p, high_p, low_p, volume=volume, extra_traces=extra, buy_idx=buy_idx, sell_idx=sell_idx, chart_col=chart_col)
-
         elif strategy == "RSI 전략 (RSI)":
             fig1 = make_candlestick_fig(close_p, open_p, high_p, low_p, volume=volume, has_rsi=True, rsi_data=rsi_chart, rsi_threshold=rsi_threshold, buy_idx=buy_idx, sell_idx=sell_idx, chart_col=chart_col)
-
         elif strategy == "볼린저 밴드 전략 (Bollinger Bands)":
             extra = [
                 go.Scatter(x=bb_upper.index, y=bb_upper[chart_col], name="상단밴드", line=dict(color=CANDLE_UP, width=1, dash="dash")),
                 go.Scatter(x=bb_mid.index, y=bb_mid[chart_col], name="중간선", line=dict(color="yellow", width=1)),
                 go.Scatter(x=bb_lower.index, y=bb_lower[chart_col], name="하단밴드", line=dict(color=GREEN, width=1, dash="dash")),
             ]
-            fig1 = make_candlestick_fig(close_p, open_p, high_p, low_p, volume=volume, extra_traces=extra, buy_idx=buy_idx, sell_idx=sell_idx, chart_col=chart_col)
-
+            fig1 = make_candlestick_fig(close_p, open_p, high_p, low_p, volume=volume, extra_trades=extra, buy_idx=buy_idx, sell_idx=sell_idx, chart_col=chart_col)
         else:
             extra = [
                 go.Scatter(x=ma_s.index, y=ma_s[chart_col], name=f"MA{ma_short}", line=dict(color="orange", width=1.2)),
@@ -361,11 +334,9 @@ if analyze:
 
         st.plotly_chart(fig1, use_container_width=True)
 
-        # ── 수익률 비교 ──
         card("💰 수익률 비교", "누적 수익률 (%)")
         st.plotly_chart(make_return_chart(portfolio_equal, portfolio_strategy, strategy), use_container_width=True)
 
-        # ── 낙폭 + 히트맵 ──
         col1, col2 = st.columns([1, 1])
         with col1:
             card("📉 낙폭 (Drawdown)", "고점 대비 하락폭")
@@ -374,7 +345,6 @@ if analyze:
             card("📅 월별 수익률", "🔴 수익 · 🔵 손실")
             st.plotly_chart(make_heatmap_chart(weighted_return), use_container_width=True)
 
-        # ── 종목별 성과 ──
         card("📊 종목별 성과", "기간 수익률 및 현재 포지션")
         period_returns = (df.iloc[-1] / df.iloc[0] - 1) * 100
         volatility = df.pct_change().std() * (252 ** 0.5) * 100
@@ -399,12 +369,10 @@ if analyze:
             })
             st.dataframe(holdings.style.map(color_val, subset=["수익률 (%)", "기여도 (pp)"]), use_container_width=True, hide_index=True)
 
-        # ── 파이차트 ──
         active = [tickers[i] for i, s in enumerate(last_signal.values) if s == 1]
         card("🥧 현재 포트폴리오 비중", "현재 포지션 기준")
         st.plotly_chart(make_pie_chart(active, tickers), use_container_width=True)
 
-        # ── 금액 배분 ──
         card("💵 금액 배분", f"전략 신호 기준 · 투입금액 {investment:,}만원")
         active_count = len(active)
         alloc_data = []
@@ -415,11 +383,49 @@ if analyze:
                 alloc_data.append({"종목": t, "포지션": "보유중 ✅", "비중": f"{weight*100:.1f}%", "투자금액": f"{amount:,.0f}만원"})
             else:
                 alloc_data.append({"종목": t, "포지션": "현금 ❌", "비중": "0%", "투자금액": "0만원"})
-
         if active_count < len(tickers):
             cash_amount = invest_won * (len(tickers) - active_count) / len(tickers) / 10000
             alloc_data.append({"종목": "현금", "포지션": "-", "비중": f"{(len(tickers)-active_count)/len(tickers)*100:.1f}%", "투자금액": f"{cash_amount:,.0f}만원"})
-
         st.dataframe(pd.DataFrame(alloc_data), use_container_width=True, hide_index=True)
+
+        # ── 매수/매도 주문 ──
+        if KIS_AVAILABLE and market == "한국주식 (KS)":
+            card("🛒 주문", "⚠️ 실제 계좌 주문 · 신중하게 클릭하세요!")
+
+            order_ticker = st.selectbox("주문 종목", [t.replace(".KS", "") for t in tickers])
+            order_qty = st.number_input("주문 수량 (주)", min_value=1, value=1, step=1)
+
+            col_buy, col_sell = st.columns(2)
+            with col_buy:
+                if st.button("🟢 매수", use_container_width=True):
+                    st.warning(f"⚠️ {order_ticker} {order_qty}주 매수하시겠어요?")
+                    col_ok, col_cancel = st.columns(2)
+                    with col_ok:
+                        if st.button("✅ 확인", use_container_width=True):
+                            with st.spinner("매수 주문 중..."):
+                                result = buy_order(order_ticker, order_qty, kis_token)
+                                if result.get("rt_cd") == "0":
+                                    st.success("✅ 매수 주문 완료!")
+                                else:
+                                    st.error(f"❌ 주문 실패: {result.get('msg1')}")
+                    with col_cancel:
+                        if st.button("❌ 취소", use_container_width=True):
+                            st.info("주문 취소됐어요!")
+
+            with col_sell:
+                if st.button("🔴 매도", use_container_width=True):
+                    st.warning(f"⚠️ {order_ticker} {order_qty}주 매도하시겠어요?")
+                    col_ok2, col_cancel2 = st.columns(2)
+                    with col_ok2:
+                        if st.button("✅ 확인 ", use_container_width=True):
+                            with st.spinner("매도 주문 중..."):
+                                result = sell_order(order_ticker, order_qty, kis_token)
+                                if result.get("rt_cd") == "0":
+                                    st.success("✅ 매도 주문 완료!")
+                                else:
+                                    st.error(f"❌ 주문 실패: {result.get('msg1')}")
+                    with col_cancel2:
+                        if st.button("❌ 취소 ", use_container_width=True):
+                            st.info("주문 취소됐어요!")
 
         st.caption(f"Data: yfinance · {df.index[0].date()} → {df.index[-1].date()} · {len(df)} trading days")
