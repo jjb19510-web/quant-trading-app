@@ -18,8 +18,22 @@ from charts import (
     make_drawdown_chart, make_heatmap_chart, make_pie_chart
 )
 
+try:
+    from broker import get_access_token, get_current_price as kis_get_price
+    KIS_AVAILABLE = True
+except:
+    KIS_AVAILABLE = False
+
 st.set_page_config(page_title="Quantfolio — Backtest Lab", page_icon="📈", layout="wide")
 apply_custom_css()
+
+# ── KIS 토큰 캐시 ──
+@st.cache_data(ttl=3600)
+def get_kis_token():
+    try:
+        return get_access_token()
+    except:
+        return None
 
 # ── 사이드바 ──
 with st.sidebar:
@@ -242,28 +256,55 @@ if analyze:
                 unsafe_allow_html=True
             )
 
-        # ── 현재가 ──
-        card("💹 현재가", "실시간 주가 · yfinance 기준")
+        # ── 현재가 (KIS API 우선, 실패시 yfinance) ──
+        card("💹 현재가", "실시간 주가 · KIS API 기준" if KIS_AVAILABLE else "주가 · yfinance 기준")
         price_cols = st.columns(len(tickers))
+
+        kis_token = get_kis_token() if KIS_AVAILABLE else None
+
         for i, ticker in enumerate(tickers):
             with price_cols[i]:
-                try:
-                    hist = yf.Ticker(ticker).history(period="2d")
-                    if len(hist) >= 2:
-                        current = hist["Close"].iloc[-1]
-                        prev = hist["Close"].iloc[-2]
-                        change = current - prev
-                        change_pct = (change / prev) * 100
-                        color = CANDLE_UP if change >= 0 else CANDLE_DOWN
-                        arrow = "▲" if change >= 0 else "▼"
-                        st.markdown(f"""
-                        <div style='background:{SURFACE_2}; border:1px solid {LINE}; border-radius:8px; padding:14px 18px; margin-bottom:8px;'>
-                            <div style='font-size:12px; color:{DIM}; margin-bottom:4px;'>{ticker}</div>
-                            <div style='font-family:JetBrains Mono; font-size:22px; font-weight:600;'>{current:,.2f}</div>
-                            <div style='font-family:JetBrains Mono; font-size:12px; color:{color}; margin-top:2px;'>{arrow} {change:+.2f} ({change_pct:+.2f}%)</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                except:
+                price_data = None
+
+                # KIS API로 현재가 조회 (한국 주식만)
+                if KIS_AVAILABLE and kis_token and market == "한국주식 (KS)":
+                    try:
+                        raw_ticker = ticker.replace(".KS", "")
+                        price_data = kis_get_price(raw_ticker, kis_token)
+                    except:
+                        pass
+
+                # KIS 실패시 yfinance로 폴백
+                if not price_data:
+                    try:
+                        hist = yf.Ticker(ticker).history(period="2d")
+                        if len(hist) >= 2:
+                            current = hist["Close"].iloc[-1]
+                            prev = hist["Close"].iloc[-2]
+                            change = current - prev
+                            change_pct = (change / prev) * 100
+                            price_data = {
+                                "current": current,
+                                "change": change,
+                                "change_pct": change_pct
+                            }
+                    except:
+                        pass
+
+                if price_data:
+                    current = price_data["current"]
+                    change = price_data["change"]
+                    change_pct = price_data["change_pct"]
+                    color = CANDLE_UP if change >= 0 else CANDLE_DOWN
+                    arrow = "▲" if change >= 0 else "▼"
+                    st.markdown(f"""
+                    <div style='background:{SURFACE_2}; border:1px solid {LINE}; border-radius:8px; padding:14px 18px; margin-bottom:8px;'>
+                        <div style='font-size:12px; color:{DIM}; margin-bottom:4px;'>{ticker}</div>
+                        <div style='font-family:JetBrains Mono; font-size:22px; font-weight:600;'>{current:,.0f}</div>
+                        <div style='font-family:JetBrains Mono; font-size:12px; color:{color}; margin-top:2px;'>{arrow} {change:+,.0f} ({change_pct:+.2f}%)</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
                     st.markdown(f"""
                     <div style='background:{SURFACE_2}; border:1px solid {LINE}; border-radius:8px; padding:14px 18px; margin-bottom:8px;'>
                         <div style='font-size:12px; color:{DIM};'>{ticker}</div>
