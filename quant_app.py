@@ -48,8 +48,8 @@ with st.sidebar:
         tickers_raw = st.text_input("티커 입력 (쉼표로 구분)", "")
         tickers = [t.strip() for t in tickers_raw.split(",") if t.strip()]
 
-    start_date = st.date_input("Start date", value=pd.to_datetime("2023-01-01"))
-    end_date = st.date_input("End date", value=pd.to_datetime("2025-01-01"))
+    start_date = st.date_input("Start date", value=pd.to_datetime("today") - pd.DateOffset(years=1))
+    end_date = st.date_input("End date", value=pd.to_datetime("today"))
 
     strategy = st.selectbox("전략 선택 (Strategy)", [
         "RSI 전략 (RSI)",
