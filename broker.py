@@ -52,3 +52,72 @@ def get_current_price(ticker, token):
             "volume": int(output["acml_vol"])
         }
     return None
+def get_balance(token):
+    """계좌 잔고 조회"""
+    url = f"{BASE_URL}/uapi/domestic-stock/v1/trading/inquire-balance"
+    headers = {
+        "content-type": "application/json",
+        "authorization": f"Bearer {token}",
+        "appkey": APP_KEY,
+        "appsecret": APP_SECRET,
+        "tr_id": "TTTC8434R"
+    }
+    params = {
+        "CANO": ACCOUNT_NO,
+        "ACNT_PRDT_CD": "01",
+        "AFHR_FLPR_YN": "N",
+        "OFL_YN": "N",
+        "INQR_DVSN": "02",
+        "UNPR_DVSN": "01",
+        "FUND_STTL_ICLD_YN": "N",
+        "FNCG_AMT_AUTO_RDPT_YN": "N",
+        "PRCS_DVSN": "01",
+        "CTX_AREA_FK100": "",
+        "CTX_AREA_NK100": ""
+    }
+    res = requests.get(url, headers=headers, params=params)
+    return res.json()
+
+
+def buy_order(ticker, qty, token):
+    """시장가 매수 주문"""
+    url = f"{BASE_URL}/uapi/domestic-stock/v1/trading/order-cash"
+    headers = {
+        "content-type": "application/json",
+        "authorization": f"Bearer {token}",
+        "appkey": APP_KEY,
+        "appsecret": APP_SECRET,
+        "tr_id": "TTTC0802U"
+    }
+    body = {
+        "CANO": ACCOUNT_NO,
+        "ACNT_PRDT_CD": "01",
+        "PDNO": ticker,
+        "ORD_DVSN": "01",
+        "ORD_QTY": str(qty),
+        "ORD_UNPR": "0"
+    }
+    res = requests.post(url, headers=headers, data=json.dumps(body))
+    return res.json()
+
+
+def sell_order(ticker, qty, token):
+    """시장가 매도 주문"""
+    url = f"{BASE_URL}/uapi/domestic-stock/v1/trading/order-cash"
+    headers = {
+        "content-type": "application/json",
+        "authorization": f"Bearer {token}",
+        "appkey": APP_KEY,
+        "appsecret": APP_SECRET,
+        "tr_id": "TTTC0801U"
+    }
+    body = {
+        "CANO": ACCOUNT_NO,
+        "ACNT_PRDT_CD": "01",
+        "PDNO": ticker,
+        "ORD_DVSN": "01",
+        "ORD_QTY": str(qty),
+        "ORD_UNPR": "0"
+    }
+    res = requests.post(url, headers=headers, data=json.dumps(body))
+    return res.json()
