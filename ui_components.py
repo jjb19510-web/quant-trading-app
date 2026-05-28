@@ -6,15 +6,15 @@ import pandas as pd
 # ── 색상 테마 ──
 ACCENT = "#3b82f6"
 RED = "#ef4444"
-GREEN = "#4ade80"
+GREEN = "#34d399"
 CANDLE_UP = "#ef4444"
 CANDLE_DOWN = "#3b82f6"
-DIM = "#6b7385"
-TEXT = "#e6e9ef"
-SURFACE_1 = "#0d0d0f"
-SURFACE_2 = "#111318"
-SURFACE_3 = "#1d2330"
-LINE = "#1c2030"
+DIM = "#6b7280"
+TEXT = "#e2e8f0"
+SURFACE_1 = "#0f1117"
+SURFACE_2 = "#13161f"
+SURFACE_3 = "#1a1f2e"
+LINE = "#1e2330"
 BG = "#080a0f"
 
 
@@ -22,31 +22,157 @@ def apply_custom_css():
     st.markdown(f"""
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap');
+
       .stApp {{ background: {BG}; color: {TEXT}; font-family: 'Inter', sans-serif; }}
       section[data-testid="stSidebar"] {{ background: {SURFACE_1}; border-right: 1px solid {LINE}; }}
       section[data-testid="stSidebar"] * {{ color: {TEXT}; }}
       h1, h2, h3, h4 {{ letter-spacing: -0.02em; }}
       .block-container {{ padding-top: 1.4rem; padding-bottom: 3rem; max-width: 1400px; }}
-      .qf-eyebrow {{ font-size: 11px; color: {DIM}; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }}
-      .qf-title {{ font-size: 26px; font-weight: 600; margin: 0 0 4px 0; }}
-      .qf-meta {{ font-size: 12px; color: {DIM}; font-family: 'JetBrains Mono', monospace; }}
-      .qf-kpi-grid {{
-        display: grid; grid-template-columns: 1.4fr repeat(5, 1fr);
-        gap: 1px; background: {LINE}; border: 1px solid {LINE};
-        border-radius: 8px; overflow: hidden; margin: 12px 0 18px;
+
+      /* ── 상단 요약 카드 ── */
+      .qf-summary-grid {{
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+        margin-bottom: 14px;
       }}
-      .qf-kpi {{ background: {SURFACE_1}; padding: 12px 14px; }}
+      .qf-summary-card {{
+        background: {SURFACE_1};
+        border: 0.5px solid {LINE};
+        border-radius: 12px;
+        padding: 14px 16px;
+      }}
+      .qf-summary-card.highlight {{
+        border-color: rgba(239,68,68,0.3);
+        background: linear-gradient(135deg, {SURFACE_1} 60%, rgba(239,68,68,0.04));
+      }}
+      .qf-eyebrow {{
+        font-size: 11px;
+        color: {DIM};
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        margin-bottom: 6px;
+        font-weight: 500;
+      }}
+      .qf-title {{
+        font-size: 24px;
+        font-weight: 600;
+        margin: 0 0 4px 0;
+        font-family: 'JetBrains Mono', monospace;
+        letter-spacing: -0.02em;
+      }}
+      .qf-badge {{
+        display: inline-block;
+        font-size: 11px;
+        font-family: 'JetBrains Mono', monospace;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 20px;
+        margin-top: 4px;
+      }}
+      .qf-badge.pos {{ background: rgba(239,68,68,0.12); color: {CANDLE_UP}; }}
+      .qf-badge.neg {{ background: rgba(59,130,246,0.12); color: {CANDLE_DOWN}; }}
+      .qf-badge.dim {{ background: rgba(107,114,128,0.12); color: {DIM}; }}
+
+      /* ── KPI 스트립 ── */
+      .qf-kpi-grid {{
+        display: grid;
+        grid-template-columns: 1.4fr repeat(5, 1fr);
+        gap: 0;
+        background: {LINE};
+        border: 0.5px solid {LINE};
+        border-radius: 10px;
+        overflow: hidden;
+        margin: 0 0 16px;
+      }}
+      .qf-kpi {{
+        background: {SURFACE_1};
+        padding: 12px 14px;
+        border-right: 0.5px solid {LINE};
+      }}
+      .qf-kpi:last-child {{ border-right: none; }}
       .qf-kpi.big {{ background: {SURFACE_2}; }}
-      .qf-kpi-label {{ font-size: 10.5px; color: {DIM}; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 500; }}
-      .qf-kpi-klabel {{ font-size: 10px; color: #4d5567; margin-top: 1px; display: block; }}
-      .qf-kpi-value {{ font-family: 'JetBrains Mono', monospace; font-size: 18px; font-weight: 600; letter-spacing: -0.02em; margin-top: 4px; }}
-      .qf-kpi.big .qf-kpi-value {{ font-size: 26px; color: {CANDLE_UP}; }}
-      .qf-kpi-delta {{ font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: {DIM}; margin-top: 2px; }}
+      .qf-kpi-label {{
+        font-size: 10px;
+        color: {DIM};
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        font-weight: 500;
+      }}
+      .qf-kpi-klabel {{
+        font-size: 10px;
+        color: #3d4459;
+        margin-top: 1px;
+        display: block;
+      }}
+      .qf-kpi-value {{
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 17px;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        margin-top: 5px;
+      }}
+      .qf-kpi.big .qf-kpi-value {{
+        font-size: 24px;
+        color: {CANDLE_UP};
+      }}
+      .qf-kpi-delta {{
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 10.5px;
+        color: {DIM};
+        margin-top: 3px;
+      }}
       .qf-kpi-delta.pos {{ color: {CANDLE_UP}; }}
       .qf-kpi-delta.neg {{ color: {CANDLE_DOWN}; }}
-      .qf-card {{ background: {SURFACE_1}; border: 1px solid {LINE}; border-radius: 8px; padding: 16px 18px; margin-bottom: 16px; }}
-      .qf-card h3 {{ margin: 0 0 2px; font-size: 13px; font-weight: 600; }}
-      .qf-card .qf-sub {{ font-size: 11px; color: {DIM}; margin-bottom: 10px; }}
+
+      /* ── 섹션 카드 ── */
+      .qf-card {{
+        background: {SURFACE_1};
+        border: 0.5px solid {LINE};
+        border-radius: 12px;
+        padding: 16px 18px;
+        margin-bottom: 14px;
+      }}
+      .qf-card h3 {{
+        margin: 0 0 2px;
+        font-size: 13px;
+        font-weight: 600;
+        color: {TEXT};
+      }}
+      .qf-card .qf-sub {{
+        font-size: 11px;
+        color: {DIM};
+        margin-bottom: 10px;
+      }}
+
+      /* ── 주문 버튼 ── */
+      div[data-testid="column"] button[kind="primary"] {{
+        background: rgba(52,211,153,0.1) !important;
+        border: 0.5px solid rgba(52,211,153,0.3) !important;
+        color: {GREEN} !important;
+        border-radius: 8px !important;
+        font-weight: 500 !important;
+      }}
+      div[data-testid="column"] button[kind="secondary"] {{
+        background: rgba(239,68,68,0.1) !important;
+        border: 0.5px solid rgba(239,68,68,0.3) !important;
+        color: {RED} !important;
+        border-radius: 8px !important;
+        font-weight: 500 !important;
+      }}
+
+      /* ── 경고 배지 ── */
+      .qf-warn {{
+        font-size: 11px;
+        color: #f59e0b;
+        background: rgba(245,158,11,0.08);
+        border: 0.5px solid rgba(245,158,11,0.2);
+        border-radius: 6px;
+        padding: 5px 10px;
+        margin-bottom: 10px;
+        display: inline-block;
+      }}
+
       .pos {{ color: {CANDLE_UP}; }}
       .neg {{ color: {CANDLE_DOWN}; }}
       div[data-testid="stDataFrame"] {{ background: {SURFACE_1}; border-radius: 8px; }}
@@ -54,8 +180,44 @@ def apply_custom_css():
     """, unsafe_allow_html=True)
 
 
+def render_summary_cards(invested, profit, profit_pct, final_val, excess):
+    """상단 4개 요약 카드"""
+    profit_badge_cls = "pos" if profit >= 0 else "neg"
+    profit_sign = "▲" if profit >= 0 else "▼"
+    excess_color = CANDLE_UP if excess >= 0 else DIM
+
+    st.markdown(f"""
+    <div class="qf-summary-grid">
+      <div class="qf-summary-card">
+        <div class="qf-eyebrow">투입금액</div>
+        <div class="qf-title" style="color:{TEXT};">{invested:,.0f}만원</div>
+      </div>
+      <div class="qf-summary-card highlight">
+        <div class="qf-eyebrow">전략 수익금</div>
+        <div class="qf-title" style="color:{CANDLE_UP if profit >= 0 else CANDLE_DOWN};">
+          {'+' if profit >= 0 else ''}{profit:,.0f}만원
+        </div>
+        <span class="qf-badge {profit_badge_cls}">{profit_sign} {profit_pct:+.2f}%</span>
+      </div>
+      <div class="qf-summary-card">
+        <div class="qf-eyebrow">전략 최종금액</div>
+        <div class="qf-title" style="color:{TEXT};">{final_val:,.0f}만원</div>
+      </div>
+      <div class="qf-summary-card">
+        <div class="qf-eyebrow">균등 대비 초과수익</div>
+        <div class="qf-title" style="color:{excess_color};">
+          {'+' if excess >= 0 else ''}{excess:,.0f}만원
+        </div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
 def card(title, sub=""):
-    st.markdown(f"<div class='qf-card'><h3>{title}</h3><div class='qf-sub'>{sub}</div></div>", unsafe_allow_html=True)
+    st.markdown(
+        f"<div class='qf-card'><h3>{title}</h3><div class='qf-sub'>{sub}</div></div>",
+        unsafe_allow_html=True
+    )
 
 
 def kpi_html(label, klabel, value, delta=None, big=False, positive=True):
@@ -66,7 +228,8 @@ def kpi_html(label, klabel, value, delta=None, big=False, positive=True):
         delta_html = f"<div class='qf-kpi-delta {d_cls}'>{delta}</div>"
     return (
         f"<div class='{cls}'>"
-        f"<div class='qf-kpi-label'>{label}<span class='qf-kpi-klabel'>{klabel}</span></div>"
+        f"<div class='qf-kpi-label'>{label}"
+        f"<span class='qf-kpi-klabel'>{klabel}</span></div>"
         f"<div class='qf-kpi-value'>{value}</div>{delta_html}</div>"
     )
 

@@ -9,7 +9,7 @@ from strategies import calculate_mdd, calculate_sharpe, calculate_cagr, run_stra
 from optimization import optimize_parameters, walk_forward_test
 from ui_components import (
     apply_custom_css, card, render_kpi_strip, render_strategy_expander,
-    color_val, style_fig,
+    render_summary_cards, color_val, style_fig,
     ACCENT, RED, GREEN, CANDLE_UP, CANDLE_DOWN,
     DIM, TEXT, SURFACE_1, SURFACE_2, LINE, BG
 )
@@ -232,6 +232,7 @@ if analyze:
         strategy_profit = invest_won * (strategy_pct / 100)
         strategy_final = invest_won + strategy_profit
         equal_profit = invest_won * (equal_pct / 100)
+        excess = strategy_profit - equal_profit
 
         left, right = st.columns([3, 2])
         with left:
@@ -279,7 +280,7 @@ if analyze:
                     color = CANDLE_UP if change >= 0 else CANDLE_DOWN
                     arrow = "▲" if change >= 0 else "▼"
                     st.markdown(f"""
-                    <div style='background:{SURFACE_2}; border:1px solid {LINE}; border-radius:8px; padding:14px 18px; margin-bottom:8px;'>
+                    <div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:12px; padding:14px 18px; margin-bottom:8px;'>
                         <div style='font-size:12px; color:{DIM}; margin-bottom:4px;'>{ticker}</div>
                         <div style='font-family:JetBrains Mono; font-size:22px; font-weight:600;'>{current:,.0f}</div>
                         <div style='font-family:JetBrains Mono; font-size:12px; color:{color}; margin-top:2px;'>{arrow} {change:+,.0f} ({change_pct:+.2f}%)</div>
@@ -287,22 +288,20 @@ if analyze:
                     """, unsafe_allow_html=True)
                 else:
                     st.markdown(f"""
-                    <div style='background:{SURFACE_2}; border:1px solid {LINE}; border-radius:8px; padding:14px 18px; margin-bottom:8px;'>
+                    <div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:12px; padding:14px 18px; margin-bottom:8px;'>
                         <div style='font-size:12px; color:{DIM};'>{ticker}</div>
                         <div style='font-size:14px; color:{DIM};'>조회 실패</div>
                     </div>
                     """, unsafe_allow_html=True)
 
-        card("💰 투입금액 수익 분석", f"투입금액 {investment:,}만원 기준")
-        m1, m2, m3, m4 = st.columns(4)
-        with m1:
-            st.metric("투입금액", f"{investment:,}만원")
-        with m2:
-            st.metric("전략 수익금", f"{strategy_profit/10000:+,.0f}만원", delta=f"{strategy_pct:+.2f}%")
-        with m3:
-            st.metric("전략 최종금액", f"{strategy_final/10000:,.0f}만원")
-        with m4:
-            st.metric("균등 대비 초과수익", f"{(strategy_profit-equal_profit)/10000:+,.0f}만원")
+        # ── 투입금액 요약 카드 (신규 디자인) ──
+        render_summary_cards(
+            invested=investment,
+            profit=strategy_profit / 10000,
+            profit_pct=strategy_pct,
+            final_val=strategy_final / 10000,
+            excess=excess / 10000
+        )
 
         render_kpi_strip(strategy_pct, equal_pct, cagr_s, cagr_e, sharpe_s, sharpe_e, mdd_s, mdd_e)
         render_strategy_expander(strategy)
