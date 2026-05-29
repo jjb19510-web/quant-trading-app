@@ -517,7 +517,7 @@ if analyze:
             from bs4 import BeautifulSoup
             news_ticker = chart_col.replace(".KS", "").replace(".KQ", "")
             url = f"https://finance.naver.com/item/news_news.naver?code={news_ticker}&page=1"
-            res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
+            res = requests.get(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}, timeout=5)
             res.encoding = "euc-kr"
             soup = BeautifulSoup(res.text, "html.parser")
             rows = soup.select("table.type5 tr")
