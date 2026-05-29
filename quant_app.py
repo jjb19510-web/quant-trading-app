@@ -111,10 +111,24 @@ with st.sidebar:
         st.divider()
 
     if market == "한국주식 (KS)":
-        st.caption("예시: 005930, 000660, 373220")
+        st.caption("예시: 삼성전자, SK하이닉스 또는 005930, 000660")
         default_ticker = st.session_state.get("selected_ticker", "")
-        tickers_raw = st.text_input("종목 코드 입력 (쉼표로 구분)", value=default_ticker)
-        tickers = [t.strip() + ".KS" for t in tickers_raw.split(",") if t.strip()]
+        tickers_raw = st.text_input("종목명 또는 코드 입력 (쉼표로 구분)", value=default_ticker)
+
+        from pykrx import stock as krx
+        def resolve_ticker(name_or_code):
+            name_or_code = name_or_code.strip()
+            if name_or_code.isdigit():
+                return name_or_code + ".KS"
+            try:
+                code = krx.get_ticker_symbol(name_or_code)
+                if code:
+                    return code + ".KS"
+            except:
+                pass
+            return name_or_code + ".KS"
+
+        tickers = [resolve_ticker(t) for t in tickers_raw.split(",") if t.strip()]
     else:
         st.caption("예시: AAPL, TSLA, NVDA")
         default_ticker = st.session_state.get("selected_ticker", "")
