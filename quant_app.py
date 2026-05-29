@@ -4,6 +4,8 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 import datetime as dt
+import json
+import os
 
 from strategies import calculate_mdd, calculate_sharpe, calculate_cagr, run_strategy
 from optimization import optimize_parameters, walk_forward_test
@@ -27,6 +29,27 @@ except:
 st.set_page_config(page_title="Quantfolio — Backtest Lab", page_icon="📈", layout="wide")
 apply_custom_css()
 
+# ── 날짜 자동 설정 (오늘 기준 1년) ──
+end_date = pd.to_datetime("today").date()
+start_date = (pd.to_datetime("today") - pd.DateOffset(years=1)).date()
+
+
+# ── 관심종목 저장/불러오기 ──
+WATCHLIST_FILE = "watchlist.json"
+
+def load_watchlist():
+    if os.path.exists(WATCHLIST_FILE):
+        with open(WATCHLIST_FILE, "r") as f:
+            return json.load(f)
+    return []
+
+def save_watchlist(wl):
+    with open(WATCHLIST_FILE, "w") as f:
+        json.dump(wl, f)
+
+if "watchlist" not in st.session_state:
+    st.session_state.watchlist = load_watchlist()
+
 @st.cache_data(ttl=3600)
 def get_kis_token():
     try:
@@ -39,17 +62,42 @@ with st.sidebar:
 
     market = st.selectbox("시장 선택 (Market)", ["한국주식 (KS)", "미국주식 (US)"])
 
+    # ── 관심종목 리스트 ──
+    if st.session_state.watchlist:
+        st.markdown("<div style='font-size:12px; color:#6b7280; margin-bottom:6px;'>⭐ 관심종목</div>", unsafe_allow_html=True)
+        for witem in st.session_state.watchlist:
+            col_w, col_d = st.columns([4, 1])
+            with col_w:
+                if st.button(witem, key=f"wl_{witem}", use_container_width=True):
+                    st.session_state["selected_ticker"] = witem
+            with col_d:
+                if st.button("✕", key=f"del_{witem}"):
+                    st.session_state.watchlist.remove(witem)
+                    save_watchlist(st.session_state.watchlist)
+                    st.rerun()
+        st.divider()
+
     if market == "한국주식 (KS)":
         st.caption("예시: 005930, 000660, 373220")
-        tickers_raw = st.text_input("종목 코드 입력 (쉼표로 구분)", "")
+        default_ticker = st.session_state.get("selected_ticker", "")
+        tickers_raw = st.text_input("종목 코드 입력 (쉼표로 구분)", value=default_ticker)
         tickers = [t.strip() + ".KS" for t in tickers_raw.split(",") if t.strip()]
     else:
         st.caption("예시: AAPL, TSLA, NVDA")
-        tickers_raw = st.text_input("티커 입력 (쉼표로 구분)", "")
+        default_ticker = st.session_state.get("selected_ticker", "")
+        tickers_raw = st.text_input("티커 입력 (쉼표로 구분)", value=default_ticker)
         tickers = [t.strip() for t in tickers_raw.split(",") if t.strip()]
 
-    start_date = st.date_input("Start date", value=pd.to_datetime("today") - pd.DateOffset(years=1))
-    end_date = st.date_input("End date", value=pd.to_datetime("today"))
+    # ── 관심종목 추가 버튼 ──
+    if tickers_raw.strip():
+        if st.button("⭐ 관심종목 추가", use_container_width=True):
+            new_items = [t.strip() for t in tickers_raw.split(",") if t.strip()]
+            for item in new_items:
+                if item not in st.session_state.watchlist:
+                    st.session_state.watchlist.append(item)
+            save_watchlist(st.session_state.watchlist)
+            st.rerun()
+
 
     strategy = st.selectbox("전략 선택 (Strategy)", [
         "RSI 전략 (RSI)",
