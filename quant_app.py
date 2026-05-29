@@ -115,15 +115,19 @@ with st.sidebar:
         default_ticker = st.session_state.get("selected_ticker", "")
         tickers_raw = st.text_input("종목명 또는 코드 입력 (쉼표로 구분)", value=default_ticker)
 
-        from pykrx import stock as krx
         def resolve_ticker(name_or_code):
             name_or_code = name_or_code.strip()
             if name_or_code.isdigit():
                 return name_or_code + ".KS"
             try:
-                code = krx.get_ticker_symbol(name_or_code)
-                if code:
-                    return code + ".KS"
+                import requests
+                url = f"https://query2.finance.yahoo.com/v1/finance/search?q={name_or_code}&region=KR&lang=ko-KR"
+                res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
+                quotes = res.json().get("quotes", [])
+                for q in quotes:
+                    sym = q.get("symbol", "")
+                    if sym.endswith(".KS") or sym.endswith(".KQ"):
+                        return sym
             except:
                 pass
             return name_or_code + ".KS"
