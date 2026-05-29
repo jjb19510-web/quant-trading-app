@@ -514,29 +514,24 @@ if analyze:
         card("📰 관련 뉴스", f"{chart_col} 최신 뉴스")
         try:
             import requests
-            from bs4 import BeautifulSoup
-            news_ticker = chart_col.replace(".KS", "").replace(".KQ", "")
-            url = f"https://finance.naver.com/item/news_news.naver?code={news_ticker}&page=1"
-            res = requests.get(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}, timeout=5)
-            res.encoding = "euc-kr"
-            soup = BeautifulSoup(res.text, "html.parser")
-            rows = soup.select("table.type5 tr")
-            news_list = []
-            for row in rows:
-                title_tag = row.select_one("td.title a")
-                date_tag = row.select_one("td.date")
-                if title_tag and date_tag:
-                    news_list.append({
-                        "제목": title_tag.text.strip(),
-                        "날짜": date_tag.text.strip(),
-                        "링크": "https://finance.naver.com" + title_tag["href"]
-                    })
-            if news_list:
-                for news in news_list[:5]:
+            naver_id = st.secrets.get("NAVER_CLIENT_ID", "")
+            naver_secret = st.secrets.get("NAVER_CLIENT_SECRET", "")
+            query = chart_col.replace(".KS", "").replace(".KQ", "")
+            url = f"https://openapi.naver.com/v1/search/news.json?query={query}&display=5&sort=date"
+            res = requests.get(url, headers={
+                "X-Naver-Client-Id": naver_id,
+                "X-Naver-Client-Secret": naver_secret
+            }, timeout=5)
+            items = res.json().get("items", [])
+            if items:
+                for item in items:
+                    title = item["title"].replace("<b>", "").replace("</b>", "")
+                    link = item["link"]
+                    date = item["pubDate"][:16]
                     st.markdown(f"""
                     <div style='background:{SURFACE_1}; border:0.5px solid {LINE}; border-radius:10px; padding:12px 14px; margin-bottom:8px;'>
-                        <a href='{news["링크"]}' target='_blank' style='color:{TEXT}; text-decoration:none; font-size:13px; font-weight:500;'>{news["제목"]}</a>
-                        <div style='font-size:11px; color:{DIM}; margin-top:4px;'>{news["날짜"]}</div>
+                        <a href='{link}' target='_blank' style='color:{TEXT}; text-decoration:none; font-size:13px; font-weight:500;'>{title}</a>
+                        <div style='font-size:11px; color:{DIM}; margin-top:4px;'>{date}</div>
                     </div>
                     """, unsafe_allow_html=True)
             else:
