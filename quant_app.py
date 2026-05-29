@@ -115,21 +115,28 @@ with st.sidebar:
         default_ticker = st.session_state.get("selected_ticker", "")
         tickers_raw = st.text_input("종목명 또는 코드 입력 (쉼표로 구분)", value=default_ticker)
 
+        @st.cache_data(ttl=86400)
+        def get_krx_ticker_map():
+            try:
+                import requests
+                from io import StringIO
+                url = "https://kind.krx.co.kr/corpgeneral/corpList.do?method=download&searchType=13"
+                res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+                res.encoding = "euc-kr"
+                df_krx = pd.read_html(StringIO(res.text))[0]
+                df_krx["종목코드"] = df_krx["종목코드"].astype(str).str.zfill(6)
+                return dict(zip(df_krx["회사명"], df_krx["종목코드"]))
+            except:
+                return {}
+
+        krx_map = get_krx_ticker_map()
+
         def resolve_ticker(name_or_code):
             name_or_code = name_or_code.strip()
             if name_or_code.isdigit():
                 return name_or_code + ".KS"
-            try:
-                import requests
-                url = f"https://query2.finance.yahoo.com/v1/finance/search?q={name_or_code}&region=KR&lang=ko-KR"
-                res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
-                quotes = res.json().get("quotes", [])
-                for q in quotes:
-                    sym = q.get("symbol", "")
-                    if sym.endswith(".KS") or sym.endswith(".KQ"):
-                        return sym
-            except:
-                pass
+            if name_or_code in krx_map:
+                return krx_map[name_or_code] + ".KS"
             return name_or_code + ".KS"
 
         tickers = [resolve_ticker(t) for t in tickers_raw.split(",") if t.strip()]
