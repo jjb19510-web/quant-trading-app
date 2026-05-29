@@ -137,7 +137,10 @@ with st.sidebar:
                 return name_or_code + ".KS"
             if name_or_code in krx_map:
                 return krx_map[name_or_code] + ".KS"
-            return name_or_code + ".KS"
+            st.warning(f"'{name_or_code}' 종목을 찾지 못했어요. 코드로 입력해주세요.")
+            return ""
+
+        tickers = [t for t in [resolve_ticker(t) for t in tickers_raw.split(",") if t.strip()] if t]
 
         tickers = [resolve_ticker(t) for t in tickers_raw.split(",") if t.strip()]
     else:
