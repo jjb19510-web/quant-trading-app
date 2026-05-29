@@ -90,7 +90,7 @@ def make_candlestick_fig(close_p, open_p, high_p, low_p, volume=None,
 
     # 기본 줌: 최근 3개월
     x_end = close_p.index[-1]
-    x_start = x_end - pd.DateOffset(months=3)
+    x_start = x_end - pd.DateOffset(months=1)
 
     fig.update_layout(
         height=500 + (rows * 80),
@@ -114,11 +114,11 @@ def make_candlestick_fig(close_p, open_p, high_p, low_p, volume=None,
             range=[str(x_start.date()), str(x_end.date())],
             rangeselector=dict(
                 buttons=[
-                    dict(count=1, label="1개월", step="month", stepmode="backward"),
-                    dict(count=3, label="3개월", step="month", stepmode="backward"),
-                    dict(count=6, label="6개월", step="month", stepmode="backward"),
-                    dict(count=1, label="1년", step="year", stepmode="backward"),
-                    dict(step="all", label="전체보기"),
+                    dict(count=1, label="1W", step="week", stepmode="backward"),
+                    dict(count=1, label="1M", step="month", stepmode="backward"),
+                    dict(count=3, label="3M", step="month", stepmode="backward"),
+                    dict(count=6, label="6M", step="month", stepmode="backward"),
+                    dict(step="all", label="전체"),
                 ],
                 bgcolor=SURFACE_1,
                 activecolor=ACCENT,
