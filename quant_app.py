@@ -534,7 +534,7 @@ if analyze:
             else:
                 st.info("재무 데이터를 찾을 수 없어요.")
         except Exception as e:
-            st.info("재무 데이터를 불러오지 못했어요.")
+            st.error(f"재무 데이터 오류: {e}")
         # ── 뉴스 연동 ──
         card("📰 관련 뉴스", f"{chart_col} 최신 뉴스")
         try:
