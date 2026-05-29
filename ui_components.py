@@ -34,7 +34,7 @@ def apply_custom_css():
         display: grid;
         grid-template-columns: repeat(4, 1fr);
         gap: 10px;
-        margin-bottom: 14px;
+        margin-bottom: 24px;
       }}
       .qf-summary-card {{
         background: {SURFACE_1};
@@ -131,7 +131,7 @@ def apply_custom_css():
         border: 0.5px solid {LINE};
         border-radius: 12px;
         padding: 16px 18px;
-        margin-bottom: 14px;
+        margin-bottom: 24px;
       }}
       .qf-card h3 {{
         margin: 0 0 2px;
