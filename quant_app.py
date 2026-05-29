@@ -131,7 +131,7 @@ if wf_test:
             ))
             fig_wf.add_hline(y=0, line=dict(color=DIM, width=1, dash="dot"))
             fig_wf.update_layout(height=300, margin=dict(l=8, r=20, t=8, b=28), paper_bgcolor=SURFACE_1, plot_bgcolor=SURFACE_1, font=dict(color=TEXT, size=11))
-            st.plotly_chart(fig_wf, use_container_width=True)
+            st.plotly_chart(fig_wf, use_container_width=True, config={"displayModeBar": False})
             st.warning("⚠️ 과거 데이터 기반 테스트예요. 미래 수익률을 보장하지 않아요!")
 
 if optimize:
@@ -160,7 +160,7 @@ if optimize:
                     textposition="outside"
                 ))
                 fig_opt.update_layout(height=300, margin=dict(l=8, r=20, t=8, b=28), paper_bgcolor=SURFACE_1, plot_bgcolor=SURFACE_1, font=dict(color=TEXT, size=11))
-                st.plotly_chart(fig_opt, use_container_width=True)
+                st.plotly_chart(fig_opt, use_container_width=True, config={"displayModeBar": False})
             elif strategy == "이동평균선 전략 (Moving Average)":
                 st.success(f"✅ 최적 MA: 단기 **{int(best['단기 MA'])}** / 장기 **{int(best['장기 MA'])}** → 수익률 **{best['수익률 (%)']:+.2f}%**")
             elif strategy == "볼린저 밴드 전략 (Bollinger Bands)":
@@ -173,7 +173,7 @@ if optimize:
                     textposition="outside"
                 ))
                 fig_opt.update_layout(height=300, margin=dict(l=8, r=20, t=8, b=28), paper_bgcolor=SURFACE_1, plot_bgcolor=SURFACE_1, font=dict(color=TEXT, size=11))
-                st.plotly_chart(fig_opt, use_container_width=True)
+                st.plotly_chart(fig_opt, use_container_width=True, config={"displayModeBar": False})
             else:
                 st.success(f"✅ 최적값: RSI **{int(best['RSI'])}** / 단기MA **{int(best['단기 MA'])}** / 장기MA **{int(best['장기 MA'])}** → 수익률 **{best['수익률 (%)']:+.2f}%**")
 
@@ -331,18 +331,18 @@ if analyze:
             ]
             fig1 = make_candlestick_fig(close_p, open_p, high_p, low_p, volume=volume, has_rsi=True, rsi_data=rsi_chart, rsi_threshold=rsi_threshold, extra_traces=extra, buy_idx=buy_idx, sell_idx=sell_idx, chart_col=chart_col)
 
-        st.plotly_chart(fig1, use_container_width=True)
+        st.plotly_chart(fig1, use_container_width=True, config={"displayModeBar": False, "scrollZoom": True})
 
         card("💰 수익률 비교", "누적 수익률 (%)")
-        st.plotly_chart(make_return_chart(portfolio_equal, portfolio_strategy, strategy), use_container_width=True)
+        st.plotly_chart(make_return_chart(portfolio_equal, portfolio_strategy, strategy), use_container_width=True, config={"displayModeBar": False, "scrollZoom": True})
 
         col1, col2 = st.columns([1, 1])
         with col1:
             card("📉 낙폭 (Drawdown)", "고점 대비 하락폭")
-            st.plotly_chart(make_drawdown_chart(portfolio_strategy), use_container_width=True)
+            st.plotly_chart(make_drawdown_chart(portfolio_strategy), use_container_width=True, config={"displayModeBar": False, "scrollZoom": True})
         with col2:
             card("📅 월별 수익률", "🔴 수익 · 🔵 손실")
-            st.plotly_chart(make_heatmap_chart(weighted_return), use_container_width=True)
+            st.plotly_chart(make_heatmap_chart(weighted_return), use_container_width=True, config={"displayModeBar": False, "scrollZoom": True})
 
         card("📊 종목별 성과", "기간 수익률 및 현재 포지션")
         period_returns = (df.iloc[-1] / df.iloc[0] - 1) * 100

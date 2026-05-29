@@ -7,6 +7,10 @@ from ui_components import (
     style_fig
 )
 
+MODEBAR_CONFIG = dict(
+    displayModeBar=False
+)
+
 
 def make_candlestick_fig(close_p, open_p, high_p, low_p, volume=None,
                           has_rsi=False, rsi_data=None, rsi_threshold=40,
@@ -91,10 +95,18 @@ def make_candlestick_fig(close_p, open_p, high_p, low_p, volume=None,
         font=dict(family="Inter, sans-serif", color=TEXT, size=11),
         showlegend=True,
         hovermode="x unified",
-        legend=dict(bgcolor="rgba(0,0,0,0)", bordercolor="rgba(0,0,0,0)",
-                    font=dict(size=10), orientation="h",
-                    yanchor="bottom", y=1.02, xanchor="left", x=0),
+        hoverlabel=dict(
+            bgcolor=SURFACE_2,
+            bordercolor=LINE,
+            font=dict(family="JetBrains Mono", size=11, color=TEXT)
+        ),
+        legend=dict(
+            bgcolor="rgba(0,0,0,0)", bordercolor="rgba(0,0,0,0)",
+            font=dict(size=10), orientation="h",
+            yanchor="bottom", y=1.02, xanchor="left", x=0
+        ),
         xaxis=dict(rangeslider=dict(visible=False)),
+        dragmode="pan",
     )
 
     for i in range(1, rows + 1):
@@ -123,6 +135,14 @@ def make_return_chart(portfolio_equal, portfolio_strategy, strategy_name):
         hovertemplate="%{x}<br>수익률: %{y:.2f}%<extra></extra>"
     ))
     fig.add_hline(y=0, line=dict(color=DIM, width=1, dash="dot"), opacity=0.4)
+    fig.update_layout(
+        hoverlabel=dict(
+            bgcolor=SURFACE_2,
+            bordercolor=LINE,
+            font=dict(family="JetBrains Mono", size=11, color=TEXT)
+        ),
+        dragmode="pan",
+    )
     return style_fig(fig, 350)
 
 
@@ -140,7 +160,13 @@ def make_drawdown_chart(portfolio_strategy):
         height=280, margin=dict(l=0, r=60, t=8, b=28),
         paper_bgcolor=BG, plot_bgcolor=BG,
         font=dict(family="Inter, sans-serif", color=TEXT, size=11),
-        showlegend=False, hovermode="x unified"
+        showlegend=False, hovermode="x unified",
+        hoverlabel=dict(
+            bgcolor=SURFACE_2,
+            bordercolor=LINE,
+            font=dict(family="JetBrains Mono", size=11, color=TEXT)
+        ),
+        dragmode="pan",
     )
     fig.update_xaxes(showgrid=True, gridcolor="rgba(255,255,255,0.03)",
                      linecolor=LINE, zeroline=False, tickfont=dict(color=DIM, size=10))
@@ -165,12 +191,18 @@ def make_heatmap_chart(weighted_return):
         text=[[f"{v:+.1f}" if not pd.isna(v) else "" for v in row] for row in pivot.values],
         texttemplate="%{text}",
         textfont=dict(family="JetBrains Mono", size=11, color="white"),
-        colorbar=dict(thickness=6, len=0.8, tickfont=dict(color=DIM, size=9))
+        colorbar=dict(thickness=6, len=0.8, tickfont=dict(color=DIM, size=9)),
+        hovertemplate="%{y}년 %{x}<br>수익률: %{z:+.2f}%<extra></extra>"
     ))
     fig.update_layout(
         height=280, margin=dict(l=0, r=60, t=8, b=28),
         paper_bgcolor=BG, plot_bgcolor=BG,
         font=dict(family="Inter, sans-serif", color=TEXT, size=11),
+        hoverlabel=dict(
+            bgcolor=SURFACE_2,
+            bordercolor=LINE,
+            font=dict(family="JetBrains Mono", size=11, color=TEXT)
+        ),
     )
     fig.update_xaxes(tickfont=dict(color=DIM, size=10))
     fig.update_yaxes(tickfont=dict(color=DIM, size=10), side="right")
@@ -194,7 +226,8 @@ def make_pie_chart(active, tickers, DIM=DIM):
         marker=dict(colors=colors, line=dict(color=BG, width=2)),
         textinfo="label+percent",
         textfont=dict(size=12, color=TEXT),
-        hole=0.4
+        hole=0.4,
+        hovertemplate="%{label}<br>%{percent}<extra></extra>"
     ))
     fig.update_layout(
         height=320, margin=dict(l=8, r=8, t=8, b=8),
