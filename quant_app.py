@@ -518,26 +518,24 @@ if analyze:
             fi = fdr.StockListing('KRX')
             row = fi[fi['Code'] == raw_ticker]
             if not row.empty:
-                st.write(row.columns.tolist())
-                per = row.iloc[0].get('PER', 'N/A')
-                pbr = row.iloc[0].get('PBR', 'N/A')
-                try:
-                    per = f"{float(per):.1f}x"
-                except:
-                    per = 'N/A'
-                try:
-                    pbr = f"{float(pbr):.1f}x"
-                except:
-                    pbr = 'N/A'
                 mkt = row.iloc[0].get('Marcap', 0)
                 mkt_str = f"{int(mkt)/1e12:.1f}조" if mkt else 'N/A'
-                f1, f2, f3 = st.columns(3)
+                high52 = row.iloc[0].get('High', 'N/A')
+                low52 = row.iloc[0].get('Low', 'N/A')
+                info = yf.Ticker(chart_col).info
+                per_val = info.get('trailingPE', None)
+                pbr_val = info.get('priceToBook', None)
+                per = f"{per_val:.1f}x" if per_val else 'N/A'
+                pbr = f"{pbr_val:.1f}x" if pbr_val else 'N/A'
+                f1, f2, f3, f4 = st.columns(4)
                 with f1:
                     st.metric("PER", per, help="주가수익비율 — 낮을수록 저평가")
                 with f2:
                     st.metric("PBR", pbr, help="주가순자산비율 — 1배 미만이면 자산가치 이하")
                 with f3:
                     st.metric("시가총액", mkt_str)
+                with f4:
+                    st.metric("52주 고가", f"{int(high52):,}" if high52 != 'N/A' else 'N/A')
             else:
                 st.info("재무 데이터를 찾을 수 없어요.")
         except Exception as e:
