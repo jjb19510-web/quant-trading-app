@@ -518,6 +518,7 @@ if analyze:
             fi = fdr.StockListing('KRX')
             row = fi[fi['Code'] == raw_ticker]
             if not row.empty:
+                st.write(row.columns.tolist())
                 per = row.iloc[0].get('PER', 'N/A')
                 pbr = row.iloc[0].get('PBR', 'N/A')
                 try:
