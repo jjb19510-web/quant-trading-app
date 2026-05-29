@@ -111,36 +111,11 @@ with st.sidebar:
         st.divider()
 
     if market == "한국주식 (KS)":
-        st.caption("예시: 삼성전자, SK하이닉스 또는 005930, 000660")
+        st.caption("예시: 005930, 000660, 373220")
         default_ticker = st.session_state.get("selected_ticker", "")
         tickers_raw = st.text_input("종목명 또는 코드 입력 (쉼표로 구분)", value=default_ticker)
 
-        @st.cache_data(ttl=86400)
-        def get_krx_ticker_map():
-            try:
-                import requests
-                from io import StringIO
-                url = "https://kind.krx.co.kr/corpgeneral/corpList.do?method=download&searchType=13"
-                res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
-                res.encoding = "euc-kr"
-                df_krx = pd.read_html(StringIO(res.text))[0]
-                df_krx["종목코드"] = df_krx["종목코드"].astype(str).str.zfill(6)
-                return dict(zip(df_krx["회사명"], df_krx["종목코드"]))
-            except:
-                return {}
-
-        krx_map = get_krx_ticker_map()
-
-        def resolve_ticker(name_or_code):
-            name_or_code = name_or_code.strip()
-            if name_or_code.isdigit():
-                return name_or_code + ".KS"
-            if name_or_code in krx_map:
-                return krx_map[name_or_code] + ".KS"
-            st.warning(f"'{name_or_code}' 종목을 찾지 못했어요. 코드로 입력해주세요.")
-            return ""
-
-        tickers = [t for t in [resolve_ticker(t) for t in tickers_raw.split(",") if t.strip()] if t]
+        tickers = [t.strip() + ".KS" for t in tickers_raw.split(",") if t.strip()]
 
         tickers = [resolve_ticker(t) for t in tickers_raw.split(",") if t.strip()]
     else:
