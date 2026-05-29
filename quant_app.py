@@ -80,6 +80,18 @@ with st.sidebar:
                     <div style='font-size:11px; color:#6b7280; margin-top:4px;'>예수금 {cash:,}원</div>
                 </div>
                 """, unsafe_allow_html=True)
+                # 보유종목 테이블
+                holdings_list = balance_data.get("output1", [])
+                if holdings_list:
+                    import pandas as pd
+                    hdf = pd.DataFrame([{
+                        "종목": h.get("prdt_name", ""),
+                        "수량": int(h.get("hldg_qty", 0)),
+                        "평균단가": f"{int(h.get('pchs_avg_pric', 0)):,}",
+                        "평가손익": f"{int(h.get('evlu_pfls_amt', 0)):+,}"
+                    } for h in holdings_list if int(h.get("hldg_qty", 0)) > 0])
+                    if not hdf.empty:
+                        st.dataframe(hdf, use_container_width=True, hide_index=True)
         st.divider()
     market = st.selectbox("시장 선택 (Market)", ["한국주식 (KS)", "미국주식 (US)"])
 
