@@ -88,9 +88,13 @@ def make_candlestick_fig(close_p, open_p, high_p, low_p, volume=None,
         fig.add_hline(y=rsi_threshold, line_dash="dash", line_color=CANDLE_UP, opacity=0.5, row=rsi_row, col=1)
         fig.add_hline(y=70, line_dash="dash", line_color=CANDLE_DOWN, opacity=0.5, row=rsi_row, col=1)
 
+    # 기본 줌: 최근 3개월
+    x_end = close_p.index[-1]
+    x_start = x_end - pd.DateOffset(months=3)
+
     fig.update_layout(
-        height=400 + (rows * 100),
-        margin=dict(l=0, r=60, t=8, b=28),
+        height=500 + (rows * 80),
+        margin=dict(l=0, r=60, t=40, b=28),
         paper_bgcolor=BG, plot_bgcolor=BG,
         font=dict(family="Inter, sans-serif", color=TEXT, size=11),
         showlegend=True,
@@ -103,9 +107,26 @@ def make_candlestick_fig(close_p, open_p, high_p, low_p, volume=None,
         legend=dict(
             bgcolor="rgba(0,0,0,0)", bordercolor="rgba(0,0,0,0)",
             font=dict(size=10), orientation="h",
-            yanchor="bottom", y=1.02, xanchor="left", x=0
+            yanchor="bottom", y=1.06, xanchor="left", x=0
         ),
-        xaxis=dict(rangeslider=dict(visible=False)),
+        xaxis=dict(
+            rangeslider=dict(visible=False),
+            range=[str(x_start.date()), str(x_end.date())],
+            rangeselector=dict(
+                buttons=[
+                    dict(count=1, label="1개월", step="month", stepmode="backward"),
+                    dict(count=3, label="3개월", step="month", stepmode="backward"),
+                    dict(count=6, label="6개월", step="month", stepmode="backward"),
+                    dict(count=1, label="1년", step="year", stepmode="backward"),
+                    dict(step="all", label="전체보기"),
+                ],
+                bgcolor=SURFACE_1,
+                activecolor=ACCENT,
+                font=dict(color=TEXT, size=10),
+                bordercolor=LINE,
+                x=0, y=1.06,
+            ),
+        ),
         dragmode="pan",
     )
 
@@ -175,37 +196,54 @@ def make_drawdown_chart(portfolio_strategy):
     return fig
 
 
-def make_heatmap_chart(weighted_return):
+def make_monthly_bar_chart(weighted_return):
+    """히트맵 대신 월별 막대그래프 — 처음 보는 사람도 바로 이해 가능"""
     monthly = weighted_return.resample("ME").apply(lambda x: (1 + x).prod() - 1) * 100
-    monthly_df = monthly.to_frame("return")
-    monthly_df["year"] = monthly_df.index.year
-    monthly_df["month"] = monthly_df.index.month
-    pivot = monthly_df.pivot(index="year", columns="month", values="return")
+    monthly = monthly.dropna()
 
-    fig = go.Figure(go.Heatmap(
-        z=pivot.values,
-        x=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
-        y=pivot.index.astype(str),
-        colorscale=[[0, CANDLE_DOWN], [0.5, "#111318"], [1, CANDLE_UP]],
-        zmid=0,
-        text=[[f"{v:+.1f}" if not pd.isna(v) else "" for v in row] for row in pivot.values],
-        texttemplate="%{text}",
-        textfont=dict(family="JetBrains Mono", size=11, color="white"),
-        colorbar=dict(thickness=6, len=0.8, tickfont=dict(color=DIM, size=9)),
-        hovertemplate="%{y}년 %{x}<br>수익률: %{z:+.2f}%<extra></extra>"
+    labels = [d.strftime("%y년 %m월") for d in monthly.index]
+    values = monthly.values
+    colors = [CANDLE_UP if v >= 0 else CANDLE_DOWN for v in values]
+    hover = [f"{l}<br>수익률: {v:+.2f}%<extra></extra>" for l, v in zip(labels, values)]
+
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=labels,
+        y=values,
+        marker=dict(color=colors, opacity=0.85),
+        text=[f"{v:+.1f}%" for v in values],
+        textposition="outside",
+        textfont=dict(family="JetBrains Mono", size=10, color=TEXT),
+        hovertemplate=hover,
+        name="월별 수익률"
     ))
+    fig.add_hline(y=0, line=dict(color=DIM, width=1, dash="dot"), opacity=0.5)
+
     fig.update_layout(
-        height=280, margin=dict(l=0, r=60, t=8, b=28),
+        height=300,
+        margin=dict(l=0, r=20, t=8, b=60),
         paper_bgcolor=BG, plot_bgcolor=BG,
         font=dict(family="Inter, sans-serif", color=TEXT, size=11),
+        showlegend=False,
+        hovermode="x unified",
         hoverlabel=dict(
             bgcolor=SURFACE_2,
             bordercolor=LINE,
             font=dict(family="JetBrains Mono", size=11, color=TEXT)
         ),
+        yaxis=dict(
+            showgrid=True, gridcolor="rgba(255,255,255,0.03)",
+            linecolor=LINE, zeroline=False,
+            tickfont=dict(color=DIM, size=10),
+            ticksuffix="%", side="right"
+        ),
+        xaxis=dict(
+            showgrid=False, linecolor=LINE,
+            tickfont=dict(color=DIM, size=9),
+            tickangle=-45,
+        ),
+        bargap=0.3,
     )
-    fig.update_xaxes(tickfont=dict(color=DIM, size=10))
-    fig.update_yaxes(tickfont=dict(color=DIM, size=10), side="right")
     return fig
 
 

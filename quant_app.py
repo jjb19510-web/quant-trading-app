@@ -15,7 +15,7 @@ from ui_components import (
 )
 from charts import (
     make_candlestick_fig, make_return_chart,
-    make_drawdown_chart, make_heatmap_chart, make_pie_chart
+    make_drawdown_chart, make_monthly_bar_chart, make_pie_chart
 )
 
 try:
@@ -341,8 +341,8 @@ if analyze:
             card("📉 낙폭 (Drawdown)", "고점 대비 하락폭")
             st.plotly_chart(make_drawdown_chart(portfolio_strategy), use_container_width=True, config={"displayModeBar": False, "scrollZoom": True})
         with col2:
-            card("📅 월별 수익률", "🔴 수익 · 🔵 손실")
-            st.plotly_chart(make_heatmap_chart(weighted_return), use_container_width=True, config={"displayModeBar": False, "scrollZoom": True})
+            card("📅 월별 수익률", "막대가 위로 → 수익 🔴 · 아래로 → 손실 🔵")
+            st.plotly_chart(make_monthly_bar_chart(weighted_return), use_container_width=True, config={"displayModeBar": False})
 
         card("📊 종목별 성과", "기간 수익률 및 현재 포지션")
         period_returns = (df.iloc[-1] / df.iloc[0] - 1) * 100
