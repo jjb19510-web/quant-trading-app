@@ -21,7 +21,7 @@ from charts import (
 )
 
 try:
-    from broker import get_access_token, get_current_price as kis_get_price, buy_order, sell_order
+    from broker import get_access_token, get_current_price as kis_get_price, get_balance, buy_order, sell_order
     KIS_AVAILABLE = True
 except:
     KIS_AVAILABLE = False
@@ -60,6 +60,27 @@ def get_kis_token():
 with st.sidebar:
     st.markdown("<div style='font-size:18px; font-weight:600; margin-bottom:16px;'>⚙️ Settings</div>", unsafe_allow_html=True)
 
+    # ── 잔고 조회 ──
+    if KIS_AVAILABLE:
+        kis_token = get_kis_token()
+        if kis_token:
+            balance_data = get_balance(kis_token)
+            if balance_data.get("rt_cd") == "0":
+                output2 = balance_data.get("output2", [{}])[0]
+                total_eval = int(output2.get("scts_evlu_amt", 0))
+                total_profit = int(output2.get("evlu_pfls_smtl_amt", 0))
+                cash = int(output2.get("dnca_tot_amt", 0))
+                st.markdown(f"""
+                <div style='background:#0f1117; border:0.5px solid #1e2330; border-radius:12px; padding:12px 14px; margin-bottom:12px;'>
+                    <div style='font-size:11px; color:#6b7280; margin-bottom:6px;'>💼 계좌 현황</div>
+                    <div style='font-size:18px; font-weight:600; font-family:JetBrains Mono;'>{total_eval:,}원</div>
+                    <div style='font-size:12px; color:{"#ef4444" if total_profit >= 0 else "#3b82f6"}; margin-top:2px;'>
+                        {"▲" if total_profit >= 0 else "▼"} {total_profit:+,}원
+                    </div>
+                    <div style='font-size:11px; color:#6b7280; margin-top:4px;'>예수금 {cash:,}원</div>
+                </div>
+                """, unsafe_allow_html=True)
+        st.divider()
     market = st.selectbox("시장 선택 (Market)", ["한국주식 (KS)", "미국주식 (US)"])
 
     # ── 관심종목 리스트 ──
