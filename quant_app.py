@@ -117,7 +117,7 @@ with st.sidebar:
 
         tickers = [t.strip() + ".KS" for t in tickers_raw.split(",") if t.strip()]
 
-        tickers = [resolve_ticker(t) for t in tickers_raw.split(",") if t.strip()]
+        tickers = [t.strip() + ".KS" for t in tickers_raw.split(",") if t.strip()]
     else:
         st.caption("예시: AAPL, TSLA, NVDA")
         default_ticker = st.session_state.get("selected_ticker", "")
