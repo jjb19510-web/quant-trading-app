@@ -114,7 +114,6 @@ def make_candlestick_fig(close_p, open_p, high_p, low_p, volume=None,
             range=[str(x_start.date()), str(x_end.date())],
             rangeselector=dict(
                 buttons=[
-                    dict(count=1, label="1W", step="week", stepmode="backward"),
                     dict(count=1, label="1M", step="month", stepmode="backward"),
                     dict(count=3, label="3M", step="month", stepmode="backward"),
                     dict(count=6, label="6M", step="month", stepmode="backward"),
