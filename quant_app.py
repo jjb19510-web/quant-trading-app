@@ -520,8 +520,14 @@ if analyze:
             if not row.empty:
                 per = row.iloc[0].get('PER', 'N/A')
                 pbr = row.iloc[0].get('PBR', 'N/A')
-                per = f"{float(per):.1f}x" if per and str(per) != 'nan' else 'N/A'
-                pbr = f"{float(pbr):.1f}x" if pbr and str(pbr) != 'nan' else 'N/A'
+                try:
+                    per = f"{float(per):.1f}x"
+                except:
+                    per = 'N/A'
+                try:
+                    pbr = f"{float(pbr):.1f}x"
+                except:
+                    pbr = 'N/A'
                 mkt = row.iloc[0].get('Marcap', 0)
                 mkt_str = f"{int(mkt)/1e12:.1f}조" if mkt else 'N/A'
                 f1, f2, f3 = st.columns(3)
