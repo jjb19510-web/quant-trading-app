@@ -87,8 +87,8 @@ with st.sidebar:
                     hdf = pd.DataFrame([{
                         "종목": h.get("prdt_name", ""),
                         "수량": int(h.get("hldg_qty", 0)),
-                        "평균단가": f"{int(h.get('pchs_avg_pric', 0)):,}",
-                        "평가손익": f"{int(h.get('evlu_pfls_amt', 0)):+,}"
+                        "평균단가": f"{float(h.get('pchs_avg_pric', 0)):,}",
+                        "평가손익": f"{float(h.get('evlu_pfls_amt', 0)):+,}"
                     } for h in holdings_list if int(h.get("hldg_qty", 0)) > 0])
                     if not hdf.empty:
                         st.dataframe(hdf, use_container_width=True, hide_index=True)
