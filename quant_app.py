@@ -510,5 +510,38 @@ if analyze:
                     with col_cancel2:
                         if st.button("❌ 취소 ", use_container_width=True):
                             st.info("주문 취소됐어요!")
+        # ── 뉴스 연동 ──
+        card("📰 관련 뉴스", f"{chart_col} 최신 뉴스")
+        try:
+            import requests
+            from bs4 import BeautifulSoup
+            news_ticker = chart_col.replace(".KS", "").replace(".KQ", "")
+            url = f"https://finance.naver.com/item/news_news.naver?code={news_ticker}&page=1"
+            res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
+            res.encoding = "euc-kr"
+            soup = BeautifulSoup(res.text, "html.parser")
+            rows = soup.select("table.type5 tr")
+            news_list = []
+            for row in rows:
+                title_tag = row.select_one("td.title a")
+                date_tag = row.select_one("td.date")
+                if title_tag and date_tag:
+                    news_list.append({
+                        "제목": title_tag.text.strip(),
+                        "날짜": date_tag.text.strip(),
+                        "링크": "https://finance.naver.com" + title_tag["href"]
+                    })
+            if news_list:
+                for news in news_list[:5]:
+                    st.markdown(f"""
+                    <div style='background:{SURFACE_1}; border:0.5px solid {LINE}; border-radius:10px; padding:12px 14px; margin-bottom:8px;'>
+                        <a href='{news["링크"]}' target='_blank' style='color:{TEXT}; text-decoration:none; font-size:13px; font-weight:500;'>{news["제목"]}</a>
+                        <div style='font-size:11px; color:{DIM}; margin-top:4px;'>{news["날짜"]}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+            else:
+                st.info("뉴스를 불러오지 못했어요.")
+        except Exception as e:
+            st.info("뉴스를 불러오지 못했어요.")
 
         st.caption(f"Data: yfinance · {df.index[0].date()} → {df.index[-1].date()} · {len(df)} trading days")
