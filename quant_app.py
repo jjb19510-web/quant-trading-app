@@ -510,6 +510,31 @@ if analyze:
                     with col_cancel2:
                         if st.button("❌ 취소 ", use_container_width=True):
                             st.info("주문 취소됐어요!")
+        # ── 재무 지표 ──
+        card("📊 재무 지표", "PER · PBR · ROE 기준 밸류에이션")
+        try:
+            import FinanceDataReader as fdr
+            raw_ticker = chart_col.replace(".KS", "").replace(".KQ", "")
+            fi = fdr.StockListing('KRX')
+            row = fi[fi['Code'] == raw_ticker]
+            if not row.empty:
+                per = row.iloc[0].get('PER', 'N/A')
+                pbr = row.iloc[0].get('PBR', 'N/A')
+                per = f"{float(per):.1f}x" if per and str(per) != 'nan' else 'N/A'
+                pbr = f"{float(pbr):.1f}x" if pbr and str(pbr) != 'nan' else 'N/A'
+                mkt = row.iloc[0].get('Marcap', 0)
+                mkt_str = f"{int(mkt)/1e12:.1f}조" if mkt else 'N/A'
+                f1, f2, f3 = st.columns(3)
+                with f1:
+                    st.metric("PER", per, help="주가수익비율 — 낮을수록 저평가")
+                with f2:
+                    st.metric("PBR", pbr, help="주가순자산비율 — 1배 미만이면 자산가치 이하")
+                with f3:
+                    st.metric("시가총액", mkt_str)
+            else:
+                st.info("재무 데이터를 찾을 수 없어요.")
+        except Exception as e:
+            st.info("재무 데이터를 불러오지 못했어요.")
         # ── 뉴스 연동 ──
         card("📰 관련 뉴스", f"{chart_col} 최신 뉴스")
         try:
