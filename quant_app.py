@@ -525,20 +525,17 @@ if analyze:
                 high52 = row.iloc[0].get('High', 'N/A')
                 low52 = row.iloc[0].get('Low', 'N/A')
                 import requests
-                from bs4 import BeautifulSoup
-                nv_url = f"https://finance.naver.com/item/main.naver?code={raw_ticker}"
-                nv_res = requests.get(nv_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}, timeout=5)
-                nv_res.encoding = "euc-kr"
-                nv_soup = BeautifulSoup(nv_res.text, "html.parser")
                 per, pbr = 'N/A', 'N/A'
-                for em in nv_soup.select("em.blind"):
-                    parent = em.find_parent("td")
-                    if parent:
-                        label = parent.find_previous_sibling("th")
-                        if label and "PER" in label.text:
-                            per = em.text.strip() + "x"
-                        if label and "PBR" in label.text:
-                            pbr = em.text.strip() + "x"
+                try:
+                    nv_url = f"https://m.stock.naver.com/api/stock/{raw_ticker}/basic"
+                    nv_res = requests.get(nv_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
+                    nv_data = nv_res.json()
+                    per_val = nv_data.get("per", None)
+                    pbr_val = nv_data.get("pbr", None)
+                    if per_val: per = f"{float(per_val):.1f}x"
+                    if pbr_val: pbr = f"{float(pbr_val):.1f}x"
+                except:
+                    pass
                 f1, f2, f3, f4 = st.columns(4)
                 with f1:
                     st.metric("PER", per, help="주가수익비율 — 낮을수록 저평가")
