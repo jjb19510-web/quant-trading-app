@@ -517,6 +517,8 @@ if analyze:
             raw_ticker = chart_col.replace(".KS", "").replace(".KQ", "")
             fi = fdr.StockListing('KRX')
             row = fi[fi['Code'] == raw_ticker]
+            st.write(f"row 수: {len(row)}, raw_ticker: {raw_ticker}")
+            st.write(f"row 수: {len(row)}, raw_ticker: {raw_ticker}")
             if not row.empty:
                 mkt = row.iloc[0].get('Marcap', 0)
                 mkt_str = f"{int(mkt)/1e12:.1f}조" if mkt else 'N/A'
