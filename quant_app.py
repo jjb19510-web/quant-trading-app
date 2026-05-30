@@ -523,7 +523,7 @@ if analyze:
                 import requests
                 per, pbr = 'N/A', 'N/A'
                 try:
-                    nv_url = f"https://m.stock.naver.com/api/stock/{raw_ticker}/basic"
+                    nv_url = f"https://m.stock.naver.com/api/stock/{raw_ticker}/investment"
                     nv_res = requests.get(nv_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
                     nv_data = nv_res.json()
                     st.write(nv_data)
