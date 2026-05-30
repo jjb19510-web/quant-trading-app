@@ -131,7 +131,7 @@ def apply_custom_css():
         border: 0.5px solid {LINE};
         border-radius: 12px;
         padding: 16px 18px;
-        margin-bottom: 24px;
+        margin-bottom: 28px;
       }}
       .qf-card h3 {{
         margin: 0 0 2px;
@@ -176,6 +176,7 @@ def apply_custom_css():
       .pos {{ color: {CANDLE_UP}; }}
       .neg {{ color: {CANDLE_DOWN}; }}
       div[data-testid="stDataFrame"] {{ background: {SURFACE_1}; border-radius: 8px; }}
+      div[data-testid="stTextInput"] input {{ border: 1px solid {LINE} !important; background: {SURFACE_2} !important; }}
     </style>
     """, unsafe_allow_html=True)
 

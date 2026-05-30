@@ -526,7 +526,6 @@ if analyze:
                     nv_url = f"https://m.stock.naver.com/api/stock/{raw_ticker}/investment"
                     nv_res = requests.get(nv_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
                     nv_data = nv_res.json()
-                    st.write(nv_data)
                     per_val = nv_data.get("per", None)
                     pbr_val = nv_data.get("pbr", None)
                     if per_val: per = f"{float(per_val):.1f}x"
