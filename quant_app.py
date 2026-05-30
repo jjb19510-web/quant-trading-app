@@ -522,11 +522,21 @@ if analyze:
                 mkt_str = f"{int(mkt)/1e12:.1f}조" if mkt else 'N/A'
                 high52 = row.iloc[0].get('High', 'N/A')
                 low52 = row.iloc[0].get('Low', 'N/A')
-                info = yf.Ticker(chart_col).info
-                per_val = info.get('trailingPE', None)
-                pbr_val = info.get('priceToBook', None)
-                per = f"{per_val:.1f}x" if per_val else 'N/A'
-                pbr = f"{pbr_val:.1f}x" if pbr_val else 'N/A'
+                import requests
+                from bs4 import BeautifulSoup
+                nv_url = f"https://finance.naver.com/item/main.naver?code={raw_ticker}"
+                nv_res = requests.get(nv_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}, timeout=5)
+                nv_res.encoding = "euc-kr"
+                nv_soup = BeautifulSoup(nv_res.text, "html.parser")
+                per, pbr = 'N/A', 'N/A'
+                for em in nv_soup.select("em.blind"):
+                    parent = em.find_parent("td")
+                    if parent:
+                        label = parent.find_previous_sibling("th")
+                        if label and "PER" in label.text:
+                            per = em.text.strip() + "x"
+                        if label and "PBR" in label.text:
+                            pbr = em.text.strip() + "x"
                 f1, f2, f3, f4 = st.columns(4)
                 with f1:
                     st.metric("PER", per, help="주가수익비율 — 낮을수록 저평가")
