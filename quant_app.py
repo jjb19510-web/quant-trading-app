@@ -116,8 +116,6 @@ with st.sidebar:
         tickers_raw = st.text_input("종목명 또는 코드 입력 (쉼표로 구분)", value=default_ticker)
 
         tickers = [t.strip() + ".KS" for t in tickers_raw.split(",") if t.strip()]
-
-        tickers = [t.strip() + ".KS" for t in tickers_raw.split(",") if t.strip()]
     else:
         st.caption("예시: AAPL, TSLA, NVDA")
         default_ticker = st.session_state.get("selected_ticker", "")
@@ -517,8 +515,6 @@ if analyze:
             raw_ticker = chart_col.replace(".KS", "").replace(".KQ", "")
             fi = fdr.StockListing('KRX')
             row = fi[fi['Code'] == raw_ticker]
-            st.write(f"row 수: {len(row)}, raw_ticker: {raw_ticker}")
-            st.write(f"row 수: {len(row)}, raw_ticker: {raw_ticker}")
             if not row.empty:
                 mkt = row.iloc[0].get('Marcap', 0)
                 mkt_str = f"{int(mkt)/1e12:.1f}조" if mkt else 'N/A'
@@ -530,6 +526,7 @@ if analyze:
                     nv_url = f"https://m.stock.naver.com/api/stock/{raw_ticker}/basic"
                     nv_res = requests.get(nv_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
                     nv_data = nv_res.json()
+                    st.write(nv_data)
                     per_val = nv_data.get("per", None)
                     pbr_val = nv_data.get("pbr", None)
                     if per_val: per = f"{float(per_val):.1f}x"
