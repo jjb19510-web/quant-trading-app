@@ -28,117 +28,10 @@ except:
 
 st.set_page_config(page_title="Quantfolio — Backtest Lab", page_icon="📈", layout="wide")
 apply_custom_css()
-# ── 시장 현황 ──
-# ── 관심종목 수익률 순위 ──
-if st.session_state.watchlist:
-    with st.spinner("관심종목 수익률 조회 중..."):
-        @st.cache_data(ttl=300)
-        def get_watchlist_returns(watchlist):
-            result = []
-            for item in watchlist:
-                ticker = item + ".KS" if not item.endswith(".KS") else item
-                try:
-                    hist = yf.Ticker(ticker).history(period="1y")
-                    if len(hist) >= 2:
-                        curr = hist["Close"].iloc[-1]
-                        start = hist["Close"].iloc[0]
-                        ret = (curr - start) / start * 100
-                        chg = hist["Close"].iloc[-1] - hist["Close"].iloc[-2]
-                        chg_pct = (chg / hist["Close"].iloc[-2]) * 100
-                        result.append({
-                            "종목": item,
-                            "현재가": f"{int(curr):,}원",
-                            "1년 수익률": f"{ret:+.1f}%",
-                            "전일비": f"{chg_pct:+.2f}%",
-                            "_ret": ret
-                        })
-                except:
-                    pass
-            return sorted(result, key=lambda x: x["_ret"], reverse=True)
-
-        wl_data = get_watchlist_returns(tuple(st.session_state.watchlist))
-        if wl_data:
-            card("📊 관심종목 수익률 순위", "1년 수익률 기준")
-            display_df = pd.DataFrame([{k: v for k, v in d.items() if k != "_ret"} for d in wl_data])
-            st.dataframe(display_df, use_container_width=True, hide_index=True)
-# ── 오늘 신호 현황 ──
-if st.session_state.watchlist:
-    @st.cache_data(ttl=300)
-    def get_today_signals(watchlist, strategy_name, rsi_thr, ma_s, ma_l, bb_p):
-        buy_list, sell_list = [], []
-        for item in watchlist:
-            ticker = item + ".KS" if not item.endswith(".KS") else item
-            try:
-                df_w = yf.download(ticker, period="6mo", progress=False)["Close"]
-                if isinstance(df_w, pd.Series):
-                    df_w = df_w.to_frame()
-                df_w.columns = [ticker]
-                _, _, sig, rsi_w, ma_sw, ma_lw, _, _, _ = run_strategy(
-                    df_w, strategy_name, rsi_thr, ma_s, ma_l, bb_p
-                )
-                last = sig.iloc[-1].values[0]
-                prev = sig.iloc[-2].values[0]
-                if last == 1 and prev == 0:
-                    buy_list.append(item)
-                elif last == 0 and prev == 1:
-                    sell_list.append(item)
-            except:
-                pass
-        return buy_list, sell_list
-
-    buy_signals, sell_signals = get_today_signals(
-        tuple(st.session_state.watchlist), strategy, rsi_threshold, ma_short, ma_long, bb_period
-    )
-
-    if buy_signals or sell_signals:
-        card("🔔 오늘 신호 현황", f"{strategy} 기준")
-        if buy_signals:
-            st.success(f"🟢 매수 신호: {', '.join(buy_signals)}")
-        if sell_signals:
-            st.warning(f"🔴 매도 신호: {', '.join(sell_signals)}")
-    else:
-        card("🔔 오늘 신호 현황", f"{strategy} 기준")
-        st.info("오늘 신호 없음 — 관망")
-@st.cache_data(ttl=300)
-def get_market_indices():
-    indices = {
-        "코스피": "^KS11",
-        "코스닥": "^KQ11",
-        "나스닥": "^IXIC"
-    }
-    result = []
-    for name, ticker in indices.items():
-        try:
-            hist = yf.Ticker(ticker).history(period="2d")
-            if len(hist) >= 2:
-                curr = hist["Close"].iloc[-1]
-                prev = hist["Close"].iloc[-2]
-                chg = curr - prev
-                chg_pct = (chg / prev) * 100
-                result.append({"name": name, "price": curr, "change": chg, "pct": chg_pct})
-        except:
-            pass
-    return result
-
-indices = get_market_indices()
-if indices:
-    cols = st.columns(len(indices))
-    for col, idx in zip(cols, indices):
-        color = CANDLE_UP if idx["change"] >= 0 else CANDLE_DOWN
-        arrow = "▲" if idx["change"] >= 0 else "▼"
-        with col:
-            st.markdown(f"""
-            <div style='background:{SURFACE_1}; border:0.5px solid {LINE}; border-radius:12px; padding:12px 16px; margin-bottom:16px; margin-top:16px;'>
-                <div style='font-size:11px; color:{DIM}; margin-bottom:4px;'>{idx["name"]}</div>
-                <div style='font-family:JetBrains Mono; font-size:18px; font-weight:600;'>{idx["price"]:,.2f}</div>
-                <div style='font-family:JetBrains Mono; font-size:12px; color:{color}; margin-top:2px;'>{arrow} {idx["change"]:+,.2f} ({idx["pct"]:+.2f}%)</div>
-            </div>
-            """, unsafe_allow_html=True)
 
 # ── 날짜 자동 설정 (오늘 기준 1년) ──
 end_date = pd.to_datetime("today").date()
 start_date = (pd.to_datetime("today") - pd.DateOffset(years=1)).date()
-
 
 # ── 관심종목 저장/불러오기 ──
 WATCHLIST_FILE = "watchlist.json"
@@ -163,6 +56,72 @@ def get_kis_token():
     except:
         return None
 
+# ── 시장 현황 ──
+@st.cache_data(ttl=300)
+def get_market_indices():
+    indices = {"코스피": "^KS11", "코스닥": "^KQ11", "나스닥": "^IXIC"}
+    result = []
+    for name, ticker in indices.items():
+        try:
+            hist = yf.Ticker(ticker).history(period="2d")
+            if len(hist) >= 2:
+                curr = hist["Close"].iloc[-1]
+                prev = hist["Close"].iloc[-2]
+                chg = curr - prev
+                chg_pct = (chg / prev) * 100
+                result.append({"name": name, "price": curr, "change": chg, "pct": chg_pct})
+        except:
+            pass
+    return result
+
+indices = get_market_indices()
+if indices:
+    cols = st.columns(len(indices))
+    for col, idx in zip(cols, indices):
+        color = CANDLE_UP if idx["change"] >= 0 else CANDLE_DOWN
+        arrow = "▲" if idx["change"] >= 0 else "▼"
+        with col:
+            st.markdown(f"""
+            <div style='background:{SURFACE_1}; border:0.5px solid {LINE}; border-radius:12px; padding:12px 16px; margin-bottom:16px; margin-top:16px;'>
+                <div style='font-size:11px; color:#9ca3af; margin-bottom:4px; font-weight:500;'>{idx["name"]}</div>
+                <div style='font-family:JetBrains Mono; font-size:18px; font-weight:600;'>{idx["price"]:,.2f}</div>
+                <div style='font-family:JetBrains Mono; font-size:12px; color:{color}; margin-top:2px;'>{arrow} {idx["change"]:+,.2f} ({idx["pct"]:+.2f}%)</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+# ── 관심종목 수익률 순위 ──
+if st.session_state.watchlist:
+    @st.cache_data(ttl=300)
+    def get_watchlist_returns(watchlist):
+        result = []
+        for item in watchlist:
+            ticker = item + ".KS" if not item.endswith(".KS") else item
+            try:
+                hist = yf.Ticker(ticker).history(period="1y")
+                if len(hist) >= 2:
+                    curr = hist["Close"].iloc[-1]
+                    start = hist["Close"].iloc[0]
+                    ret = (curr - start) / start * 100
+                    chg = hist["Close"].iloc[-1] - hist["Close"].iloc[-2]
+                    chg_pct = (chg / hist["Close"].iloc[-2]) * 100
+                    result.append({
+                        "종목": item,
+                        "현재가": f"{int(curr):,}원",
+                        "1년 수익률": f"{ret:+.1f}%",
+                        "전일비": f"{chg_pct:+.2f}%",
+                        "_ret": ret
+                    })
+            except:
+                pass
+        return sorted(result, key=lambda x: x["_ret"], reverse=True)
+
+    with st.spinner("관심종목 수익률 조회 중..."):
+        wl_data = get_watchlist_returns(tuple(st.session_state.watchlist))
+    if wl_data:
+        card("📊 관심종목 수익률 순위", "1년 수익률 기준")
+        display_df = pd.DataFrame([{k: v for k, v in d.items() if k != "_ret"} for d in wl_data])
+        st.dataframe(display_df, use_container_width=True, hide_index=True)
+
 with st.sidebar:
     st.markdown("<div style='font-size:18px; font-weight:600; margin-bottom:16px;'>⚙️ Settings</div>", unsafe_allow_html=True)
 
@@ -186,19 +145,18 @@ with st.sidebar:
                     <div style='font-size:11px; color:#6b7280; margin-top:4px;'>예수금 {cash:,}원</div>
                 </div>
                 """, unsafe_allow_html=True)
-                # 보유종목 테이블
                 holdings_list = balance_data.get("output1", [])
                 if holdings_list:
-                    import pandas as pd
                     hdf = pd.DataFrame([{
                         "종목": h.get("prdt_name", ""),
                         "수량": int(h.get("hldg_qty", 0)),
-                        "평균단가": f"{float(h.get('pchs_avg_pric', 0)):,}",
-                        "평가손익": f"{float(h.get('evlu_pfls_amt', 0)):+,}"
+                        "평균단가": f"{float(h.get('pchs_avg_pric', 0)):,.0f}",
+                        "평가손익": f"{float(h.get('evlu_pfls_amt', 0)):+,.0f}"
                     } for h in holdings_list if int(h.get("hldg_qty", 0)) > 0])
                     if not hdf.empty:
                         st.dataframe(hdf, use_container_width=True, hide_index=True)
         st.divider()
+
     market = st.selectbox("시장 선택 (Market)", ["한국주식 (KS)", "미국주식 (US)"])
 
     # ── 관심종목 리스트 ──
@@ -217,18 +175,18 @@ with st.sidebar:
         st.divider()
 
     if market == "한국주식 (KS)":
+        st.markdown("<div style='font-size:13px; font-weight:600; margin-bottom:4px;'>🔍 종목 검색</div>", unsafe_allow_html=True)
         st.caption("예시: 005930, 000660, 373220")
         default_ticker = st.session_state.get("selected_ticker", "")
         tickers_raw = st.text_input("종목명 또는 코드 입력 (쉼표로 구분)", value=default_ticker)
-
         tickers = [t.strip() + ".KS" for t in tickers_raw.split(",") if t.strip()]
     else:
+        st.markdown("<div style='font-size:13px; font-weight:600; margin-bottom:4px;'>🔍 종목 검색</div>", unsafe_allow_html=True)
         st.caption("예시: AAPL, TSLA, NVDA")
         default_ticker = st.session_state.get("selected_ticker", "")
         tickers_raw = st.text_input("티커 입력 (쉼표로 구분)", value=default_ticker)
         tickers = [t.strip() for t in tickers_raw.split(",") if t.strip()]
 
-    # ── 관심종목 추가 버튼 ──
     if tickers_raw.strip():
         if st.button("⭐ 관심종목 추가", use_container_width=True):
             new_items = [t.strip() for t in tickers_raw.split(",") if t.strip()]
@@ -237,7 +195,6 @@ with st.sidebar:
                     st.session_state.watchlist.append(item)
             save_watchlist(st.session_state.watchlist)
             st.rerun()
-
 
     strategy = st.selectbox("전략 선택 (Strategy)", [
         "RSI 전략 (RSI)",
@@ -270,6 +227,42 @@ with st.sidebar:
     analyze = st.button("🔍 분석 시작", use_container_width=True)
     optimize = st.button("⚡ 최적값 자동 탐색", use_container_width=True)
     wf_test = st.button("🔄 워크포워드 테스트", use_container_width=True)
+
+# ── 오늘 신호 현황 ──
+if st.session_state.watchlist:
+    @st.cache_data(ttl=300)
+    def get_today_signals(watchlist, strategy_name, rsi_thr, ma_s, ma_l, bb_p):
+        buy_list, sell_list = [], []
+        for item in watchlist:
+            ticker = item + ".KS" if not item.endswith(".KS") else item
+            try:
+                df_w = yf.download(ticker, period="6mo", progress=False)["Close"]
+                if isinstance(df_w, pd.Series):
+                    df_w = df_w.to_frame()
+                df_w.columns = [ticker]
+                _, _, sig, _, _, _, _, _, _ = run_strategy(
+                    df_w, strategy_name, rsi_thr, ma_s, ma_l, bb_p
+                )
+                last = sig.iloc[-1].values[0]
+                prev = sig.iloc[-2].values[0]
+                if last == 1 and prev == 0:
+                    buy_list.append(item)
+                elif last == 0 and prev == 1:
+                    sell_list.append(item)
+            except:
+                pass
+        return buy_list, sell_list
+
+    buy_signals, sell_signals = get_today_signals(
+        tuple(st.session_state.watchlist), strategy, rsi_threshold, ma_short, ma_long, bb_period
+    )
+    card("🔔 오늘 신호 현황", f"{strategy} 기준")
+    if buy_signals:
+        st.success(f"🟢 매수 신호: {', '.join(buy_signals)}")
+    elif sell_signals:
+        st.warning(f"🔴 매도 신호: {', '.join(sell_signals)}")
+    else:
+        st.info("오늘 신호 없음 — 관망")
 
 if wf_test:
     if not tickers:
@@ -482,7 +475,6 @@ if analyze:
                     </div>
                     """, unsafe_allow_html=True)
 
-        # ── 투입금액 요약 카드 (신규 디자인) ──
         render_summary_cards(
             invested=investment,
             profit=strategy_profit / 10000,
@@ -493,6 +485,7 @@ if analyze:
 
         render_kpi_strip(strategy_pct, equal_pct, cagr_s, cagr_e, sharpe_s, sharpe_e, mdd_s, mdd_e)
         render_strategy_expander(strategy)
+
         # ── 매수/매도 신호 설명 ──
         last_sig = signal.iloc[-1].values[0]
         last_rsi = rsi[chart_col].iloc[-1] if isinstance(rsi, pd.DataFrame) else rsi.iloc[-1]
@@ -516,6 +509,7 @@ if analyze:
             else:
                 reason = "매수 조건 미충족 — 현금 대기"
             st.warning(f"⚪ 현재 포지션: 현금 · {reason}")
+
         card("📈 전략 지표 그래프", f"{chart_col} · 상승 🔴 하락 🔵 · ▲매수 ▼매도")
         rsi_chart = rsi[chart_col] if isinstance(rsi, pd.DataFrame) else rsi
 
@@ -597,7 +591,6 @@ if analyze:
             alloc_data.append({"종목": "현금", "포지션": "-", "비중": f"{(len(tickers)-active_count)/len(tickers)*100:.1f}%", "투자금액": f"{cash_amount:,.0f}만원"})
         st.dataframe(pd.DataFrame(alloc_data), use_container_width=True, hide_index=True)
 
-        # ── 매수/매도 주문 ──
         if KIS_AVAILABLE and market == "한국주식 (KS)":
             card("🛒 주문", "⚠️ 실제 계좌 주문 · 신중하게 클릭하세요!")
 
@@ -636,8 +629,9 @@ if analyze:
                     with col_cancel2:
                         if st.button("❌ 취소 ", use_container_width=True):
                             st.info("주문 취소됐어요!")
+
         # ── 재무 지표 ──
-        card("📊 재무 지표", "PER · PBR · ROE 기준 밸류에이션")
+        card("📊 재무 지표", "PER · PBR · 시가총액 · 52주 범위")
         try:
             import FinanceDataReader as fdr
             raw_ticker = chart_col.replace(".KS", "").replace(".KQ", "")
@@ -675,6 +669,7 @@ if analyze:
                 st.info("재무 데이터를 찾을 수 없어요.")
         except Exception as e:
             st.error(f"재무 데이터 오류: {e}")
+
         # ── 뉴스 연동 ──
         card("📰 관련 뉴스", f"{chart_col} 최신 뉴스")
         try:
