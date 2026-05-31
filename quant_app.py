@@ -193,8 +193,8 @@ with st.sidebar:
         if "note_ticker" in st.session_state:
             nt = st.session_state.note_ticker
             st.markdown(f"<div style='font-size:12px; font-weight:600; margin:8px 0 4px;'>📝 {nt} 메모</div>", unsafe_allow_html=True)
-            note_text = st.text_area("", value=st.session_state.notes.get(nt, ""), height=80, key="note_input", label_visibility="collapsed")
-            if st.button("💾 저장", key="save_note", use_container_width=True):
+            note_text = st.text_area("", value=st.session_state.notes.get(nt, ""), height=80, key=f"note_{nt}", label_visibility="collapsed")
+            if st.button("💾 저장", key=f"save_note_{nt}", use_container_width=True):
                 st.session_state.notes[nt] = note_text
                 save_notes(st.session_state.notes)
                 st.success("저장됐어요!")
