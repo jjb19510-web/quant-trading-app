@@ -166,6 +166,7 @@ with st.sidebar:
                     hdf = pd.DataFrame([{
                         "종목": h.get("prdt_name", ""),
                         "수량": int(h.get("hldg_qty", 0)),
+                        "현재가": f"{int(h.get('prpr', 0)):,}",
                         "평균단가": f"{float(h.get('pchs_avg_pric', 0)):,.0f}",
                         "평가손익": f"{float(h.get('evlu_pfls_amt', 0)):+,.0f}"
                     } for h in holdings_list if int(h.get("hldg_qty", 0)) > 0])
@@ -526,7 +527,48 @@ if analyze:
                 st.error(f"🛑 손절 라인 도달! (-{stop_pct}%)")
             else:
                 st.info(f"🛡 손절까지 {current_pct + stop_pct:.1f}% 여유 (손절 -{stop_pct}%)")
+        # ── 백테스트 결과 저장 ──
+        BACKTEST_FILE = "backtest_results.json"
+        def load_backtest():
+            if os.path.exists(BACKTEST_FILE):
+                with open(BACKTEST_FILE, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            return []
 
+        def save_backtest(results):
+            with open(BACKTEST_FILE, "w", encoding="utf-8") as f:
+                json.dump(results, f, ensure_ascii=False)
+
+        if "backtest_results" not in st.session_state:
+            st.session_state.backtest_results = load_backtest()
+
+        col_save, col_clear = st.columns([3, 1])
+        with col_save:
+            save_label = st.text_input("결과 저장 이름", value=f"{chart_col} {strategy[:3]} {dt.date.today()}", key="save_label")
+        with col_clear:
+            st.markdown("<div style='margin-top:28px;'></div>", unsafe_allow_html=True)
+            if st.button("💾 저장", key="save_backtest"):
+                result_entry = {
+                    "이름": save_label,
+                    "종목": chart_col,
+                    "전략": strategy,
+                    "수익률": round(strategy_pct, 2),
+                    "샤프": round(sharpe_s, 2),
+                    "MDD": round(mdd_s, 2),
+                    "날짜": str(dt.date.today())
+                }
+                st.session_state.backtest_results.append(result_entry)
+                save_backtest(st.session_state.backtest_results)
+                st.success("저장됐어요!")
+
+        if st.session_state.backtest_results:
+            with st.expander("📋 저장된 백테스트 결과 비교", expanded=False):
+                bt_df = pd.DataFrame(st.session_state.backtest_results)
+                st.dataframe(bt_df, use_container_width=True, hide_index=True)
+                if st.button("🗑 전체 삭제", key="clear_backtest"):
+                    st.session_state.backtest_results = []
+                    save_backtest([])
+                    st.rerun()
         render_kpi_strip(strategy_pct, equal_pct, cagr_s, cagr_e, sharpe_s, sharpe_e, mdd_s, mdd_e)
         render_strategy_expander(strategy)
 
