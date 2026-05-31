@@ -183,6 +183,7 @@ with st.sidebar:
             with col_w:
                 if st.button(witem, key=f"wl_{witem}", use_container_width=True):
                     st.session_state["selected_ticker"] = witem
+                    st.session_state["note_ticker"] = witem
             with col_d:
                 if st.button("✕", key=f"del_{witem}"):
                     st.session_state.watchlist.remove(witem)
