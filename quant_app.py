@@ -157,6 +157,88 @@ if st.session_state.watchlist:
 with st.sidebar:
     st.markdown("<div style='font-size:18px; font-weight:600; margin-bottom:16px;'>⚙️ Settings</div>", unsafe_allow_html=True)
 
+    # ── 섹터별 수익률 비교 ──
+if st.session_state.sectors:
+    @st.cache_data(ttl=300)
+    def get_sector_returns(sectors):
+        result = []
+        for sector_name, tickers_list in sectors.items():
+            sector_rets = []
+            for code in tickers_list:
+                ticker = code + ".KS" if not code.endswith(".KS") else code
+                try:
+                    hist = yf.Ticker(ticker).history(period="1y")["Close"]
+                    if len(hist) >= 2:
+                        ret = (hist.iloc[-1] - hist.iloc[0]) / hist.iloc[0] * 100
+                        sector_rets.append(ret)
+                except:
+                    pass
+            if sector_rets:
+                avg_ret = sum(sector_rets) / len(sector_rets)
+                result.append({"섹터": sector_name, "평균 수익률": round(avg_ret, 2), "_ret": avg_ret})
+        return sorted(result, key=lambda x: x["_ret"], reverse=True)
+
+    sector_data = get_sector_returns(tuple(sorted(st.session_state.sectors.items())))
+    if sector_data:
+        card("📂 섹터별 수익률 비교", "1년 수익률 기준")
+        fig_sector = go.Figure(go.Bar(
+            x=[d["섹터"] for d in sector_data],
+            y=[d["평균 수익률"] for d in sector_data],
+            marker=dict(color=[CANDLE_UP if d["_ret"] >= 0 else CANDLE_DOWN for d in sector_data], opacity=0.85),
+            text=[f"{d['평균 수익률']:+.1f}%" for d in sector_data],
+            textposition="outside",
+            textfont=dict(family="JetBrains Mono", size=11, color=TEXT),
+        ))
+        fig_sector.add_hline(y=0, line=dict(color=DIM, width=1, dash="dot"))
+        fig_sector.update_layout(
+            height=300,
+            margin=dict(l=0, r=20, t=8, b=28),
+            paper_bgcolor=BG, plot_bgcolor=BG,
+            font=dict(family="Inter, sans-serif", color=TEXT, size=11),
+            showlegend=False,
+            yaxis=dict(ticksuffix="%", side="right", gridcolor="rgba(255,255,255,0.03)"),
+            xaxis=dict(showgrid=False),
+        )
+        st.plotly_chart(fig_sector, use_container_width=True, config={"displayModeBar": False})
+    # ── 관심종목 상관관계 히트맵 ──
+if st.session_state.watchlist and len(st.session_state.watchlist) >= 2:
+    @st.cache_data(ttl=300)
+    def get_correlation(watchlist):
+        price_data = {}
+        for item in watchlist:
+            ticker = item + ".KS" if not item.endswith(".KS") else item
+            try:
+                hist = yf.Ticker(ticker).history(period="1y")["Close"]
+                if len(hist) > 0:
+                    price_data[item] = hist
+            except:
+                pass
+        if len(price_data) >= 2:
+            df_prices = pd.DataFrame(price_data).dropna()
+            return df_prices.pct_change().corr()
+        return None
+
+    corr = get_correlation(tuple(st.session_state.watchlist))
+    if corr is not None:
+        card("🔗 관심종목 상관관계", "1에 가까울수록 같이 움직임 · 0에 가까울수록 독립적")
+        fig_corr = go.Figure(go.Heatmap(
+            z=corr.values,
+            x=corr.columns.tolist(),
+            y=corr.index.tolist(),
+            colorscale=[[0, CANDLE_DOWN], [0.5, SURFACE_2], [1, CANDLE_UP]],
+            zmid=0, zmin=-1, zmax=1,
+            text=[[f"{v:.2f}" for v in row] for row in corr.values],
+            texttemplate="%{text}",
+            textfont=dict(size=12, color=TEXT),
+            colorbar=dict(thickness=8, tickfont=dict(color=DIM, size=9))
+        ))
+        fig_corr.update_layout(
+            height=300,
+            margin=dict(l=0, r=60, t=8, b=8),
+            paper_bgcolor=BG, plot_bgcolor=BG,
+            font=dict(family="Inter, sans-serif", color=TEXT, size=11)
+        )
+        st.plotly_chart(fig_corr, use_container_width=True, config={"displayModeBar": False})
     # ── 잔고 조회 ──
     if KIS_AVAILABLE:
         kis_token = get_kis_token()
