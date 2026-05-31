@@ -46,6 +46,22 @@ def save_watchlist(wl):
     with open(WATCHLIST_FILE, "w") as f:
         json.dump(wl, f)
 
+# ── 투자 노트 저장/불러오기 ──
+NOTES_FILE = "investment_notes.json"
+
+def load_notes():
+    if os.path.exists(NOTES_FILE):
+        with open(NOTES_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
+def save_notes(notes):
+    with open(NOTES_FILE, "w", encoding="utf-8") as f:
+        json.dump(notes, f, ensure_ascii=False)
+
+if "notes" not in st.session_state:
+    st.session_state.notes = load_notes()
+
 if "watchlist" not in st.session_state:
     st.session_state.watchlist = load_watchlist()
 
@@ -172,6 +188,14 @@ with st.sidebar:
                     st.session_state.watchlist.remove(witem)
                     save_watchlist(st.session_state.watchlist)
                     st.rerun()
+        if "note_ticker" in st.session_state:
+            nt = st.session_state.note_ticker
+        st.markdown(f"<div style='font-size:12px; font-weight:600; margin:8px 0 4px;'>📝 {nt} 메모</div>", unsafe_allow_html=True)
+        note_text = st.text_area("", value=st.session_state.notes.get(nt, ""), height=80, key=f"note_{nt}", label_visibility="collapsed")
+        if st.button("💾 저장", key="save_note", use_container_width=True):
+            st.session_state.notes[nt] = note_text
+            save_notes(st.session_state.notes)
+            st.success("저장됐어요!")
         st.divider()
 
     if market == "한국주식 (KS)":
@@ -218,7 +242,10 @@ with st.sidebar:
         ma_short = st.slider("단기 MA", 5, 60, 20)
         ma_long = st.slider("장기 MA", 20, 120, 60)
         bb_period = 20
-
+    st.divider()
+    st.markdown("<div style='font-size:13px; font-weight:600; margin-bottom:8px;'>🎯 목표가 · 손절가</div>", unsafe_allow_html=True)
+    target_pct = st.number_input("목표 수익률 (%)", min_value=1, max_value=200, value=20, step=5)
+    stop_pct = st.number_input("손절 라인 (%)", min_value=1, max_value=50, value=10, step=1)
     st.divider()
     st.markdown("<div style='font-size:13px; font-weight:600; margin-bottom:8px;'>💰 투입금액 설정</div>", unsafe_allow_html=True)
     investment = st.number_input("투입금액 (만원)", min_value=0, value=1000, step=100)
@@ -482,6 +509,21 @@ if analyze:
             final_val=strategy_final / 10000,
             excess=excess / 10000
         )
+        
+        # ── 목표가/손절가 현황 ──
+        current_pct = strategy_pct
+        target_remaining = target_pct - current_pct
+        t1, t2 = st.columns(2)
+        with t1:
+            if current_pct >= target_pct:
+                st.success(f"🎯 목표 수익률 달성! (+{target_pct}%)")
+            else:
+                st.info(f"🎯 목표까지 {target_remaining:.1f}% 남음 (목표 +{target_pct}%)")
+        with t2:
+            if current_pct <= -stop_pct:
+                st.error(f"🛑 손절 라인 도달! (-{stop_pct}%)")
+            else:
+                st.info(f"🛡 손절까지 {current_pct + stop_pct:.1f}% 여유 (손절 -{stop_pct}%)")
 
         render_kpi_strip(strategy_pct, equal_pct, cagr_s, cagr_e, sharpe_s, sharpe_e, mdd_s, mdd_e)
         render_strategy_expander(strategy)
