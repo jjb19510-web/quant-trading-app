@@ -29,6 +29,76 @@ except:
 st.set_page_config(page_title="Quantfolio — Backtest Lab", page_icon="📈", layout="wide")
 apply_custom_css()
 # ── 시장 현황 ──
+# ── 관심종목 수익률 순위 ──
+if st.session_state.watchlist:
+    with st.spinner("관심종목 수익률 조회 중..."):
+        @st.cache_data(ttl=300)
+        def get_watchlist_returns(watchlist):
+            result = []
+            for item in watchlist:
+                ticker = item + ".KS" if not item.endswith(".KS") else item
+                try:
+                    hist = yf.Ticker(ticker).history(period="1y")
+                    if len(hist) >= 2:
+                        curr = hist["Close"].iloc[-1]
+                        start = hist["Close"].iloc[0]
+                        ret = (curr - start) / start * 100
+                        chg = hist["Close"].iloc[-1] - hist["Close"].iloc[-2]
+                        chg_pct = (chg / hist["Close"].iloc[-2]) * 100
+                        result.append({
+                            "종목": item,
+                            "현재가": f"{int(curr):,}원",
+                            "1년 수익률": f"{ret:+.1f}%",
+                            "전일비": f"{chg_pct:+.2f}%",
+                            "_ret": ret
+                        })
+                except:
+                    pass
+            return sorted(result, key=lambda x: x["_ret"], reverse=True)
+
+        wl_data = get_watchlist_returns(tuple(st.session_state.watchlist))
+        if wl_data:
+            card("📊 관심종목 수익률 순위", "1년 수익률 기준")
+            display_df = pd.DataFrame([{k: v for k, v in d.items() if k != "_ret"} for d in wl_data])
+            st.dataframe(display_df, use_container_width=True, hide_index=True)
+# ── 오늘 신호 현황 ──
+if st.session_state.watchlist:
+    @st.cache_data(ttl=300)
+    def get_today_signals(watchlist, strategy_name, rsi_thr, ma_s, ma_l, bb_p):
+        buy_list, sell_list = [], []
+        for item in watchlist:
+            ticker = item + ".KS" if not item.endswith(".KS") else item
+            try:
+                df_w = yf.download(ticker, period="6mo", progress=False)["Close"]
+                if isinstance(df_w, pd.Series):
+                    df_w = df_w.to_frame()
+                df_w.columns = [ticker]
+                _, _, sig, rsi_w, ma_sw, ma_lw, _, _, _ = run_strategy(
+                    df_w, strategy_name, rsi_thr, ma_s, ma_l, bb_p
+                )
+                last = sig.iloc[-1].values[0]
+                prev = sig.iloc[-2].values[0]
+                if last == 1 and prev == 0:
+                    buy_list.append(item)
+                elif last == 0 and prev == 1:
+                    sell_list.append(item)
+            except:
+                pass
+        return buy_list, sell_list
+
+    buy_signals, sell_signals = get_today_signals(
+        tuple(st.session_state.watchlist), strategy, rsi_threshold, ma_short, ma_long, bb_period
+    )
+
+    if buy_signals or sell_signals:
+        card("🔔 오늘 신호 현황", f"{strategy} 기준")
+        if buy_signals:
+            st.success(f"🟢 매수 신호: {', '.join(buy_signals)}")
+        if sell_signals:
+            st.warning(f"🔴 매도 신호: {', '.join(sell_signals)}")
+    else:
+        card("🔔 오늘 신호 현황", f"{strategy} 기준")
+        st.info("오늘 신호 없음 — 관망")
 @st.cache_data(ttl=300)
 def get_market_indices():
     indices = {
