@@ -223,7 +223,8 @@ with tab1:
                 z=corr.values,
                 x=corr.columns.tolist(),
                 y=corr.index.tolist(),
-                colorscale=[[0, CANDLE_DOWN], [0.5, SURFACE_2], [1, CANDLE_UP]],
+                colorscale=[[0, "#3b82f6"], [0.5, "#1a1f2e"], [1, "#ef4444"]],
+            zmin=-1, zmax=1,
                 zmid=0, zmin=-1, zmax=1,
                 text=[[f"{v:.2f}" for v in row] for row in corr.values],
                 texttemplate="%{text}",
@@ -231,7 +232,7 @@ with tab1:
                 colorbar=dict(thickness=8, tickfont=dict(color=DIM, size=9))
             ))
             fig_corr.update_layout(
-                height=300, margin=dict(l=0, r=60, t=8, b=8),
+                height=350, margin=dict(l=60, r=60, t=8, b=8),
                 paper_bgcolor=BG, plot_bgcolor=BG,
                 font=dict(family="Inter, sans-serif", color=TEXT, size=11)
             )
