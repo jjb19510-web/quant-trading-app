@@ -59,6 +59,22 @@ def save_notes(notes):
     with open(NOTES_FILE, "w", encoding="utf-8") as f:
         json.dump(notes, f, ensure_ascii=False)
 
+# ── 섹터 저장/불러오기 ──
+SECTORS_FILE = "sectors.json"
+
+def load_sectors():
+    if os.path.exists(SECTORS_FILE):
+        with open(SECTORS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
+def save_sectors(sectors):
+    with open(SECTORS_FILE, "w", encoding="utf-8") as f:
+        json.dump(sectors, f, ensure_ascii=False)
+
+if "sectors" not in st.session_state:
+    st.session_state.sectors = load_sectors()
+
 if "notes" not in st.session_state:
     st.session_state.notes = load_notes()
 
@@ -253,6 +269,27 @@ with st.sidebar:
     st.markdown("<div style='font-size:13px; font-weight:600; margin-bottom:8px;'>💰 투입금액 설정</div>", unsafe_allow_html=True)
     investment = st.number_input("투입금액 (만원)", min_value=0, value=1000, step=100)
     st.caption(f"= {investment:,}만원 ({investment * 10000:,}원)")
+
+    st.divider()
+    st.markdown("<div style='font-size:13px; font-weight:600; margin-bottom:8px;'>📂 섹터 관리</div>", unsafe_allow_html=True)
+    sector_name = st.text_input("섹터 이름", placeholder="예: 반도체", key="sector_name_input")
+    sector_tickers = st.text_input("종목 코드 (쉼표로 구분)", placeholder="예: 005930, 000660", key="sector_tickers_input")
+    if st.button("➕ 섹터 추가", use_container_width=True):
+        if sector_name and sector_tickers:
+            tickers_list = [t.strip() for t in sector_tickers.split(",") if t.strip()]
+            st.session_state.sectors[sector_name] = tickers_list
+            save_sectors(st.session_state.sectors)
+            st.success(f"{sector_name} 섹터 저장됐어요!")
+    if st.session_state.sectors:
+        for sname in list(st.session_state.sectors.keys()):
+            col_s, col_sd = st.columns([4, 1])
+            with col_s:
+                st.caption(f"📁 {sname}: {', '.join(st.session_state.sectors[sname])}")
+            with col_sd:
+                if st.button("✕", key=f"del_sector_{sname}"):
+                    del st.session_state.sectors[sname]
+                    save_sectors(st.session_state.sectors)
+                    st.rerun()
 
     analyze = st.button("🔍 분석 시작", use_container_width=True)
     optimize = st.button("⚡ 최적값 자동 탐색", use_container_width=True)
