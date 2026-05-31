@@ -58,7 +58,7 @@ if indices:
         arrow = "▲" if idx["change"] >= 0 else "▼"
         with col:
             st.markdown(f"""
-            <div style='background:{SURFACE_1}; border:0.5px solid {LINE}; border-radius:12px; padding:12px 16px; margin-bottom:16px;'>
+            <div style='background:{SURFACE_1}; border:0.5px solid {LINE}; border-radius:12px; padding:12px 16px; margin-bottom:16px; margin-top:16px;'>
                 <div style='font-size:11px; color:{DIM}; margin-bottom:4px;'>{idx["name"]}</div>
                 <div style='font-family:JetBrains Mono; font-size:18px; font-weight:600;'>{idx["price"]:,.2f}</div>
                 <div style='font-family:JetBrains Mono; font-size:12px; color:{color}; margin-top:2px;'>{arrow} {idx["change"]:+,.2f} ({idx["pct"]:+.2f}%)</div>
