@@ -28,6 +28,42 @@ except:
 
 st.set_page_config(page_title="Quantfolio — Backtest Lab", page_icon="📈", layout="wide")
 apply_custom_css()
+# ── 시장 현황 ──
+@st.cache_data(ttl=300)
+def get_market_indices():
+    indices = {
+        "코스피": "^KS11",
+        "코스닥": "^KQ11",
+        "나스닥": "^IXIC"
+    }
+    result = []
+    for name, ticker in indices.items():
+        try:
+            hist = yf.Ticker(ticker).history(period="2d")
+            if len(hist) >= 2:
+                curr = hist["Close"].iloc[-1]
+                prev = hist["Close"].iloc[-2]
+                chg = curr - prev
+                chg_pct = (chg / prev) * 100
+                result.append({"name": name, "price": curr, "change": chg, "pct": chg_pct})
+        except:
+            pass
+    return result
+
+indices = get_market_indices()
+if indices:
+    cols = st.columns(len(indices))
+    for col, idx in zip(cols, indices):
+        color = CANDLE_UP if idx["change"] >= 0 else CANDLE_DOWN
+        arrow = "▲" if idx["change"] >= 0 else "▼"
+        with col:
+            st.markdown(f"""
+            <div style='background:{SURFACE_1}; border:0.5px solid {LINE}; border-radius:12px; padding:12px 16px; margin-bottom:16px;'>
+                <div style='font-size:11px; color:{DIM}; margin-bottom:4px;'>{idx["name"]}</div>
+                <div style='font-family:JetBrains Mono; font-size:18px; font-weight:600;'>{idx["price"]:,.2f}</div>
+                <div style='font-family:JetBrains Mono; font-size:12px; color:{color}; margin-top:2px;'>{arrow} {idx["change"]:+,.2f} ({idx["pct"]:+.2f}%)</div>
+            </div>
+            """, unsafe_allow_html=True)
 
 # ── 날짜 자동 설정 (오늘 기준 1년) ──
 end_date = pd.to_datetime("today").date()
@@ -387,7 +423,29 @@ if analyze:
 
         render_kpi_strip(strategy_pct, equal_pct, cagr_s, cagr_e, sharpe_s, sharpe_e, mdd_s, mdd_e)
         render_strategy_expander(strategy)
-
+        # ── 매수/매도 신호 설명 ──
+        last_sig = signal.iloc[-1].values[0]
+        last_rsi = rsi[chart_col].iloc[-1] if isinstance(rsi, pd.DataFrame) else rsi.iloc[-1]
+        if last_sig == 1:
+            if strategy == "RSI 전략 (RSI)":
+                reason = f"RSI {last_rsi:.1f} — 과매도 구간 진입, 매수 신호"
+            elif strategy == "이동평균선 전략 (Moving Average)":
+                reason = "단기 MA가 장기 MA 위 — 골든크로스, 매수 신호"
+            elif strategy == "볼린저 밴드 전략 (Bollinger Bands)":
+                reason = "주가가 볼린저 하단 밴드 아래 — 매수 신호"
+            else:
+                reason = f"RSI {last_rsi:.1f} + 골든크로스 동시 충족 — 강한 매수 신호"
+            st.success(f"🟢 현재 포지션: 매수 · {reason}")
+        else:
+            if strategy == "RSI 전략 (RSI)":
+                reason = f"RSI {last_rsi:.1f} — 과매도 구간 아님, 현금 대기"
+            elif strategy == "이동평균선 전략 (Moving Average)":
+                reason = "단기 MA가 장기 MA 아래 — 데드크로스, 현금 대기"
+            elif strategy == "볼린저 밴드 전략 (Bollinger Bands)":
+                reason = "주가가 볼린저 하단 밴드 위 — 현금 대기"
+            else:
+                reason = "매수 조건 미충족 — 현금 대기"
+            st.warning(f"⚪ 현재 포지션: 현금 · {reason}")
         card("📈 전략 지표 그래프", f"{chart_col} · 상승 🔴 하락 🔵 · ▲매수 ▼매도")
         rsi_chart = rsi[chart_col] if isinstance(rsi, pd.DataFrame) else rsi
 
@@ -532,7 +590,7 @@ if analyze:
                     if pbr_val: pbr = f"{float(pbr_val):.1f}x"
                 except:
                     pass
-                f1, f2, f3, f4 = st.columns(4)
+                f1, f2, f3, f4, f5 = st.columns(5)
                 with f1:
                     st.metric("PER", per, help="주가수익비율 — 낮을수록 저평가")
                 with f2:
@@ -540,7 +598,9 @@ if analyze:
                 with f3:
                     st.metric("시가총액", mkt_str)
                 with f4:
-                    st.metric("52주 고가", f"{int(high52):,}" if high52 != 'N/A' else 'N/A')
+                    st.metric("52주 고가", f"{int(high52):,}원" if high52 != 'N/A' else 'N/A')
+                with f5:
+                    st.metric("52주 저가", f"{int(low52):,}원" if low52 != 'N/A' else 'N/A')
             else:
                 st.info("재무 데이터를 찾을 수 없어요.")
         except Exception as e:
