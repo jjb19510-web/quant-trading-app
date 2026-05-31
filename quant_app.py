@@ -160,7 +160,8 @@ with st.sidebar:
     # ── 섹터별 수익률 비교 ──
 if st.session_state.sectors:
     @st.cache_data(ttl=300)
-    def get_sector_returns(sectors):
+    def get_sector_returns(sectors_str):
+        sectors = st.session_state.sectors
         result = []
         for sector_name, tickers_list in sectors.items():
             sector_rets = []
@@ -178,7 +179,7 @@ if st.session_state.sectors:
                 result.append({"섹터": sector_name, "평균 수익률": round(avg_ret, 2), "_ret": avg_ret})
         return sorted(result, key=lambda x: x["_ret"], reverse=True)
 
-    sector_data = get_sector_returns(tuple(sorted(st.session_state.sectors.items())))
+    sector_data = get_sector_returns(str(st.session_state.sectors))
     if sector_data:
         card("📂 섹터별 수익률 비교", "1년 수익률 기준")
         fig_sector = go.Figure(go.Bar(
