@@ -27,7 +27,7 @@ def apply_custom_css():
       section[data-testid="stSidebar"] {{ background: {SURFACE_1}; border-right: 1px solid {LINE}; }}
       section[data-testid="stSidebar"] * {{ color: {TEXT}; }}
       h1, h2, h3, h4 {{ letter-spacing: -0.02em; }}
-      .block-container {{ padding-top: 1.4rem; padding-bottom: 3rem; max-width: 1400px; }}
+      .block-container {{ padding-top: 5rem; padding-bottom: 3rem; max-width: 1400px; }}
 
       /* ── 상단 요약 카드 ── */
       .qf-summary-grid {{
