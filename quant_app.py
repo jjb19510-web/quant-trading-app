@@ -851,6 +851,37 @@ with tab3:
                         st.dataframe(hdf, use_container_width=True, hide_index=True)
                     else:
                         st.info("보유 종목이 없어요.")
+
+                # ── 리밸런싱 시뮬레이션 ──
+                card("⚖️ 리밸런싱 시뮬레이션", "목표 비중으로 조정 시 필요 금액 계산")
+                if holdings_list:
+                    st.markdown("**목표 비중 설정 (%)**")
+                    tickers_held = [h.get("prdt_name", "") for h in holdings_list if int(h.get("hldg_qty", 0)) > 0]
+                    target_weights = {}
+                    cols_rbl = st.columns(len(tickers_held))
+                    for i, t in enumerate(tickers_held):
+                        with cols_rbl[i]:
+                            target_weights[t] = st.number_input(t, min_value=0, max_value=100, value=round(100/len(tickers_held)), step=5, key=f"rbl_{t}")
+
+                    total_weight = sum(target_weights.values())
+                    if total_weight != 100:
+                        st.warning(f"⚠️ 목표 비중 합계가 {total_weight}%예요. 100%가 되도록 조정해주세요!")
+                    else:
+                        rebal_data = []
+                        for h in holdings_list:
+                            if int(h.get("hldg_qty", 0)) > 0:
+                                name = h.get("prdt_name", "")
+                                curr_val = int(h.get("evlu_amt", 0))
+                                target_val = total_eval * (target_weights.get(name, 0) / 100)
+                                diff = target_val - curr_val
+                                rebal_data.append({
+                                    "종목": name,
+                                    "현재금액": f"{curr_val:,}원",
+                                    "목표금액": f"{int(target_val):,}원",
+                                    "조정금액": f"{diff:+,.0f}원",
+                                    "액션": "매수 🟢" if diff > 0 else "매도 🔴"
+                                })
+                        st.dataframe(pd.DataFrame(rebal_data), use_container_width=True, hide_index=True)
         else:
             st.info("KIS API 연결 필요")
     else:
