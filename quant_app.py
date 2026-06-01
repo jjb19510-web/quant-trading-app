@@ -225,7 +225,7 @@ with tab1:
                 y=corr.index.tolist(),
                 colorscale=[[0, "#3b82f6"], [0.5, "#1a1f2e"], [1, "#ef4444"]],
                 zmin=-1, zmax=1, zmid=0,
-                text=[[f"{v:.2f}" for v in row] for row in corr.values],
+                text=[[f"{v*100:.0f}%" for v in row] for row in corr.values],
                 texttemplate="%{text}",
                 textfont=dict(size=12, color=TEXT),
                 colorbar=dict(thickness=8, tickfont=dict(color=DIM, size=9))

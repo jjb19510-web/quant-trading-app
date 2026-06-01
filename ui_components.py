@@ -177,7 +177,7 @@ def apply_custom_css():
       .neg {{ color: {CANDLE_DOWN}; }}
       div[data-testid="stDataFrame"] {{ background: {SURFACE_1}; border-radius: 8px; }}
       div[data-testid="stTextInput"] input {{ border: 1px solid {LINE} !important; background: {SURFACE_2} !important; }}
-      div[data-testid="stTabs"] button {{ font-size: 13px !important; padding: 8px 12px !important; }}
+      div[data-testid="stTabs"] button {{ font-size: 11px !important; padding: 6px 8px !important; }}
     </style>
     """, unsafe_allow_html=True)
 
