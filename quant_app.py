@@ -514,7 +514,7 @@ with tab2:
                     options=list(SCENARIOS.keys()),
                     default=[]
                 )
-                if selected and tickers:
+                if selected and "tickers" in dir() and tickers:
                     stress_results = []
                     for scenario in selected:
                         s_start, s_end = SCENARIOS[scenario]
@@ -554,7 +554,7 @@ with tab2:
                             xaxis=dict(showgrid=False),
                         )
                         st.plotly_chart(fig_stress, use_container_width=True, config={"displayModeBar": False})
-                elif not tickers:
+                else:
                     st.info("사이드바에서 종목을 먼저 입력해주세요!")
 
             card("📈 전략 지표 그래프", f"{chart_col} · 상승 🔴 하락 🔵 · ▲매수 ▼매도")
