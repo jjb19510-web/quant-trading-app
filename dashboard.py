@@ -5,38 +5,60 @@ import plotly.graph_objects as go
 from ui_components import card, CANDLE_UP, CANDLE_DOWN, DIM, TEXT, SURFACE_1, LINE, BG, SURFACE_2
 
 def render_dashboard():
+    st.write("dashboard loaded")
     # ── 시장 현황 ──
     @st.cache_data(ttl=300)
     def get_market_indices():
-        indices = {"코스피": "^KS11", "코스닥": "^KQ11", "나스닥": "^IXIC"}
+        indices = {
+            "코스피": "^KS11",
+            "코스닥": "^KQ11",
+            "나스닥": "^IXIC",
+            "원/달러": "USDKRW=X",
+            "WTI유": "CL=F",
+            "금": "GC=F",
+            "미국10년채": "^TNX"
+        }
         result = []
         for name, ticker in indices.items():
             try:
-                hist = yf.Ticker(ticker).history(period="2d")
+                hist = yf.Ticker(ticker).history(period="5d")
                 if len(hist) >= 2:
                     curr = hist["Close"].iloc[-1]
                     prev = hist["Close"].iloc[-2]
                     chg = curr - prev
                     chg_pct = (chg / prev) * 100
                     result.append({"name": name, "price": curr, "change": chg, "pct": chg_pct})
-            except:
-                pass
+            except Exception as e:
+                result.append({"name": name, "price": 0, "change": 0, "pct": 0, "error": str(e)})
         return result
 
+    def render_index_card(col, idx, margin_top=False):
+        color = CANDLE_UP if idx["change"] >= 0 else CANDLE_DOWN
+        arrow = "▲" if idx["change"] >= 0 else "▼"
+        mt = "margin-top:16px;" if margin_top else ""
+        with col:
+            st.markdown(f"""
+            <div style='background:{SURFACE_1}; border:0.5px solid {LINE}; border-radius:12px; padding:12px 16px; margin-bottom:16px; {mt}'>
+                <div style='font-size:11px; color:#9ca3af; margin-bottom:4px; font-weight:500;'>{idx["name"]}</div>
+                <div style='font-family:JetBrains Mono; font-size:18px; font-weight:600;'>{idx["price"]:,.2f}</div>
+                <div style='font-family:JetBrains Mono; font-size:12px; color:{color}; margin-top:2px;'>{arrow} {idx["change"]:+,.2f} ({idx["pct"]:+.2f}%)</div>
+            </div>
+            """, unsafe_allow_html=True)
+
     indices = get_market_indices()
+    st.write(indices)  # 디버깅
     if indices:
-        cols = st.columns(len(indices))
-        for col, idx in zip(cols, indices):
-            color = CANDLE_UP if idx["change"] >= 0 else CANDLE_DOWN
-            arrow = "▲" if idx["change"] >= 0 else "▼"
-            with col:
-                st.markdown(f"""
-                <div style='background:{SURFACE_1}; border:0.5px solid {LINE}; border-radius:12px; padding:12px 16px; margin-bottom:16px; margin-top:16px;'>
-                    <div style='font-size:11px; color:#9ca3af; margin-bottom:4px; font-weight:500;'>{idx["name"]}</div>
-                    <div style='font-family:JetBrains Mono; font-size:18px; font-weight:600;'>{idx["price"]:,.2f}</div>
-                    <div style='font-family:JetBrains Mono; font-size:12px; color:{color}; margin-top:2px;'>{arrow} {idx["change"]:+,.2f} ({idx["pct"]:+.2f}%)</div>
-                </div>
-                """, unsafe_allow_html=True)
+        row1 = indices[:3]
+        row2 = indices[3:]
+
+        cols1 = st.columns(len(row1))
+        for col, idx in zip(cols1, row1):
+            render_index_card(col, idx, margin_top=True)
+
+        if row2:
+            cols2 = st.columns(len(row2))
+            for col, idx in zip(cols2, row2):
+                render_index_card(col, idx, margin_top=False)
 
     # ── 관심종목 수익률 순위 ──
     if st.session_state.watchlist:
