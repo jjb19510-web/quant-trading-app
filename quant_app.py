@@ -51,15 +51,9 @@ def get_kis_token():
 
 tab1, tab2, tab3 = st.tabs(["📊 대시보드", "🔍 분석", "💼 포트폴리오"])
 
-# ════════════════════════════════
-# 탭 1 — 대시보드
-# ════════════════════════════════
 with tab1:
     render_dashboard()
 
-# ════════════════════════════════
-# 탭 2 — 분석
-# ════════════════════════════════
 with tab2:
     with st.sidebar:
         st.markdown("<div style='font-size:18px; font-weight:600; margin-bottom:16px;'>⚙️ Settings</div>", unsafe_allow_html=True)
@@ -128,12 +122,16 @@ with tab2:
             default_ticker = st.session_state.get("selected_ticker", "")
             tickers_raw = st.text_input("종목명 또는 코드 입력 (쉼표로 구분)", value=default_ticker)
             tickers = [t.strip() + ".KS" for t in tickers_raw.split(",") if t.strip()]
+            if tickers:
+                st.session_state["last_tickers"] = tickers
         else:
             st.markdown("<div style='font-size:13px; font-weight:600; margin-bottom:4px;'>🔍 종목 검색</div>", unsafe_allow_html=True)
             st.caption("예시: AAPL, TSLA, NVDA")
             default_ticker = st.session_state.get("selected_ticker", "")
             tickers_raw = st.text_input("티커 입력 (쉼표로 구분)", value=default_ticker)
             tickers = [t.strip() for t in tickers_raw.split(",") if t.strip()]
+            if tickers:
+                st.session_state["last_tickers"] = tickers
 
         if tickers_raw.strip():
             if st.button("⭐ 관심종목 추가", use_container_width=True):
@@ -234,6 +232,59 @@ with tab2:
             st.warning(f"🔴 매도 신호: {', '.join(sell_signals)}")
         else:
             st.info("오늘 신호 없음 — 관망")
+
+    # ── 스트레스 테스트 ──
+    last_tickers = st.session_state.get("last_tickers", [])
+    if last_tickers:
+        with st.expander("🚨 스트레스 테스트 — 과거 위기 시뮬레이션", expanded=False):
+            SCENARIOS = {
+                "코로나 폭락": ("2020-02-01", "2020-03-31"),
+                "금리인상 쇼크": ("2022-01-01", "2022-10-31"),
+                "미중 무역전쟁": ("2018-06-01", "2018-12-31"),
+                "글로벌 금융위기": ("2008-09-01", "2009-03-31"),
+                "미국-이란 전쟁": ("2026-02-28", "2026-04-30"),
+            }
+            selected = st.multiselect("시나리오 선택", options=list(SCENARIOS.keys()), default=[])
+            if selected:
+                stress_results = []
+                for scenario in selected:
+                    s_start, s_end = SCENARIOS[scenario]
+                    try:
+                        s_df = yf.download(last_tickers, start=s_start, end=s_end, progress=False)["Close"]
+                        if isinstance(s_df, pd.Series):
+                            s_df = s_df.to_frame()
+                        if len(s_df) >= 2:
+                            s_ret = (s_df.iloc[-1] / s_df.iloc[0] - 1).mean() * 100
+                            stress_results.append({
+                                "시나리오": scenario,
+                                "기간": f"{s_start} ~ {s_end}",
+                                "예상 손익": f"{s_ret:+.1f}%",
+                                "평가": "🟢 선방" if s_ret > -10 else ("🟡 주의" if s_ret > -20 else "🔴 위험"),
+                                "_ret": s_ret
+                            })
+                    except:
+                        pass
+                if stress_results:
+                    st.dataframe(
+                        pd.DataFrame([{k: v for k, v in r.items() if k != "_ret"} for r in stress_results]),
+                        use_container_width=True, hide_index=True
+                    )
+                    fig_stress = go.Figure(go.Bar(
+                        x=[r["시나리오"] for r in stress_results],
+                        y=[r["_ret"] for r in stress_results],
+                        marker=dict(color=[CANDLE_UP if r["_ret"] >= 0 else CANDLE_DOWN for r in stress_results], opacity=0.85),
+                        text=[f"{r['_ret']:+.1f}%" for r in stress_results],
+                        textposition="outside",
+                    ))
+                    fig_stress.add_hline(y=0, line=dict(color=DIM, width=1, dash="dot"))
+                    fig_stress.update_layout(
+                        height=300, margin=dict(l=0, r=20, t=8, b=28),
+                        paper_bgcolor=BG, plot_bgcolor=BG,
+                        font=dict(family="Inter, sans-serif", color=TEXT, size=11),
+                        yaxis=dict(ticksuffix="%", side="right"),
+                        xaxis=dict(showgrid=False),
+                    )
+                    st.plotly_chart(fig_stress, use_container_width=True, config={"displayModeBar": False})
 
     if wf_test:
         if not tickers:
@@ -500,63 +551,6 @@ with tab2:
                     reason = "매수 조건 미충족 — 현금 대기"
                 st.warning(f"⚪ 현재 포지션: 현금 · {reason}")
 
-            # ── 스트레스 테스트 ──
-            with st.expander("🚨 스트레스 테스트 — 과거 위기 시뮬레이션", expanded=False):
-                SCENARIOS = {
-                    "코로나 폭락": ("2020-02-01", "2020-03-31"),
-                    "금리인상 쇼크": ("2022-01-01", "2022-10-31"),
-                    "미중 무역전쟁": ("2018-06-01", "2018-12-31"),
-                    "글로벌 금융위기": ("2008-09-01", "2009-03-31"),
-                    "미국-이란 전쟁": ("2026-02-28", "2026-04-30"),
-                }
-                selected = st.multiselect(
-                    "시나리오 선택",
-                    options=list(SCENARIOS.keys()),
-                    default=[]
-                )
-                if selected and "tickers" in dir() and tickers:
-                    stress_results = []
-                    for scenario in selected:
-                        s_start, s_end = SCENARIOS[scenario]
-                        try:
-                            s_df = yf.download(tickers, start=s_start, end=s_end, progress=False)["Close"]
-                            if isinstance(s_df, pd.Series):
-                                s_df = s_df.to_frame()
-                            if len(s_df) >= 2:
-                                s_ret = (s_df.iloc[-1] / s_df.iloc[0] - 1).mean() * 100
-                                stress_results.append({
-                                    "시나리오": scenario,
-                                    "기간": f"{s_start} ~ {s_end}",
-                                    "예상 손익": f"{s_ret:+.1f}%",
-                                    "평가": "🟢 선방" if s_ret > -10 else ("🟡 주의" if s_ret > -20 else "🔴 위험"),
-                                    "_ret": s_ret
-                                })
-                        except:
-                            pass
-                    if stress_results:
-                        st.dataframe(
-                            pd.DataFrame([{k: v for k, v in r.items() if k != "_ret"} for r in stress_results]),
-                            use_container_width=True, hide_index=True
-                        )
-                        fig_stress = go.Figure(go.Bar(
-                            x=[r["시나리오"] for r in stress_results],
-                            y=[r["_ret"] for r in stress_results],
-                            marker=dict(color=[CANDLE_UP if r["_ret"] >= 0 else CANDLE_DOWN for r in stress_results], opacity=0.85),
-                            text=[f"{r['_ret']:+.1f}%" for r in stress_results],
-                            textposition="outside",
-                        ))
-                        fig_stress.add_hline(y=0, line=dict(color=DIM, width=1, dash="dot"))
-                        fig_stress.update_layout(
-                            height=300, margin=dict(l=0, r=20, t=8, b=28),
-                            paper_bgcolor=BG, plot_bgcolor=BG,
-                            font=dict(family="Inter, sans-serif", color=TEXT, size=11),
-                            yaxis=dict(ticksuffix="%", side="right"),
-                            xaxis=dict(showgrid=False),
-                        )
-                        st.plotly_chart(fig_stress, use_container_width=True, config={"displayModeBar": False})
-                else:
-                    st.info("사이드바에서 종목을 먼저 입력해주세요!")
-
             card("📈 전략 지표 그래프", f"{chart_col} · 상승 🔴 하락 🔵 · ▲매수 ▼매도")
             rsi_chart = rsi[chart_col] if isinstance(rsi, pd.DataFrame) else rsi
             if strategy == "이동평균선 전략 (Moving Average)":
@@ -680,8 +674,5 @@ with tab2:
 
             st.caption(f"Data: yfinance · {df.index[0].date()} → {df.index[-1].date()} · {len(df)} trading days")
 
-# ════════════════════════════════
-# 탭 3 — 포트폴리오
-# ════════════════════════════════
 with tab3:
     render_portfolio(KIS_AVAILABLE, get_kis_token, get_balance if KIS_AVAILABLE else lambda x: {})
