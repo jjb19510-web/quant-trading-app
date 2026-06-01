@@ -512,7 +512,7 @@ with tab2:
                 selected = st.multiselect(
                     "시나리오 선택",
                     options=list(SCENARIOS.keys()),
-                    default=["코로나 폭락", "미국-이란 전쟁"]
+                    default=[]
                 )
                 if selected and tickers:
                     stress_results = []
