@@ -6,12 +6,13 @@ import plotly.graph_objects as go
 import datetime as dt
 import json
 import os
+import requests
 
 from strategies import calculate_mdd, calculate_sharpe, calculate_cagr, run_strategy
 from optimization import optimize_parameters, walk_forward_test
 from ui_components import (
     apply_custom_css, card, render_kpi_strip, render_strategy_expander,
-    render_summary_cards, color_val, style_fig,
+    render_summary_cards, color_val,
     ACCENT, RED, GREEN, CANDLE_UP, CANDLE_DOWN,
     DIM, TEXT, SURFACE_1, SURFACE_2, LINE, BG
 )
@@ -19,6 +20,13 @@ from charts import (
     make_candlestick_fig, make_return_chart,
     make_drawdown_chart, make_monthly_bar_chart, make_pie_chart
 )
+from data_utils import (
+    load_watchlist, save_watchlist, load_notes, save_notes,
+    load_sectors, save_sectors, load_backtest, save_backtest,
+    init_session_state
+)
+from dashboard import render_dashboard
+from portfolio import render_portfolio
 
 try:
     from broker import get_access_token, get_current_price as kis_get_price, get_balance, buy_order, sell_order
@@ -29,50 +37,10 @@ except:
 st.set_page_config(page_title="Quantfolio", page_icon="📈", layout="wide")
 apply_custom_css()
 
-# ── 공통 데이터 초기화 ──
 end_date = pd.to_datetime("today").date()
 start_date = (pd.to_datetime("today") - pd.DateOffset(years=1)).date()
 
-WATCHLIST_FILE = "watchlist.json"
-NOTES_FILE = "investment_notes.json"
-SECTORS_FILE = "sectors.json"
-
-def load_watchlist():
-    if os.path.exists(WATCHLIST_FILE):
-        with open(WATCHLIST_FILE, "r") as f:
-            return json.load(f)
-    return []
-
-def save_watchlist(wl):
-    with open(WATCHLIST_FILE, "w") as f:
-        json.dump(wl, f)
-
-def load_notes():
-    if os.path.exists(NOTES_FILE):
-        with open(NOTES_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {}
-
-def save_notes(notes):
-    with open(NOTES_FILE, "w", encoding="utf-8") as f:
-        json.dump(notes, f, ensure_ascii=False)
-
-def load_sectors():
-    if os.path.exists(SECTORS_FILE):
-        with open(SECTORS_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {}
-
-def save_sectors(sectors):
-    with open(SECTORS_FILE, "w", encoding="utf-8") as f:
-        json.dump(sectors, f, ensure_ascii=False)
-
-if "watchlist" not in st.session_state:
-    st.session_state.watchlist = load_watchlist()
-if "notes" not in st.session_state:
-    st.session_state.notes = load_notes()
-if "sectors" not in st.session_state:
-    st.session_state.sectors = load_sectors()
+init_session_state()
 
 @st.cache_data(ttl=3600)
 def get_kis_token():
@@ -81,161 +49,13 @@ def get_kis_token():
     except:
         return None
 
-# ── 페이지 탭 ──
 tab1, tab2, tab3 = st.tabs(["📊 대시보드", "🔍 분석", "💼 포트폴리오"])
 
 # ════════════════════════════════
 # 탭 1 — 대시보드
 # ════════════════════════════════
 with tab1:
-    # 시장 현황
-    @st.cache_data(ttl=300)
-    def get_market_indices():
-        indices = {"코스피": "^KS11", "코스닥": "^KQ11", "나스닥": "^IXIC"}
-        result = []
-        for name, ticker in indices.items():
-            try:
-                hist = yf.Ticker(ticker).history(period="2d")
-                if len(hist) >= 2:
-                    curr = hist["Close"].iloc[-1]
-                    prev = hist["Close"].iloc[-2]
-                    chg = curr - prev
-                    chg_pct = (chg / prev) * 100
-                    result.append({"name": name, "price": curr, "change": chg, "pct": chg_pct})
-            except:
-                pass
-        return result
-
-    indices = get_market_indices()
-    if indices:
-        cols = st.columns(len(indices))
-        for col, idx in zip(cols, indices):
-            color = CANDLE_UP if idx["change"] >= 0 else CANDLE_DOWN
-            arrow = "▲" if idx["change"] >= 0 else "▼"
-            with col:
-                st.markdown(f"""
-                <div style='background:{SURFACE_1}; border:0.5px solid {LINE}; border-radius:12px; padding:12px 16px; margin-bottom:16px; margin-top:16px;'>
-                    <div style='font-size:11px; color:#9ca3af; margin-bottom:4px; font-weight:500;'>{idx["name"]}</div>
-                    <div style='font-family:JetBrains Mono; font-size:18px; font-weight:600;'>{idx["price"]:,.2f}</div>
-                    <div style='font-family:JetBrains Mono; font-size:12px; color:{color}; margin-top:2px;'>{arrow} {idx["change"]:+,.2f} ({idx["pct"]:+.2f}%)</div>
-                </div>
-                """, unsafe_allow_html=True)
-
-    # 관심종목 수익률 순위
-    if st.session_state.watchlist:
-        @st.cache_data(ttl=300)
-        def get_watchlist_returns(watchlist):
-            result = []
-            for item in watchlist:
-                ticker = item + ".KS" if not item.endswith(".KS") else item
-                try:
-                    hist = yf.Ticker(ticker).history(period="1y")
-                    if len(hist) >= 2:
-                        curr = hist["Close"].iloc[-1]
-                        start = hist["Close"].iloc[0]
-                        ret = (curr - start) / start * 100
-                        chg = hist["Close"].iloc[-1] - hist["Close"].iloc[-2]
-                        chg_pct = (chg / hist["Close"].iloc[-2]) * 100
-                        result.append({
-                            "종목": item,
-                            "현재가": f"{int(curr):,}원",
-                            "1년 수익률": f"{ret:+.1f}%",
-                            "전일비": f"{chg_pct:+.2f}%",
-                            "_ret": ret
-                        })
-                except:
-                    pass
-            return sorted(result, key=lambda x: x["_ret"], reverse=True)
-
-        with st.spinner("관심종목 수익률 조회 중..."):
-            wl_data = get_watchlist_returns(tuple(st.session_state.watchlist))
-        if wl_data:
-            card("📊 관심종목 수익률 순위", "1년 수익률 기준")
-            display_df = pd.DataFrame([{k: v for k, v in d.items() if k != "_ret"} for d in wl_data])
-            st.dataframe(display_df, use_container_width=True, hide_index=True)
-
-    # 섹터별 수익률 비교
-    if st.session_state.sectors:
-        @st.cache_data(ttl=300)
-        def get_sector_returns(sectors_str):
-            sectors = st.session_state.sectors
-            result = []
-            for sector_name, tickers_list in sectors.items():
-                sector_rets = []
-                for code in tickers_list:
-                    ticker = code + ".KS" if not code.endswith(".KS") else code
-                    try:
-                        hist = yf.Ticker(ticker).history(period="1y")["Close"]
-                        if len(hist) >= 2:
-                            ret = (hist.iloc[-1] - hist.iloc[0]) / hist.iloc[0] * 100
-                            sector_rets.append(ret)
-                    except:
-                        pass
-                if sector_rets:
-                    avg_ret = sum(sector_rets) / len(sector_rets)
-                    result.append({"섹터": sector_name, "평균 수익률": round(avg_ret, 2), "_ret": avg_ret})
-            return sorted(result, key=lambda x: x["_ret"], reverse=True)
-
-        sector_data = get_sector_returns(str(st.session_state.sectors))
-        if sector_data:
-            card("📂 섹터별 수익률 비교", "1년 수익률 기준")
-            fig_sector = go.Figure(go.Bar(
-                x=[d["섹터"] for d in sector_data],
-                y=[d["평균 수익률"] for d in sector_data],
-                marker=dict(color=[CANDLE_UP if d["_ret"] >= 0 else CANDLE_DOWN for d in sector_data], opacity=0.85),
-                text=[f"{d['평균 수익률']:+.1f}%" for d in sector_data],
-                textposition="outside",
-                textfont=dict(family="JetBrains Mono", size=11, color=TEXT),
-            ))
-            fig_sector.add_hline(y=0, line=dict(color=DIM, width=1, dash="dot"))
-            fig_sector.update_layout(
-                height=300, margin=dict(l=0, r=20, t=8, b=28),
-                paper_bgcolor=BG, plot_bgcolor=BG,
-                font=dict(family="Inter, sans-serif", color=TEXT, size=11),
-                showlegend=False,
-                yaxis=dict(ticksuffix="%", side="right", gridcolor="rgba(255,255,255,0.03)"),
-                xaxis=dict(showgrid=False),
-            )
-            st.plotly_chart(fig_sector, use_container_width=True, config={"displayModeBar": False})
-
-    # 상관관계 히트맵
-    if st.session_state.watchlist and len(st.session_state.watchlist) >= 2:
-        @st.cache_data(ttl=300)
-        def get_correlation(watchlist):
-            price_data = {}
-            for item in watchlist:
-                ticker = item + ".KS" if not item.endswith(".KS") else item
-                try:
-                    hist = yf.Ticker(ticker).history(period="1y")["Close"]
-                    if len(hist) > 0:
-                        price_data[item] = hist
-                except:
-                    pass
-            if len(price_data) >= 2:
-                df_prices = pd.DataFrame(price_data).dropna()
-                return df_prices.pct_change().corr()
-            return None
-
-        corr = get_correlation(tuple(st.session_state.watchlist))
-        if corr is not None:
-            card("🔗 관심종목 상관관계", "1에 가까울수록 같이 움직임 · 0에 가까울수록 독립적")
-            fig_corr = go.Figure(go.Heatmap(
-                z=corr.values,
-                x=corr.columns.tolist(),
-                y=corr.index.tolist(),
-                colorscale=[[0, "#3b82f6"], [0.5, "#1a1f2e"], [1, "#ef4444"]],
-                zmin=-1, zmax=1, zmid=0,
-                text=[[f"{v*100:.0f}%" for v in row] for row in corr.values],
-                texttemplate="%{text}",
-                textfont=dict(size=12, color=TEXT),
-                colorbar=dict(thickness=8, tickfont=dict(color=DIM, size=9))
-            ))
-            fig_corr.update_layout(
-                height=350, margin=dict(l=60, r=60, t=8, b=8),
-                paper_bgcolor=BG, plot_bgcolor=BG,
-                font=dict(family="Inter, sans-serif", color=TEXT, size=11)
-            )
-            st.plotly_chart(fig_corr, use_container_width=True, config={"displayModeBar": False})
+    render_dashboard()
 
 # ════════════════════════════════
 # 탭 2 — 분석
@@ -381,7 +201,7 @@ with tab2:
         optimize = st.button("⚡ 최적값 자동 탐색", use_container_width=True)
         wf_test = st.button("🔄 워크포워드 테스트", use_container_width=True)
 
-    # 오늘 신호 현황
+    # ── 오늘 신호 현황 ──
     if st.session_state.watchlist:
         @st.cache_data(ttl=300)
         def get_today_signals(watchlist, strategy_name, rsi_thr, ma_s, ma_l, bb_p):
@@ -629,18 +449,8 @@ with tab2:
                 else:
                     st.info(f"🛡 손절까지 {current_pct + stop_pct:.1f}% 여유 (손절 -{stop_pct}%)")
 
-            BACKTEST_FILE = "backtest_results.json"
-            def load_backtest():
-                if os.path.exists(BACKTEST_FILE):
-                    with open(BACKTEST_FILE, "r", encoding="utf-8") as f:
-                        return json.load(f)
-                return []
-            def save_backtest(results):
-                with open(BACKTEST_FILE, "w", encoding="utf-8") as f:
-                    json.dump(results, f, ensure_ascii=False)
             if "backtest_results" not in st.session_state:
                 st.session_state.backtest_results = load_backtest()
-
             col_save, col_clear = st.columns([3, 1])
             with col_save:
                 save_label = st.text_input("결과 저장 이름", value=f"{chart_col} {strategy[:3]} {dt.date.today()}", key="save_label")
@@ -689,6 +499,63 @@ with tab2:
                 else:
                     reason = "매수 조건 미충족 — 현금 대기"
                 st.warning(f"⚪ 현재 포지션: 현금 · {reason}")
+
+            # ── 스트레스 테스트 ──
+            with st.expander("🚨 스트레스 테스트 — 과거 위기 시뮬레이션", expanded=False):
+                SCENARIOS = {
+                    "코로나 폭락": ("2020-02-01", "2020-03-31"),
+                    "금리인상 쇼크": ("2022-01-01", "2022-10-31"),
+                    "미중 무역전쟁": ("2018-06-01", "2018-12-31"),
+                    "글로벌 금융위기": ("2008-09-01", "2009-03-31"),
+                    "미국-이란 전쟁": ("2026-02-28", "2026-04-30"),
+                }
+                selected = st.multiselect(
+                    "시나리오 선택",
+                    options=list(SCENARIOS.keys()),
+                    default=["코로나 폭락", "미국-이란 전쟁"]
+                )
+                if selected and tickers:
+                    stress_results = []
+                    for scenario in selected:
+                        s_start, s_end = SCENARIOS[scenario]
+                        try:
+                            s_df = yf.download(tickers, start=s_start, end=s_end, progress=False)["Close"]
+                            if isinstance(s_df, pd.Series):
+                                s_df = s_df.to_frame()
+                            if len(s_df) >= 2:
+                                s_ret = (s_df.iloc[-1] / s_df.iloc[0] - 1).mean() * 100
+                                stress_results.append({
+                                    "시나리오": scenario,
+                                    "기간": f"{s_start} ~ {s_end}",
+                                    "예상 손익": f"{s_ret:+.1f}%",
+                                    "평가": "🟢 선방" if s_ret > -10 else ("🟡 주의" if s_ret > -20 else "🔴 위험"),
+                                    "_ret": s_ret
+                                })
+                        except:
+                            pass
+                    if stress_results:
+                        st.dataframe(
+                            pd.DataFrame([{k: v for k, v in r.items() if k != "_ret"} for r in stress_results]),
+                            use_container_width=True, hide_index=True
+                        )
+                        fig_stress = go.Figure(go.Bar(
+                            x=[r["시나리오"] for r in stress_results],
+                            y=[r["_ret"] for r in stress_results],
+                            marker=dict(color=[CANDLE_UP if r["_ret"] >= 0 else CANDLE_DOWN for r in stress_results], opacity=0.85),
+                            text=[f"{r['_ret']:+.1f}%" for r in stress_results],
+                            textposition="outside",
+                        ))
+                        fig_stress.add_hline(y=0, line=dict(color=DIM, width=1, dash="dot"))
+                        fig_stress.update_layout(
+                            height=300, margin=dict(l=0, r=20, t=8, b=28),
+                            paper_bgcolor=BG, plot_bgcolor=BG,
+                            font=dict(family="Inter, sans-serif", color=TEXT, size=11),
+                            yaxis=dict(ticksuffix="%", side="right"),
+                            xaxis=dict(showgrid=False),
+                        )
+                        st.plotly_chart(fig_stress, use_container_width=True, config={"displayModeBar": False})
+                elif not tickers:
+                    st.info("사이드바에서 종목을 먼저 입력해주세요!")
 
             card("📈 전략 지표 그래프", f"{chart_col} · 상승 🔴 하락 🔵 · ▲매수 ▼매도")
             rsi_chart = rsi[chart_col] if isinstance(rsi, pd.DataFrame) else rsi
@@ -760,7 +627,6 @@ with tab2:
                     mkt_str = f"{int(mkt)/1e12:.1f}조" if mkt else 'N/A'
                     high52 = row.iloc[0].get('High', 'N/A')
                     low52 = row.iloc[0].get('Low', 'N/A')
-                    import requests
                     per, pbr = 'N/A', 'N/A'
                     try:
                         nv_url = f"https://m.stock.naver.com/api/stock/{raw_ticker}/investment"
@@ -790,7 +656,6 @@ with tab2:
 
             card("📰 관련 뉴스", f"{chart_col} 최신 뉴스")
             try:
-                import requests
                 naver_id = st.secrets.get("NAVER_CLIENT_ID", "")
                 naver_secret = st.secrets.get("NAVER_CLIENT_SECRET", "")
                 query = chart_col.replace(".KS", "").replace(".KQ", "")
@@ -819,70 +684,4 @@ with tab2:
 # 탭 3 — 포트폴리오
 # ════════════════════════════════
 with tab3:
-    if KIS_AVAILABLE:
-        kis_token = get_kis_token()
-        if kis_token:
-            balance_data = get_balance(kis_token)
-            if balance_data.get("rt_cd") == "0":
-                output2 = balance_data.get("output2", [{}])[0]
-                total_eval = int(output2.get("scts_evlu_amt", 0))
-                total_profit = int(output2.get("evlu_pfls_smtl_amt", 0))
-                cash = int(output2.get("dnca_tot_amt", 0))
-
-                p1, p2, p3 = st.columns(3)
-                with p1:
-                    st.metric("총 평가금액", f"{total_eval:,}원")
-                with p2:
-                    st.metric("평가손익", f"{total_profit:+,}원")
-                with p3:
-                    st.metric("예수금", f"{cash:,}원")
-
-                card("📋 보유종목", "현재 포지션 기준")
-                holdings_list = balance_data.get("output1", [])
-                if holdings_list:
-                    hdf = pd.DataFrame([{
-                        "종목": h.get("prdt_name", ""),
-                        "수량": int(h.get("hldg_qty", 0)),
-                        "현재가": f"{int(h.get('prpr', 0)):,}",
-                        "평균단가": f"{float(h.get('pchs_avg_pric', 0)):,.0f}",
-                        "평가손익": f"{float(h.get('evlu_pfls_amt', 0)):+,.0f}"
-                    } for h in holdings_list if int(h.get("hldg_qty", 0)) > 0])
-                    if not hdf.empty:
-                        st.dataframe(hdf, use_container_width=True, hide_index=True)
-                    else:
-                        st.info("보유 종목이 없어요.")
-
-                # ── 리밸런싱 시뮬레이션 ──
-                card("⚖️ 리밸런싱 시뮬레이션", "목표 비중으로 조정 시 필요 금액 계산")
-                if holdings_list:
-                    st.markdown("**목표 비중 설정 (%)**")
-                    tickers_held = [h.get("prdt_name", "") for h in holdings_list if int(h.get("hldg_qty", 0)) > 0]
-                    target_weights = {}
-                    cols_rbl = st.columns(len(tickers_held))
-                    for i, t in enumerate(tickers_held):
-                        with cols_rbl[i]:
-                            target_weights[t] = st.number_input(t, min_value=0, max_value=100, value=round(100/len(tickers_held)), step=5, key=f"rbl_{t}")
-
-                    total_weight = sum(target_weights.values())
-                    if total_weight != 100:
-                        st.warning(f"⚠️ 목표 비중 합계가 {total_weight}%예요. 100%가 되도록 조정해주세요!")
-                    else:
-                        rebal_data = []
-                        for h in holdings_list:
-                            if int(h.get("hldg_qty", 0)) > 0:
-                                name = h.get("prdt_name", "")
-                                curr_val = int(h.get("evlu_amt", 0))
-                                target_val = total_eval * (target_weights.get(name, 0) / 100)
-                                diff = target_val - curr_val
-                                rebal_data.append({
-                                    "종목": name,
-                                    "현재금액": f"{curr_val:,}원",
-                                    "목표금액": f"{int(target_val):,}원",
-                                    "조정금액": f"{diff:+,.0f}원",
-                                    "액션": "매수 🟢" if diff > 0 else "매도 🔴"
-                                })
-                        st.dataframe(pd.DataFrame(rebal_data), use_container_width=True, hide_index=True)
-        else:
-            st.info("KIS API 연결 필요")
-    else:
-        st.info("KIS API가 연결되지 않았어요.")
+    render_portfolio(KIS_AVAILABLE, get_kis_token, get_balance if KIS_AVAILABLE else lambda x: {})
