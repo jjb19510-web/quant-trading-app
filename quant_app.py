@@ -373,6 +373,9 @@ with tab2:
             st.warning("⚠️ 과최적화 주의!")
 
     if analyze:
+        st.session_state["analyzed"] = True
+    
+    if st.session_state.get("analyzed") and tickers:
         if not tickers:
             st.warning("종목을 입력해주세요!")
         else:
