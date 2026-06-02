@@ -42,6 +42,19 @@ start_date = (pd.to_datetime("today") - pd.DateOffset(years=1)).date()
 
 init_session_state()
 
+@st.cache_data(ttl=86400)
+def get_krx_name_map():
+    try:
+        import FinanceDataReader as fdr
+        df = fdr.StockListing('KRX')
+        code_col = next((c for c in ['Symbol', 'Code'] if c in df.columns), None)
+        name_col = next((c for c in ['Name'] if c in df.columns), None)
+        if code_col and name_col:
+            return dict(zip(df[code_col].astype(str).str.split('.').str[0].str.zfill(6), df[name_col]))
+    except:
+        pass
+    return {}
+
 @st.cache_data(ttl=3600)
 def get_kis_token():
     try:
@@ -97,7 +110,9 @@ with tab2:
             for witem in st.session_state.watchlist:
                 col_w, col_d = st.columns([4, 1])
                 with col_w:
-                    if st.button(witem, key=f"wl_{witem}", use_container_width=True):
+                    name_map = get_krx_name_map()
+                display_name = name_map.get(witem, witem)
+                if st.button(f"{display_name} ({witem})", key=f"wl_{witem}", use_container_width=True):
                         st.session_state["selected_ticker"] = witem
                         st.session_state["note_ticker"] = witem
                 with col_d:
@@ -139,7 +154,7 @@ with tab2:
                         continue
                     
                     if not t_clean.isdigit() and df_krx is not None:
-                        matched = df_krx[df_krx['Name'] == t_clean]
+                        matched = df_krx[df_krx['Name'].str.upper() == t_clean.upper()]
                         if not matched.empty:
                             code_col = next((c for c in ['Symbol', 'Code', 'code'] if c in df_krx.columns), None)
                             if code_col:
