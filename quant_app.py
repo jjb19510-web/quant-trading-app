@@ -122,34 +122,37 @@ with tab2:
             default_ticker = st.session_state.get("selected_ticker", "")
             tickers_raw = st.text_input("종목명 또는 코드 입력 (쉼표로 구분)", value=default_ticker)
             
-            import FinanceDataReader as fdr
             tickers_list = []
             if tickers_raw.strip():
                 try:
-                    df_krx = fdr.StockListing('KRX')
+                    df_krx = pd.read_csv("https://raw.githubusercontent.com/corazzon/finance-data-analysis/main/krx.csv")
                 except:
-                    df_krx = None
+                    try:
+                        import FinanceDataReader as fdr
+                        df_krx = fdr.StockListing('KRX')
+                    except:
+                        df_krx = None
 
                 for t in tickers_raw.split(","):
                     t_clean = t.strip()
                     if not t_clean:
                         continue
                     
-                    # 숫자가 아닐 경우(한글명 입력 시) KRX 상장 리스트에서 매핑 코드 탐색
                     if not t_clean.isdigit() and df_krx is not None:
                         matched = df_krx[df_krx['Name'] == t_clean]
                         if not matched.empty:
-                            # FDR 버전에 따라 'Symbol' 또는 'Code' 컬럼명을 자동으로 감지
                             code_col = next((c for c in ['Symbol', 'Code', 'code'] if c in df_krx.columns), None)
                             if code_col:
-                                code = matched.iloc[0][code_col]
+                                raw_code = matched.iloc[0][code_col]
+                                code = str(raw_code).split('.')[0].zfill(6)
                                 tickers_list.append(code + ".KS")
                             else:
                                 tickers_list.append(t_clean + ".KS")
                         else:
                             tickers_list.append(t_clean + ".KS")
                     else:
-                        tickers_list.append(t_clean + ".KS")
+                        code_padded = t_clean.zfill(6) if len(t_clean) < 6 else t_clean
+                        tickers_list.append(code_padded + ".KS")
             
             tickers = tickers_list
             if tickers:
@@ -654,42 +657,27 @@ with tab2:
                     mkt_str = f"{int(mkt)/1e12:.1f}조" if mkt else 'N/A'
                     high52 = row.iloc[0].get('High', 'N/A')
                     low52 = row.iloc[0].get('Low', 'N/A')
-                    # 현재 분석 대상 종목의 최신 종가(현재가) 추출
-                    curr_p = float(close_p.iloc[-1]) if not close_p.empty else 0
-
-                    from dart_utils import get_dart_roe, get_dart_per_pbr
-                    
+                    per, pbr = 'N/A', 'N/A'
+                    try:
+                        nv_url = f"https://m.stock.naver.com/api/stock/{raw_ticker}/investment"
+                        nv_res = requests.get(nv_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
+                        nv_data = nv_res.json()
+                        per_val = nv_data.get("per", None)
+                        pbr_val = nv_data.get("pbr", None)
+                        if per_val: per = f"{float(per_val):.1f}x"
+                        if pbr_val: pbr = f"{float(pbr_val):.1f}x"
+                    except:
+                        pass
+                    from dart_utils import get_dart_roe
                     roe = get_dart_roe(raw_ticker)
                     roe_str = f"{roe:.1f}%" if roe is not None else "N/A"
-                    
-                    # DART 연동하여 PER, PBR 직접 계산 시도
-                    dart_per, dart_pbr = get_dart_per_pbr(raw_ticker, curr_p)
-                    
-                    per = f"{dart_per:.1f}x" if dart_per is not None else "N/A"
-                    pbr = f"{dart_pbr:.1f}x" if dart_pbr is not None else "N/A"
-                    
-                    # DART 계산에 실패하거나 데이터가 비어 있는 경우 네이버 모바일 API로 백업
-                    if per == "N/A" or pbr == "N/A":
-                        try:
-                            nv_url = f"https://m.stock.naver.com/api/stock/{raw_ticker}/investment"
-                            nv_res = requests.get(nv_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
-                            nv_data = nv_res.json()
-                            per_val = nv_data.get("per", None)
-                            pbr_val = nv_data.get("pbr", None)
-                            if per == "N/A" and per_val: 
-                                per = f"{float(per_val):.1f}x"
-                            if pbr == "N/A" and pbr_val: 
-                                pbr = f"{float(pbr_val):.1f}x"
-                        except:
-                            pass
-
                     f1, f2, f3, f4, f5, f6 = st.columns(6)
                     with f1:
                         st.metric("ROE", roe_str, help="자기자본이익률 — 높을수록 수익성 좋음")
                     with f2:
-                        st.metric("PER", per, help="주가수익비율 — DART 공시 데이터 및 현재가 기준 연산")
+                        st.metric("PER", per, help="주가수익비율 — 낮을수록 저평가")
                     with f3:
-                        st.metric("PBR", pbr, help="주가순자산비율 — DART 공시 데이터 및 현재가 기준 연산")
+                        st.metric("PBR", pbr, help="주가순자산비율")
                     with f4:
                         st.metric("시가총액", mkt_str)
                     with f5:
