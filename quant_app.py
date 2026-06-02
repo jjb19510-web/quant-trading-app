@@ -118,10 +118,35 @@ with tab2:
 
         if market == "한국주식 (KS)":
             st.markdown("<div style='font-size:13px; font-weight:600; margin-bottom:4px;'>🔍 종목 검색</div>", unsafe_allow_html=True)
-            st.caption("예시: 005930, 000660, 373220")
+            st.caption("예시: 삼성전자, SK하이닉스, 005930")
             default_ticker = st.session_state.get("selected_ticker", "")
             tickers_raw = st.text_input("종목명 또는 코드 입력 (쉼표로 구분)", value=default_ticker)
-            tickers = [t.strip() + ".KS" for t in tickers_raw.split(",") if t.strip()]
+            
+            import FinanceDataReader as fdr
+            tickers_list = []
+            if tickers_raw.strip():
+                try:
+                    df_krx = fdr.StockListing('KRX')
+                except:
+                    df_krx = None
+
+                for t in tickers_raw.split(","):
+                    t_clean = t.strip()
+                    if not t_clean:
+                        continue
+                    
+                    # 숫자가 아닐 경우(한글명 입력 시) KRX 상장 리스트에서 매핑 코드 탐색
+                    if not t_clean.isdigit() and df_krx is not None:
+                        matched = df_krx[df_krx['Name'] == t_clean]
+                        if not matched.empty:
+                            code = matched.iloc[0]['Symbol']
+                            tickers_list.append(code + ".KS")
+                        else:
+                            tickers_list.append(t_clean + ".KS")
+                    else:
+                        tickers_list.append(t_clean + ".KS")
+            
+            tickers = tickers_list
             if tickers:
                 st.session_state["last_tickers"] = tickers
         else:
