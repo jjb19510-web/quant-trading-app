@@ -139,8 +139,13 @@ with tab2:
                     if not t_clean.isdigit() and df_krx is not None:
                         matched = df_krx[df_krx['Name'] == t_clean]
                         if not matched.empty:
-                            code = matched.iloc[0]['Symbol']
-                            tickers_list.append(code + ".KS")
+                            # FDR 버전에 따라 'Symbol' 또는 'Code' 컬럼명을 자동으로 감지
+                            code_col = next((c for c in ['Symbol', 'Code', 'code'] if c in df_krx.columns), None)
+                            if code_col:
+                                code = matched.iloc[0][code_col]
+                                tickers_list.append(code + ".KS")
+                            else:
+                                tickers_list.append(t_clean + ".KS")
                         else:
                             tickers_list.append(t_clean + ".KS")
                     else:
