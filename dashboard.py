@@ -5,35 +5,36 @@ import plotly.graph_objects as go
 from ui_components import card, CANDLE_UP, CANDLE_DOWN, DIM, TEXT, SURFACE_1, LINE, BG, SURFACE_2
 
 def render_dashboard():
-    # ?�?� ?�장 ?�황 ?�?�
+    # ── 시장 현황 ──
     @st.cache_data(ttl=300)
     def get_market_indices():
         indices = {
-            "코스??: "^KS11",
-            "코스??: "^KQ11",
-            "?�스??: "^IXIC",
-            "???�러": "USDKRW=X",
-            "WTI??: "CL=F",
-            "�?: "GC=F",
-            "미국10?�채": "^TNX"
+            "코스피": "^KS11",
+            "코스닥": "^KQ11",
+            "나스닥": "^IXIC",
+            "원/달러": "USDKRW=X",
+            "WTI유": "CL=F",
+            "금": "GC=F",
+            "미국10년채": "^TNX"
         }
         result = []
         for name, ticker in indices.items():
             try:
-                hist = yf.Ticker(ticker).history(period="5d")
+                hist = yf.Ticker(ticker).history(period="1mo")
+                hist = hist.dropna(subset=["Close"])
                 if len(hist) >= 2:
                     curr = hist["Close"].iloc[-1]
                     prev = hist["Close"].iloc[-2]
                     chg = curr - prev
                     chg_pct = (chg / prev) * 100
                     result.append({"name": name, "price": curr, "change": chg, "pct": chg_pct})
-            except Exception as e:
-                result.append({"name": name, "price": 0, "change": 0, "pct": 0, "error": str(e)})
+            except:
+                pass
         return result
 
     def render_index_card(col, idx, margin_top=False):
         color = CANDLE_UP if idx["change"] >= 0 else CANDLE_DOWN
-        arrow = "?? if idx["change"] >= 0 else "??
+        arrow = "▲" if idx["change"] >= 0 else "▼"
         mt = "margin-top:16px;" if margin_top else ""
         with col:
             st.markdown(f"""
@@ -45,20 +46,18 @@ def render_dashboard():
             """, unsafe_allow_html=True)
 
     indices = get_market_indices()
-    st.write(indices)  # ?�버�?    if indices:
+    if indices:
         row1 = indices[:3]
         row2 = indices[3:]
-
         cols1 = st.columns(len(row1))
         for col, idx in zip(cols1, row1):
             render_index_card(col, idx, margin_top=True)
-
         if row2:
             cols2 = st.columns(len(row2))
             for col, idx in zip(cols2, row2):
                 render_index_card(col, idx, margin_top=False)
 
-    # ?�?� 관?�종�??�익�??�위 ?�?�
+    # ── 관심종목 수익률 순위 ──
     if st.session_state.watchlist:
         @st.cache_data(ttl=300)
         def get_watchlist_returns(watchlist):
@@ -75,23 +74,23 @@ def render_dashboard():
                         chg_pct = (chg / hist["Close"].iloc[-2]) * 100
                         result.append({
                             "종목": item,
-                            "?�재가": f"{int(curr):,}??,
-                            "1???�익�?: f"{ret:+.1f}%",
-                            "?�일�?: f"{chg_pct:+.2f}%",
+                            "현재가": f"{int(curr):,}원",
+                            "1년 수익률": f"{ret:+.1f}%",
+                            "전일비": f"{chg_pct:+.2f}%",
                             "_ret": ret
                         })
                 except:
                     pass
             return sorted(result, key=lambda x: x["_ret"], reverse=True)
 
-        with st.spinner("관?�종�??�익�?조회 �?.."):
+        with st.spinner("관심종목 수익률 조회 중..."):
             wl_data = get_watchlist_returns(tuple(st.session_state.watchlist))
         if wl_data:
-            card("?�� 관?�종�??�익�??�위", "1???�익�?기�?")
+            card("📊 관심종목 수익률 순위", "1년 수익률 기준")
             display_df = pd.DataFrame([{k: v for k, v in d.items() if k != "_ret"} for d in wl_data])
             st.dataframe(display_df, use_container_width=True, hide_index=True)
 
-    # ?�?� ?�터�??�익�?비교 ?�?�
+    # ── 섹터별 수익률 비교 ──
     if st.session_state.sectors:
         @st.cache_data(ttl=300)
         def get_sector_returns(sectors_str):
@@ -110,17 +109,17 @@ def render_dashboard():
                         pass
                 if sector_rets:
                     avg_ret = sum(sector_rets) / len(sector_rets)
-                    result.append({"?�터": sector_name, "?�균 ?�익�?: round(avg_ret, 2), "_ret": avg_ret})
+                    result.append({"섹터": sector_name, "평균 수익률": round(avg_ret, 2), "_ret": avg_ret})
             return sorted(result, key=lambda x: x["_ret"], reverse=True)
 
         sector_data = get_sector_returns(str(st.session_state.sectors))
         if sector_data:
-            card("?�� ?�터�??�익�?비교", "1???�익�?기�?")
+            card("📂 섹터별 수익률 비교", "1년 수익률 기준")
             fig_sector = go.Figure(go.Bar(
-                x=[d["?�터"] for d in sector_data],
-                y=[d["?�균 ?�익�?] for d in sector_data],
+                x=[d["섹터"] for d in sector_data],
+                y=[d["평균 수익률"] for d in sector_data],
                 marker=dict(color=[CANDLE_UP if d["_ret"] >= 0 else CANDLE_DOWN for d in sector_data], opacity=0.85),
-                text=[f"{d['?�균 ?�익�?]:+.1f}%" for d in sector_data],
+                text=[f"{d['평균 수익률']:+.1f}%" for d in sector_data],
                 textposition="outside",
                 textfont=dict(family="JetBrains Mono", size=11, color=TEXT),
             ))
@@ -135,7 +134,7 @@ def render_dashboard():
             )
             st.plotly_chart(fig_sector, use_container_width=True, config={"displayModeBar": False})
 
-    # ?�?� ?��?관�??�트�??�?�
+    # ── 상관관계 히트맵 ──
     if st.session_state.watchlist and len(st.session_state.watchlist) >= 2:
         @st.cache_data(ttl=300)
         def get_correlation(watchlist):
@@ -155,7 +154,7 @@ def render_dashboard():
 
         corr = get_correlation(tuple(st.session_state.watchlist))
         if corr is not None:
-            card("?�� 관?�종�??��?관�?, "1??가까울?�록 같이 ?�직임 · 0??가까울?�록 ?�립??)
+            card("🔗 관심종목 상관관계", "1에 가까울수록 같이 움직임 · 0에 가까울수록 독립적")
             fig_corr = go.Figure(go.Heatmap(
                 z=corr.values,
                 x=corr.columns.tolist(),
