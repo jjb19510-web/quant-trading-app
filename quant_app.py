@@ -613,7 +613,7 @@ with tab2:
                 })
                 st.dataframe(holdings.style.map(color_val, subset=["수익률 (%)", "기여도 (pp)"]), use_container_width=True, hide_index=True)
 
-            card("📊 재무 지표", "PER · PBR · 시가총액 · 52주 범위")
+            card("📊 재무 지표", "ROE · PER · PBR · 시가총액 · 52주 범위")
             try:
                 import FinanceDataReader as fdr
                 raw_ticker = chart_col.replace(".KS", "").replace(".KQ", "")
@@ -635,16 +635,21 @@ with tab2:
                         if pbr_val: pbr = f"{float(pbr_val):.1f}x"
                     except:
                         pass
-                    f1, f2, f3, f4, f5 = st.columns(5)
+                    from dart_utils import get_dart_roe
+                    roe = get_dart_roe(raw_ticker)
+                    roe_str = f"{roe:.1f}%" if roe is not None else "N/A"
+                    f1, f2, f3, f4, f5, f6 = st.columns(6)
                     with f1:
-                        st.metric("PER", per, help="주가수익비율 — 낮을수록 저평가")
+                        st.metric("ROE", roe_str, help="자기자본이익률 — 높을수록 수익성 좋음")
                     with f2:
-                        st.metric("PBR", pbr, help="주가순자산비율")
+                        st.metric("PER", per, help="주가수익비율 — 낮을수록 저평가")
                     with f3:
-                        st.metric("시가총액", mkt_str)
+                        st.metric("PBR", pbr, help="주가순자산비율")
                     with f4:
-                        st.metric("52주 고가", f"{int(high52):,}원" if high52 != 'N/A' else 'N/A')
+                        st.metric("시가총액", mkt_str)
                     with f5:
+                        st.metric("52주 고가", f"{int(high52):,}원" if high52 != 'N/A' else 'N/A')
+                    with f6:
                         st.metric("52주 저가", f"{int(low52):,}원" if low52 != 'N/A' else 'N/A')
                 else:
                     st.info("재무 데이터를 찾을 수 없어요.")
