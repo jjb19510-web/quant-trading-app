@@ -646,38 +646,66 @@ with tab2:
                 })
                 st.dataframe(holdings.style.map(color_val, subset=["수익률 (%)", "기여도 (pp)"]), use_container_width=True, hide_index=True)
 
-            card("📊 재무 지표", "ROE · PER · PBR · 시가총액 · 52주 범위")
+            card("📊 재무 지표", "ROE · PER · PBR · 시가총액 · 52주 범위 (DART 공식 기준)")
             try:
                 import FinanceDataReader as fdr
                 raw_ticker = chart_col.replace(".KS", "").replace(".KQ", "")
-                fi = fdr.StockListing('KRX')
-                row = fi[fi['Code'] == raw_ticker]
+                
+                # 안정적인 외부 백업 리스트망 사용 (FDR 서버 마비 대응)
+                try:
+                    fi = pd.read_csv("https://raw.githubusercontent.com/corazzon/finance-data-analysis/main/krx.csv")
+                except:
+                    fi = fdr.StockListing('KRX')
+
+                # 컬럼 매핑 자동 처리 및 포맷 가공
+                code_col = next((c for c in ['Symbol', 'Code', 'code'] if c in fi.columns), None)
+                row = fi[fi[code_col].astype(str).str.split('.').str[0].str.zfill(6) == raw_ticker] if code_col else pd.DataFrame()
+
                 if not row.empty:
                     mkt = row.iloc[0].get('Marcap', 0)
                     mkt_str = f"{int(mkt)/1e12:.1f}조" if mkt else 'N/A'
                     high52 = row.iloc[0].get('High', 'N/A')
                     low52 = row.iloc[0].get('Low', 'N/A')
-                    per, pbr = 'N/A', 'N/A'
-                    try:
-                        nv_url = f"https://m.stock.naver.com/api/stock/{raw_ticker}/investment"
-                        nv_res = requests.get(nv_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
-                        nv_data = nv_res.json()
-                        per_val = nv_data.get("per", None)
-                        pbr_val = nv_data.get("pbr", None)
-                        if per_val: per = f"{float(per_val):.1f}x"
-                        if pbr_val: pbr = f"{float(pbr_val):.1f}x"
-                    except:
-                        pass
-                    from dart_utils import get_dart_roe
+                    
+                    # ── DART 계산을 위한 현재가 추출 ──
+                    curr_p = float(close_p.iloc[-1]) if not close_p.empty else 0
+                    
+                    # ── DART 모듈에서 금융 정보 동적 년도(2025 우선) 호출 ──
+                    from dart_utils import get_dart_roe, get_dart_per_pbr
+                    
                     roe = get_dart_roe(raw_ticker)
                     roe_str = f"{roe:.1f}%" if roe is not None else "N/A"
+                    
+                    # DART 기반으로 PER, PBR 직접 계산 시도
+                    dart_per, dart_pbr = get_dart_per_pbr(raw_ticker, curr_p)
+                    
+                    per = f"{dart_per:.1f}x" if dart_per is not None else "N/A"
+                    pbr = f"{dart_pbr:.1f}x" if dart_pbr is not None else "N/A"
+                    
+                    # ── [예외 처리] DART 데이터가 없거나 실패 시 네이버 최신 통합 API로 보완 ──
+                    if per == "N/A" or pbr == "N/A":
+                        try:
+                            nv_url = f"https://m.stock.naver.com/api/stock/{raw_ticker}/integration"
+                            nv_res = requests.get(nv_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
+                            nv_data = nv_res.json()
+                            total_infos = nv_data.get("totalInfos", [])
+                            for info in total_infos:
+                                k = info.get("key", "")
+                                v = info.get("value", "")
+                                if "PER" in k and per == "N/A" and v:
+                                    per = f"{v}x"
+                                if "PBR" in k and pbr == "N/A" and v:
+                                    pbr = f"{v}x"
+                        except:
+                            pass
+
                     f1, f2, f3, f4, f5, f6 = st.columns(6)
                     with f1:
-                        st.metric("ROE", roe_str, help="자기자본이익률 — 높을수록 수익성 좋음")
+                        st.metric("ROE", roe_str, help="자기자본이익률 — DART 정기 보고서 기준")
                     with f2:
-                        st.metric("PER", per, help="주가수익비율 — 낮을수록 저평가")
+                        st.metric("PER", per, help="주가수익비율 — DART 공시 데이터 및 현재가 기준 연산 (실패시 네이버 보완)")
                     with f3:
-                        st.metric("PBR", pbr, help="주가순자산비율")
+                        st.metric("PBR", pbr, help="주가순자산비율 — DART 공시 데이터 및 현재가 기준 연산 (실패시 네이버 보완)")
                     with f4:
                         st.metric("시가총액", mkt_str)
                     with f5:
