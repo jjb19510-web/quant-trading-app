@@ -279,12 +279,15 @@ with tab2:
                             if df_krx is not None:
                                 code_col = next((c for c in ['Symbol', 'Code', 'code'] if c in df_krx.columns), None)
                                 if code_col:
-                                    matched_code = df_krx[df_krx[code_col].astype(str).str.split('.').str[0].str.zfill(6) == code_padded]
-                                    if not matched_code.empty:
-                                        mkt_info = str(matched_code.iloc[0].get('Market', 'KOSPI')).upper()
-                                        suffix = ".KS" if "KOSPI" in mkt_info else ".KQ"
-                                        tickers_list.append(code_padded + suffix)
-                                        continue
+                                    try:
+                                        matched_code = df_krx[df_krx[code_col].astype(str).str.split('.').str[0].str.zfill(6) == code_padded]
+                                        if not matched_code.empty:
+                                            mkt_info = str(matched_code.iloc[0].get('Market', 'KOSPI')).upper()
+                                            suffix = ".KS" if "KOSPI" in mkt_info else ".KQ"
+                                            tickers_list.append(code_padded + suffix)
+                                            continue
+                                    except:
+                                        pass
                             tickers_list.append(code_padded + ".KS")
 
                 tickers = tickers_list
