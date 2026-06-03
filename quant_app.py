@@ -257,29 +257,64 @@ with tab2:
     if analyzed:
         with st.spinner("데이터 분석 준비 중..."):
             ohlc = yf.download(tickers, start=start_date, end=end_date)
-            df = ohlc["Close"]
+            df = ohlc["Close"] if isinstance(ohlc, pd.DataFrame) and "Close" in ohlc else pd.DataFrame()
             if isinstance(df, pd.Series):
                 df = df.to_frame()
-            df.columns = [str(c) for c in df.columns]
-            chart_col = df.columns[0]
-            if len(tickers) == 1:
-                ticker_ohlc = yf.download(tickers[0], start=start_date, end=end_date)
-                open_p = ticker_ohlc["Open"].squeeze()
-                high_p = ticker_ohlc["High"].squeeze()
-                low_p = ticker_ohlc["Low"].squeeze()
-                close_p = ticker_ohlc["Close"].squeeze()
-                volume = ticker_ohlc["Volume"].squeeze()
-            else:
-                open_p = ohlc["Open"][chart_col] if isinstance(ohlc["Open"], pd.DataFrame) else ohlc["Open"]
-                high_p = ohlc["High"][chart_col] if isinstance(ohlc["High"], pd.DataFrame) else ohlc["High"]
-                low_p = ohlc["Low"][chart_col] if isinstance(ohlc["Low"], pd.DataFrame) else ohlc["Low"]
-                close_p = df[chart_col]
-                volume = ohlc["Volume"][chart_col] if isinstance(ohlc["Volume"], pd.DataFrame) else ohlc["Volume"]
+            
+            # ── [듀얼 엔진 백업] yfinance 장애 발생 시, 한국주식은 FinanceDataReader(네이버)로 자동 우회 수집 ──
+            if (df.empty or df.isna().all().all()) and market == "한국주식 (KS)":
+                try:
+                    import FinanceDataReader as fdr
+                    clean_tickers = [t.replace(".KS", "") for t in tickers]
+                    if len(clean_tickers) == 1:
+                        df_fdr = fdr.DataReader(clean_tickers[0], start_date, end_date)
+                        if not df_fdr.empty:
+                            df = pd.DataFrame({tickers[0]: df_fdr["Close"]})
+                            open_p = df_fdr["Open"]
+                            high_p = df_fdr["High"]
+                            low_p = df_fdr["Low"]
+                            close_p = df_fdr["Close"]
+                            volume = df_fdr["Volume"]
+                    else:
+                        dfs = []
+                        for ct, t in zip(clean_tickers, tickers):
+                            temp_df = fdr.DataReader(ct, start_date, end_date)[["Close"]]
+                            temp_df.columns = [t]
+                            dfs.append(temp_df)
+                        df = pd.concat(dfs, axis=1).dropna()
+                        chart_col = df.columns[0]
+                        chart_raw = chart_col.replace(".KS", "")
+                        df_fdr_single = fdr.DataReader(chart_raw, start_date, end_date)
+                        open_p = df_fdr_single["Open"]
+                        high_p = df_fdr_single["High"]
+                        low_p = df_fdr_single["Low"]
+                        close_p = df_fdr_single["Close"]
+                        volume = df_fdr_single["Volume"]
+                except:
+                    pass
 
-        # ── [예외 처리] yfinance 수집 지연(IP 차단 등) 발생 시 앱 크래시 강제 제어 ──
-        if df.empty or close_p.empty:
-            st.error("❌ yfinance 서버 응답이 원활하지 않아 마켓 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.")
-            st.stop() # 에러를 뿜으며 뻗지 않고 깔끔한 알림만 보여준 뒤 정지
+            # ── yfinance가 정상 작동했을 때의 기존 컬럼/단일가 분리 파싱 ──
+            if not df.empty and 'close_p' not in locals():
+                df.columns = [str(c) for c in df.columns]
+                chart_col = df.columns[0]
+                if len(tickers) == 1:
+                    ticker_ohlc = yf.download(tickers[0], start=start_date, end=end_date)
+                    open_p = ticker_ohlc["Open"].squeeze()
+                    high_p = ticker_ohlc["High"].squeeze()
+                    low_p = ticker_ohlc["Low"].squeeze()
+                    close_p = ticker_ohlc["Close"].squeeze()
+                    volume = ticker_ohlc["Volume"].squeeze()
+                else:
+                    open_p = ohlc["Open"][chart_col] if isinstance(ohlc["Open"], pd.DataFrame) else ohlc["Open"]
+                    high_p = ohlc["High"][chart_col] if isinstance(ohlc["High"], pd.DataFrame) else ohlc["High"]
+                    low_p = ohlc["Low"][chart_col] if isinstance(ohlc["Low"], pd.DataFrame) else ohlc["Low"]
+                    close_p = df[chart_col]
+                    volume = ohlc["Volume"][chart_col] if isinstance(ohlc["Volume"], pd.DataFrame) else ohlc["Volume"]
+
+        # ── [예외 처리] 듀얼 백업 수집까지 최종 실패했을 때에만 안전하게 정지 ──
+        if df.empty or 'close_p' not in locals() or close_p.empty:
+            st.error("❌ 주가 데이터 서버(Yahoo Finance/Naver) 응답이 원활하지 않습니다. 잠시 후 다시 시도해 주세요.")
+            st.stop()
 
         strategy_pct, weighted_return, signal, rsi, ma_s, ma_l, bb_upper, bb_lower, bb_mid = run_strategy(
             df, strategy, rsi_threshold, ma_short, ma_long, bb_period
