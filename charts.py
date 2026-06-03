@@ -169,15 +169,54 @@ def make_return_chart(portfolio_equal, portfolio_strategy, strategy_name):
 def make_drawdown_chart(portfolio_strategy):
     peak = portfolio_strategy.cummax()
     drawdown = (portfolio_strategy - peak) / peak * 100
+    
+    # 역사상 최악의 지점(MDD)의 수치와 날짜 자동 추출
+    mdd_val = drawdown.min()
+    mdd_date = drawdown.idxmin()
+    
     fig = go.Figure()
+    
+    # 붉은색 하락 고통 테마로 차트 변경
     fig.add_trace(go.Scatter(
         x=drawdown.index, y=drawdown.values,
-        fill="tozeroy", line=dict(color=CANDLE_DOWN, width=1.5),
-        fillcolor="rgba(59,130,246,0.15)", name="Drawdown",
-        hovertemplate="%{x}<br>낙폭: %{y:.2f}%<extra></extra>"
+        fill="tozeroy", 
+        line=dict(color="#ef4444", width=1.8), 
+        fillcolor="rgba(239,68,68,0.06)", 
+        name="현재 낙폭",
+        hovertemplate="%{x}<br>최고점 대비 하락: <b>%{y:.1f}%</b><extra></extra>"
     ))
+    
+    # 0% 전고점 돌파 가이드라인 (초록색)
+    fig.add_hline(
+        y=0, 
+        line=dict(color="#34d399", width=1.5, dash="solid"),
+        annotation_text="역대 최고점 (무손실 0%)",
+        annotation_position="top left",
+        annotation_font=dict(size=10, color="#34d399")
+    )
+    
+    # 자산이 쪼그라든 최악의 순간에 붉은색 화살표 말풍선 주입
+    if mdd_val < -1.0:
+        fig.add_annotation(
+            x=mdd_date,
+            y=mdd_val,
+            text=f"🔥 역사상 가장 아팠던 지점 ({mdd_val:.1f}%)",
+            showarrow=True,
+            arrowhead=2,
+            arrowsize=1.2,
+            arrowwidth=1.5,
+            arrowcolor="#ef4444",
+            ax=0,
+            ay=35, # 텍스트를 화살표 아래로 배치해 공간 확보
+            font=dict(color="#ef4444", size=10.5, family="Inter"),
+            bgcolor="#13161f",
+            bordercolor="#ef4444",
+            borderwidth=0.5,
+            borderpad=4
+        )
+        
     fig.update_layout(
-        height=280, margin=dict(l=0, r=60, t=8, b=28),
+        height=280, margin=dict(l=0, r=60, t=12, b=28),
         paper_bgcolor=BG, plot_bgcolor=BG,
         font=dict(family="Inter, sans-serif", color=TEXT, size=11),
         showlegend=False, hovermode="x unified",
@@ -187,6 +226,7 @@ def make_drawdown_chart(portfolio_strategy):
             font=dict(family="JetBrains Mono", size=11, color=TEXT)
         ),
         dragmode="pan",
+        yaxis=dict(ticksuffix="%") # 단위에 % 자동 부착
     )
     fig.update_xaxes(showgrid=True, gridcolor="rgba(255,255,255,0.03)",
                      linecolor=LINE, zeroline=False, tickfont=dict(color=DIM, size=10))

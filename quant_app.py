@@ -486,7 +486,12 @@ with tab2:
 
             col1, col2 = st.columns([1, 1])
             with col1:
-                card("📉 낙폭 (Drawdown)", "고점 대비 하락폭")
+                card("📉 자산 낙폭 (Drawdown)", "자산이 역대 최고점에서 얼마나 떨어졌었는지 보여주는 위기 고통 지표예요.")
+                st.markdown("""
+                <div style='background: rgba(239,68,68,0.03); border: 0.5px solid rgba(239,68,68,0.2); border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; font-size: 11.5px; color: #9ca3af;'>
+                  💡 <b>0%는 자산이 역대 최고점(무손실)</b>인 이상적인 상태를 뜻합니다. 그래프가 밑으로 깊게 파여 갈수록 손실 고통이 컸음을 나타내며, 가장 밑바닥 계곡이 <b>역사상 가장 크게 돈을 잃었던 순간(MDD)</b>입니다.
+                </div>
+                """, unsafe_allow_html=True)
                 st.plotly_chart(make_drawdown_chart(portfolio_strategy), use_container_width=True, config={"displayModeBar": False, "scrollZoom": True})
             with col2:
                 card("📅 월별 수익률", "막대가 위로 → 수익 🔴 · 아래로 → 손실 🔵")
