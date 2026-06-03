@@ -4,6 +4,11 @@ from ui_components import card
 
 def render_portfolio(KIS_AVAILABLE, get_kis_token, get_balance):
     if KIS_AVAILABLE:
+        col_refresh, _ = st.columns([1, 5])
+        with col_refresh:
+            if st.button("🔄 새로고침", key="portfolio_refresh"):
+                st.cache_data.clear()
+                st.rerun()
         kis_token = get_kis_token()
         if kis_token:
             balance_data = get_balance(kis_token)
@@ -21,6 +26,7 @@ def render_portfolio(KIS_AVAILABLE, get_kis_token, get_balance):
                 with p3:
                     st.metric("예수금", f"{cash:,}원")
 
+                st.write(output2)  # 디버깅
                 card("📋 보유종목", "현재 포지션 기준")
                 holdings_list = balance_data.get("output1", [])
                 if holdings_list:
