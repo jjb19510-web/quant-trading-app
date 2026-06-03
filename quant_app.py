@@ -274,7 +274,23 @@ with tab2:
                                 else:
                                     tickers_list.append(t_clean + ".KS")
                             else:
-                                st.write(f"DEBUG: {t_clean} 검색 실패 → .KS로 시도")
+                                # KRX 검색 실패시 FinanceDataReader로 직접 검색
+                                try:
+                                    import FinanceDataReader as fdr
+                                    krx_all = fdr.StockListing('KRX')
+                                    name_col = next((c for c in ['Name'] if c in krx_all.columns), None)
+                                    code_col2 = next((c for c in ['Symbol', 'Code'] if c in krx_all.columns), None)
+                                    if name_col and code_col2:
+                                        matched2 = krx_all[krx_all[name_col].str.upper() == t_clean.upper()]
+                                        if not matched2.empty:
+                                            raw_code2 = matched2.iloc[0][code_col2]
+                                            code2 = str(raw_code2).split('.')[0].zfill(6)
+                                            mkt2 = str(matched2.iloc[0].get('Market', 'KOSPI')).upper()
+                                            suffix2 = ".KS" if "KOSPI" in mkt2 else ".KQ"
+                                            tickers_list.append(code2 + suffix2)
+                                            continue
+                                except:
+                                    pass
                                 tickers_list.append(t_clean + ".KS")
                         else:
                             # 6자리 숫자로 입력 시 상장사 정보에서 시장 판별 후 알맞은 심볼 부착
