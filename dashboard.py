@@ -4,6 +4,19 @@ import pandas as pd
 import plotly.graph_objects as go
 from ui_components import card, CANDLE_UP, CANDLE_DOWN, DIM, TEXT, SURFACE_1, LINE, BG, SURFACE_2
 
+@st.cache_data(ttl=86400)
+def get_krx_name_map():
+    try:
+        import FinanceDataReader as fdr
+        df = fdr.StockListing('KRX')
+        code_col = next((c for c in ['Symbol', 'Code'] if c in df.columns), None)
+        name_col = next((c for c in ['Name'] if c in df.columns), None)
+        if code_col and name_col:
+            return dict(zip(df[code_col].astype(str).str.split('.').str[0].str.zfill(6), df[name_col]))
+    except:
+        pass
+    return {}
+
 def render_dashboard():
     # ── 시장 현황 ──
     @st.cache_data(ttl=300)
@@ -61,6 +74,7 @@ def render_dashboard():
     if st.session_state.watchlist:
         @st.cache_data(ttl=300)
         def get_watchlist_returns(watchlist):
+            name_map = get_krx_name_map()
             result = []
             for item in watchlist:
                 ticker = item + ".KS" if not item.endswith(".KS") else item
@@ -72,8 +86,9 @@ def render_dashboard():
                         ret = (curr - start) / start * 100
                         chg = hist["Close"].iloc[-1] - hist["Close"].iloc[-2]
                         chg_pct = (chg / hist["Close"].iloc[-2]) * 100
+                        display = name_map.get(item, item)
                         result.append({
-                            "종목": item,
+                            "종목": f"{display} ({item})",
                             "현재가": f"{int(curr):,}원",
                             "1년 수익률": f"{ret:+.1f}%",
                             "전일비": f"{chg_pct:+.2f}%",
@@ -154,6 +169,9 @@ def render_dashboard():
 
         corr = get_correlation(tuple(st.session_state.watchlist))
         if corr is not None:
+            name_map = get_krx_name_map()
+            corr.index = [name_map.get(i, i) for i in corr.index]
+            corr.columns = [name_map.get(c, c) for c in corr.columns]
             card("🔗 관심종목 상관관계", "1에 가까울수록 같이 움직임 · 0에 가까울수록 독립적")
             fig_corr = go.Figure(go.Heatmap(
                 z=corr.values,
@@ -169,6 +187,8 @@ def render_dashboard():
             fig_corr.update_layout(
                 height=350, margin=dict(l=60, r=60, t=8, b=8),
                 paper_bgcolor=BG, plot_bgcolor=BG,
-                font=dict(family="Inter, sans-serif", color=TEXT, size=11)
+                font=dict(family="Inter, sans-serif", color=TEXT, size=11),
+                xaxis=dict(type="category"),
+                yaxis=dict(type="category")
             )
             st.plotly_chart(fig_corr, use_container_width=True, config={"displayModeBar": False})
