@@ -266,7 +266,7 @@ with tab2:
                                     code = str(raw_code).split('.')[0].zfill(6)
                                     
                                     # 시장 정보 추출 (KOSPI -> .KS, KOSDAQ/KONEX -> .KQ)
-                                    mkt_info = str(matched.iloc[0].get('Market', 'KOSPI')).upper()
+                                    mkt_info = str(matched_code.iloc[0].get('Market', 'KOSPI')).upper()
                                     suffix = ".KS" if "KOSPI" in mkt_info else ".KQ"
                                     tickers_list.append(code + suffix)
                                 else:
@@ -402,7 +402,13 @@ with tab2:
 
     if analyzed:
         with st.spinner("데이터 분석 준비 중..."):
+            # .KS 실패시 .KQ로 자동 재시도
             ohlc = yf.download(tickers, start=start_date, end=end_date)
+            df_check = ohlc["Close"] if isinstance(ohlc, pd.DataFrame) and "Close" in ohlc else pd.DataFrame()
+            if df_check.empty or df_check.isna().all().all():
+                tickers = [t.replace(".KS", ".KQ") if t.endswith(".KS") else t for t in tickers]
+                st.session_state["last_tickers"] = tickers
+                ohlc = yf.download(tickers, start=start_date, end=end_date)
             df = ohlc["Close"] if isinstance(ohlc, pd.DataFrame) and "Close" in ohlc else pd.DataFrame()
             if isinstance(df, pd.Series):
                 df = df.to_frame()
