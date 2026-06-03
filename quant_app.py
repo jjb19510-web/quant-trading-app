@@ -827,11 +827,12 @@ with tab2:
                         title = item["title"].replace("<b>", "").replace("</b>", "")
                         link = item["link"]
                         date = item["pubDate"][:16]
+                        # 카드 전체 영역이 링크가 되도록 <a> 태그를 부모로 배치하고 간격을 명확히 함
                         st.markdown(f"""
-                        <div style='background:{SURFACE_1}; border:0.5px solid {LINE}; border-radius:10px; padding:12px 14px; margin-bottom:8px;'>
-                            <a href='{link}' target='_blank' style='color:{TEXT}; text-decoration:none; font-size:13px; font-weight:500;'>{title}</a>
-                            <div style='font-size:11px; color:{DIM}; margin-top:4px;'>{date}</div>
-                        </div>
+                        <a href='{link}' target='_blank' class='qf-news-card'>
+                            <div style='color:{TEXT}; font-size:13.5px; font-weight:500; line-height:1.45;'>{title}</div>
+                            <div style='font-size:11.5px; color:{DIM}; margin-top:8px;'>{date}</div>
+                        </a>
                         """, unsafe_allow_html=True)
                 else:
                     st.info("뉴스를 불러오지 못했어요.")
