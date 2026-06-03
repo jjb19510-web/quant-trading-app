@@ -248,230 +248,98 @@ with tab2:
         optimize = st.button("⚡ 최적값 자동 탐색", use_container_width=True)
         wf_test = st.button("🔄 워크포워드 테스트", use_container_width=True)
 
-    # ── 오늘 신호 현황 ──
-    if st.session_state.watchlist:
-        @st.cache_data(ttl=300)
-        def get_today_signals(watchlist, strategy_name, rsi_thr, ma_s, ma_l, bb_p):
-            buy_list, sell_list = [], []
-            for item in watchlist:
-                ticker = item + ".KS" if not item.endswith(".KS") else item
-                try:
-                    df_w = yf.download(ticker, period="6mo", progress=False)["Close"]
-                    if isinstance(df_w, pd.Series):
-                        df_w = df_w.to_frame()
-                    df_w.columns = [ticker]
-                    _, _, sig, _, _, _, _, _, _ = run_strategy(df_w, strategy_name, rsi_thr, ma_s, ma_l, bb_p)
-                    last = sig.iloc[-1].values[0]
-                    prev = sig.iloc[-2].values[0]
-                    if last == 1 and prev == 0:
-                        buy_list.append(item)
-                    elif last == 0 and prev == 1:
-                        sell_list.append(item)
-                except:
-                    pass
-            return buy_list, sell_list
-
-        buy_signals, sell_signals = get_today_signals(
-            tuple(st.session_state.watchlist), strategy, rsi_threshold, ma_short, ma_long, bb_period
-        )
-        card("🔔 오늘 신호 현황", f"{strategy} 기준")
-        if buy_signals:
-            st.success(f"🟢 매수 신호: {', '.join(buy_signals)}")
-        elif sell_signals:
-            st.warning(f"🔴 매도 신호: {', '.join(sell_signals)}")
-        else:
-            st.info("오늘 신호 없음 — 관망")
-
-    # ── 스트레스 테스트 ──
-    last_tickers = st.session_state.get("last_tickers", [])
-    if last_tickers:
-        with st.expander("🚨 스트레스 테스트 — 과거 위기 시뮬레이션", expanded=False):
-            SCENARIOS = {
-                "코로나 폭락": ("2020-02-01", "2020-03-31"),
-                "금리인상 쇼크": ("2022-01-01", "2022-10-31"),
-                "미중 무역전쟁": ("2018-06-01", "2018-12-31"),
-                "글로벌 금융위기": ("2008-09-01", "2009-03-31"),
-                "미국-이란 전쟁": ("2026-02-28", "2026-04-30"),
-            }
-            selected = st.multiselect("시나리오 선택", options=list(SCENARIOS.keys()), default=[])
-            if selected:
-                stress_results = []
-                for scenario in selected:
-                    s_start, s_end = SCENARIOS[scenario]
-                    try:
-                        s_df = yf.download(last_tickers, start=s_start, end=s_end, progress=False)["Close"]
-                        if isinstance(s_df, pd.Series):
-                            s_df = s_df.to_frame()
-                        if len(s_df) >= 2:
-                            s_ret = (s_df.iloc[-1] / s_df.iloc[0] - 1).mean() * 100
-                            stress_results.append({
-                                "시나리오": scenario,
-                                "기간": f"{s_start} ~ {s_end}",
-                                "예상 손익": f"{s_ret:+.1f}%",
-                                "평가": "🟢 선방" if s_ret > -10 else ("🟡 주의" if s_ret > -20 else "🔴 위험"),
-                                "_ret": s_ret
-                            })
-                    except:
-                        pass
-                if stress_results:
-                    st.dataframe(
-                        pd.DataFrame([{k: v for k, v in r.items() if k != "_ret"} for r in stress_results]),
-                        use_container_width=True, hide_index=True
-                    )
-                    fig_stress = go.Figure(go.Bar(
-                        x=[r["시나리오"] for r in stress_results],
-                        y=[r["_ret"] for r in stress_results],
-                        marker=dict(color=[CANDLE_UP if r["_ret"] >= 0 else CANDLE_DOWN for r in stress_results], opacity=0.85),
-                        text=[f"{r['_ret']:+.1f}%" for r in stress_results],
-                        textposition="outside",
-                    ))
-                    fig_stress.add_hline(y=0, line=dict(color=DIM, width=1, dash="dot"))
-                    fig_stress.update_layout(
-                        height=300, margin=dict(l=0, r=20, t=8, b=28),
-                        paper_bgcolor=BG, plot_bgcolor=BG,
-                        font=dict(family="Inter, sans-serif", color=TEXT, size=11),
-                        yaxis=dict(ticksuffix="%", side="right"),
-                        xaxis=dict(showgrid=False),
-                    )
-                    st.plotly_chart(fig_stress, use_container_width=True, config={"displayModeBar": False})
-
-    if wf_test:
-        if not tickers:
-            st.warning("종목을 입력해주세요!")
-        else:
-            with st.spinner("데이터 불러오는 중..."):
-                df = yf.download(tickers, start=start_date, end=end_date)["Close"]
-            if isinstance(df, pd.Series):
-                df = df.to_frame()
-            df.columns = [str(c) for c in df.columns]
-            card("🔄 워크포워드 테스트 결과", "과거로 최적화 → 미래로 검증 · 반복")
-            col_a, col_b = st.columns(2)
-            with col_a:
-                train_months = st.slider("학습 기간 (개월)", 12, 36, 24)
-            with col_b:
-                test_months = st.slider("검증 기간 (개월)", 3, 12, 6)
-            with st.spinner("워크포워드 테스트 진행 중..."):
-                wf_result = walk_forward_test(df, strategy, train_months, test_months)
-            if wf_result.empty:
-                st.warning("데이터 기간이 너무 짧아요!")
-            else:
-                avg_return = wf_result["검증 수익률 (%)"].mean()
-                positive_count = (wf_result["검증 수익률 (%)"] > 0).sum()
-                total_count = len(wf_result)
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("평균 검증 수익률", f"{avg_return:+.2f}%")
-                with col2:
-                    st.metric("수익 구간", f"{positive_count}/{total_count}")
-                with col3:
-                    st.metric("승률", f"{positive_count/total_count*100:.1f}%")
-                st.dataframe(wf_result.style.map(color_val, subset=["검증 수익률 (%)"]), use_container_width=True, hide_index=True)
-                fig_wf = go.Figure()
-                fig_wf.add_trace(go.Bar(
-                    x=list(range(1, len(wf_result)+1)),
-                    y=wf_result["검증 수익률 (%)"],
-                    marker=dict(color=[CANDLE_UP if v > 0 else CANDLE_DOWN for v in wf_result["검증 수익률 (%)"]]),
-                    text=[f"{v:+.1f}%" for v in wf_result["검증 수익률 (%)"]],
-                    textposition="outside"
-                ))
-                fig_wf.add_hline(y=0, line=dict(color=DIM, width=1, dash="dot"))
-                fig_wf.update_layout(height=300, margin=dict(l=8, r=20, t=8, b=28), paper_bgcolor=SURFACE_1, plot_bgcolor=SURFACE_1, font=dict(color=TEXT, size=11))
-                st.plotly_chart(fig_wf, use_container_width=True, config={"displayModeBar": False})
-                st.warning("⚠️ 과거 데이터 기반 테스트예요!")
-
-    if optimize:
-        if not tickers:
-            st.warning("종목을 입력해주세요!")
-        else:
-            with st.spinner("데이터 불러오는 중..."):
-                df = yf.download(tickers, start=start_date, end=end_date)["Close"]
-            if isinstance(df, pd.Series):
-                df = df.to_frame()
-            df.columns = [str(c) for c in df.columns]
-            card("⚡ 파라미터 최적화 결과", "과거 데이터 기준 최적값 탐색 · 과최적화 주의!")
-            with st.spinner("최적값 탐색 중..."):
-                result_df = optimize_parameters(df, strategy)
-                best = result_df.loc[result_df["수익률 (%)"].idxmax()]
-                if strategy == "RSI 전략 (RSI)":
-                    st.success(f"✅ 최적 RSI 기준값: **{int(best['RSI 기준값'])}** → 수익률 **{best['수익률 (%)']:+.2f}%**")
-                    fig_opt = go.Figure()
-                    fig_opt.add_trace(go.Bar(
-                        x=result_df["RSI 기준값"], y=result_df["수익률 (%)"],
-                        marker=dict(color=[CANDLE_UP if v == best["RSI 기준값"] else ACCENT for v in result_df["RSI 기준값"]]),
-                        text=[f"{v:+.1f}%" for v in result_df["수익률 (%)"]],
-                        textposition="outside"
-                    ))
-                    fig_opt.update_layout(height=300, margin=dict(l=8, r=20, t=8, b=28), paper_bgcolor=SURFACE_1, plot_bgcolor=SURFACE_1, font=dict(color=TEXT, size=11))
-                    st.plotly_chart(fig_opt, use_container_width=True, config={"displayModeBar": False})
-                elif strategy == "이동평균선 전략 (Moving Average)":
-                    st.success(f"✅ 최적 MA: 단기 **{int(best['단기 MA'])}** / 장기 **{int(best['장기 MA'])}** → 수익률 **{best['수익률 (%)']:+.2f}%**")
-                elif strategy == "볼린저 밴드 전략 (Bollinger Bands)":
-                    st.success(f"✅ 최적 BB 기간: **{int(best['BB 기간'])}** → 수익률 **{best['수익률 (%)']:+.2f}%**")
-                    fig_opt = go.Figure()
-                    fig_opt.add_trace(go.Bar(
-                        x=result_df["BB 기간"], y=result_df["수익률 (%)"],
-                        marker=dict(color=[CANDLE_UP if v == best["BB 기간"] else ACCENT for v in result_df["BB 기간"]]),
-                        text=[f"{v:+.1f}%" for v in result_df["수익률 (%)"]],
-                        textposition="outside"
-                    ))
-                    fig_opt.update_layout(height=300, margin=dict(l=8, r=20, t=8, b=28), paper_bgcolor=SURFACE_1, plot_bgcolor=SURFACE_1, font=dict(color=TEXT, size=11))
-                    st.plotly_chart(fig_opt, use_container_width=True, config={"displayModeBar": False})
-                else:
-                    st.success(f"✅ 최적값: RSI **{int(best['RSI'])}** / 단기MA **{int(best['단기 MA'])}** / 장기MA **{int(best['장기 MA'])}** → 수익률 **{best['수익률 (%)']:+.2f}%**")
-                st.dataframe(result_df.sort_values("수익률 (%)", ascending=False).head(10).style.map(color_val, subset=["수익률 (%)"]), use_container_width=True, hide_index=True)
-            st.warning("⚠️ 과최적화 주의!")
-
+    # ── [전략 분석 공통 연산 영역] (서브탭 분할을 위한 최적 계산부) ──
     if analyze:
         st.session_state["analyzed"] = True
 
-    if st.session_state.get("analyzed") and tickers:
-        if not tickers:
-            st.warning("종목을 입력해주세요!")
-        else:
-            with st.spinner("데이터 불러오는 중..."):
-                ohlc = yf.download(tickers, start=start_date, end=end_date)
-                df = ohlc["Close"]
-                if isinstance(df, pd.Series):
-                    df = df.to_frame()
-                df.columns = [str(c) for c in df.columns]
-                chart_col = df.columns[0]
-                if len(tickers) == 1:
-                    ticker_ohlc = yf.download(tickers[0], start=start_date, end=end_date)
-                    open_p = ticker_ohlc["Open"].squeeze()
-                    high_p = ticker_ohlc["High"].squeeze()
-                    low_p = ticker_ohlc["Low"].squeeze()
-                    close_p = ticker_ohlc["Close"].squeeze()
-                    volume = ticker_ohlc["Volume"].squeeze()
-                else:
-                    open_p = ohlc["Open"][chart_col] if isinstance(ohlc["Open"], pd.DataFrame) else ohlc["Open"]
-                    high_p = ohlc["High"][chart_col] if isinstance(ohlc["High"], pd.DataFrame) else ohlc["High"]
-                    low_p = ohlc["Low"][chart_col] if isinstance(ohlc["Low"], pd.DataFrame) else ohlc["Low"]
-                    close_p = df[chart_col]
-                    volume = ohlc["Volume"][chart_col] if isinstance(ohlc["Volume"], pd.DataFrame) else ohlc["Volume"]
+    analyzed = st.session_state.get("analyzed") and 'tickers' in locals() and tickers
 
-            strategy_pct, weighted_return, signal, rsi, ma_s, ma_l, bb_upper, bb_lower, bb_mid = run_strategy(
-                df, strategy, rsi_threshold, ma_short, ma_long, bb_period
+    if analyzed:
+        with st.spinner("데이터 분석 준비 중..."):
+            ohlc = yf.download(tickers, start=start_date, end=end_date)
+            df = ohlc["Close"]
+            if isinstance(df, pd.Series):
+                df = df.to_frame()
+            df.columns = [str(c) for c in df.columns]
+            chart_col = df.columns[0]
+            if len(tickers) == 1:
+                ticker_ohlc = yf.download(tickers[0], start=start_date, end=end_date)
+                open_p = ticker_ohlc["Open"].squeeze()
+                high_p = ticker_ohlc["High"].squeeze()
+                low_p = ticker_ohlc["Low"].squeeze()
+                close_p = ticker_ohlc["Close"].squeeze()
+                volume = ticker_ohlc["Volume"].squeeze()
+            else:
+                open_p = ohlc["Open"][chart_col] if isinstance(ohlc["Open"], pd.DataFrame) else ohlc["Open"]
+                high_p = ohlc["High"][chart_col] if isinstance(ohlc["High"], pd.DataFrame) else ohlc["High"]
+                low_p = ohlc["Low"][chart_col] if isinstance(ohlc["Low"], pd.DataFrame) else ohlc["Low"]
+                close_p = df[chart_col]
+                volume = ohlc["Volume"][chart_col] if isinstance(ohlc["Volume"], pd.DataFrame) else ohlc["Volume"]
+
+        strategy_pct, weighted_return, signal, rsi, ma_s, ma_l, bb_upper, bb_lower, bb_mid = run_strategy(
+            df, strategy, rsi_threshold, ma_short, ma_long, bb_period
+        )
+        sig = signal.iloc[:, 0]
+        buy_idx = sig[(sig == 1) & (sig.shift(1) == 0)].index
+        sell_idx = sig[(sig == 0) & (sig.shift(1) == 1)].index
+        equal_return = df.pct_change().mean(axis=1)
+        portfolio_strategy = (1 + weighted_return).cumprod()
+        portfolio_equal = (1 + equal_return).cumprod()
+        days = max((df.index[-1] - df.index[0]).days, 1)
+        equal_pct = (portfolio_equal.iloc[-1] - 1) * 100
+        mdd_s = calculate_mdd(portfolio_strategy)
+        mdd_e = calculate_mdd(portfolio_equal)
+        sharpe_s = calculate_sharpe(weighted_return.dropna())
+        sharpe_e = calculate_sharpe(equal_return.dropna())
+        cagr_s = calculate_cagr(portfolio_strategy, days)
+        cagr_e = calculate_cagr(portfolio_equal, days)
+        invest_won = investment * 10000
+        strategy_profit = invest_won * (strategy_pct / 100)
+        strategy_final = invest_won + strategy_profit
+        equal_profit = invest_won * (equal_pct / 100)
+        excess = strategy_profit - equal_profit
+
+    # ── [메인 콘텐츠 서브탭 영역] ──
+    sub1, sub2, sub3 = st.tabs(["📈 주가 & 신호", "📊 백테스트", "🔍 재무 & 뉴스"])
+
+    # ── SUB 1 : 주가 & 신호 ──
+    with sub1:
+        if st.session_state.watchlist:
+            @st.cache_data(ttl=300)
+            def get_today_signals(watchlist, strategy_name, rsi_thr, ma_s, ma_l, bb_p):
+                buy_list, sell_list = [], []
+                for item in watchlist:
+                    ticker = item + ".KS" if not item.endswith(".KS") else item
+                    try:
+                        df_w = yf.download(ticker, period="6mo", progress=False)["Close"]
+                        if isinstance(df_w, pd.Series):
+                            df_w = df_w.to_frame()
+                        df_w.columns = [ticker]
+                        _, _, sig, _, _, _, _, _, _ = run_strategy(df_w, strategy_name, rsi_thr, ma_s, ma_l, bb_p)
+                        last = sig.iloc[-1].values[0]
+                        prev = sig.iloc[-2].values[0]
+                        if last == 1 and prev == 0:
+                            buy_list.append(item)
+                        elif last == 0 and prev == 1:
+                            sell_list.append(item)
+                    except:
+                        pass
+                return buy_list, sell_list
+
+            buy_signals, sell_signals = get_today_signals(
+                tuple(st.session_state.watchlist), strategy, rsi_threshold, ma_short, ma_long, bb_period
             )
-            sig = signal.iloc[:, 0]
-            buy_idx = sig[(sig == 1) & (sig.shift(1) == 0)].index
-            sell_idx = sig[(sig == 0) & (sig.shift(1) == 1)].index
-            equal_return = df.pct_change().mean(axis=1)
-            portfolio_strategy = (1 + weighted_return).cumprod()
-            portfolio_equal = (1 + equal_return).cumprod()
-            days = max((df.index[-1] - df.index[0]).days, 1)
-            equal_pct = (portfolio_equal.iloc[-1] - 1) * 100
-            mdd_s = calculate_mdd(portfolio_strategy)
-            mdd_e = calculate_mdd(portfolio_equal)
-            sharpe_s = calculate_sharpe(weighted_return.dropna())
-            sharpe_e = calculate_sharpe(equal_return.dropna())
-            cagr_s = calculate_cagr(portfolio_strategy, days)
-            cagr_e = calculate_cagr(portfolio_equal, days)
-            invest_won = investment * 10000
-            strategy_profit = invest_won * (strategy_pct / 100)
-            strategy_final = invest_won + strategy_profit
-            equal_profit = invest_won * (equal_pct / 100)
-            excess = strategy_profit - equal_profit
+            card("🔔 오늘 신호 현황", f"{strategy} 기준")
+            if buy_signals:
+                st.success(f"🟢 매수 신호: {', '.join(buy_signals)}")
+            elif sell_signals:
+                st.warning(f"🔴 매도 신호: {', '.join(sell_signals)}")
+            else:
+                st.info("오늘 신호 없음 — 관망")
 
+        if not analyzed:
+            st.info("사이드바에서 종목을 입력하고 🔍 분석 시작 버튼을 눌러주세요!")
+        else:
             left, right = st.columns([3, 2])
             with left:
                 st.markdown(
@@ -552,36 +420,7 @@ with tab2:
                 else:
                     st.info(f"🛡 손절까지 {current_pct + stop_pct:.1f}% 여유 (손절 -{stop_pct}%)")
 
-            if "backtest_results" not in st.session_state:
-                st.session_state.backtest_results = load_backtest()
-            col_save, col_clear = st.columns([3, 1])
-            with col_save:
-                save_label = st.text_input("결과 저장 이름", value=f"{chart_col} {strategy[:3]} {dt.date.today()}", key="save_label")
-            with col_clear:
-                st.markdown("<div style='margin-top:28px;'></div>", unsafe_allow_html=True)
-                if st.button("💾 저장", key="save_backtest"):
-                    result_entry = {
-                        "이름": save_label, "종목": chart_col, "전략": strategy,
-                        "수익률": round(strategy_pct, 2), "샤프": round(sharpe_s, 2),
-                        "MDD": round(mdd_s, 2), "날짜": str(dt.date.today())
-                    }
-                    st.session_state.backtest_results.append(result_entry)
-                    save_backtest(st.session_state.backtest_results)
-                    st.success("저장됐어요!")
-            if st.session_state.backtest_results:
-                with st.expander("📋 저장된 백테스트 결과 비교", expanded=False):
-                    bt_df = pd.DataFrame(st.session_state.backtest_results)
-                    st.dataframe(bt_df, use_container_width=True, hide_index=True)
-                    if st.button("🗑 전체 삭제", key="clear_backtest"):
-                        st.session_state.backtest_results = []
-                        save_backtest([])
-                        st.rerun()
-
-            render_kpi_strip(strategy_pct, equal_pct, cagr_s, cagr_e, sharpe_s, sharpe_e, mdd_s, mdd_e)
-            render_strategy_expander(strategy)
-
-            last_sig = signal.iloc[-1].values[0]
-            last_rsi = rsi[chart_col].iloc[-1] if isinstance(rsi, pd.DataFrame) else rsi.iloc[-1]
+            # 현재 포지션 메시지
             if last_sig == 1:
                 if strategy == "RSI 전략 (RSI)":
                     reason = f"RSI {last_rsi:.1f} — 과매도 구간 진입, 매수 신호"
@@ -603,6 +442,7 @@ with tab2:
                     reason = "매수 조건 미충족 — 현금 대기"
                 st.warning(f"⚪ 현재 포지션: 현금 · {reason}")
 
+            # 전략 지표 그래프
             card("📈 전략 지표 그래프", f"{chart_col} · 상승 🔴 하락 🔵 · ▲매수 ▼매도")
             rsi_chart = rsi[chart_col] if isinstance(rsi, pd.DataFrame) else rsi
             if strategy == "이동평균선 전략 (Moving Average)":
@@ -628,6 +468,15 @@ with tab2:
                 fig1 = make_candlestick_fig(close_p, open_p, high_p, low_p, volume=volume, has_rsi=True, rsi_data=rsi_chart, rsi_threshold=rsi_threshold, extra_traces=extra, buy_idx=buy_idx, sell_idx=sell_idx, chart_col=chart_col)
 
             st.plotly_chart(fig1, use_container_width=True, config={"displayModeBar": False, "scrollZoom": True})
+
+    # ── SUB 2 : 백테스트 성과 ──
+    with sub2:
+        if not analyzed:
+            st.info("사이드바에서 종목을 입력하고 🔍 분석 시작 버튼을 눌러주세요!")
+        else:
+            render_kpi_strip(strategy_pct, equal_pct, cagr_s, cagr_e, sharpe_s, sharpe_e, mdd_s, mdd_e)
+            render_strategy_expander(strategy)
+
             card("💰 수익률 비교", "누적 수익률 (%)")
             st.plotly_chart(make_return_chart(portfolio_equal, portfolio_strategy, strategy), use_container_width=True, config={"displayModeBar": False, "scrollZoom": True})
 
@@ -662,6 +511,162 @@ with tab2:
                 })
                 st.dataframe(holdings.style.map(color_val, subset=["수익률 (%)", "기여도 (pp)"]), use_container_width=True, hide_index=True)
 
+            # 백테스트 저장/비교
+            if "backtest_results" not in st.session_state:
+                st.session_state.backtest_results = load_backtest()
+            col_save, col_clear = st.columns([3, 1])
+            with col_save:
+                save_label = st.text_input("결과 저장 이름", value=f"{chart_col} {strategy[:3]} {dt.date.today()}", key="save_label")
+            with col_clear:
+                st.markdown("<div style='margin-top:28px;'></div>", unsafe_allow_html=True)
+                if st.button("💾 저장", key="save_backtest"):
+                    result_entry = {
+                        "이름": save_label, "종목": chart_col, "전략": strategy,
+                        "수익률": round(strategy_pct, 2), "샤프": round(sharpe_s, 2),
+                        "MDD": round(mdd_s, 2), "날짜": str(dt.date.today())
+                    }
+                    st.session_state.backtest_results.append(result_entry)
+                    save_backtest(st.session_state.backtest_results)
+                    st.success("저장됐어요!")
+            if st.session_state.backtest_results:
+                with st.expander("📋 저장된 백테스트 결과 비교", expanded=False):
+                    bt_df = pd.DataFrame(st.session_state.backtest_results)
+                    st.dataframe(bt_df, use_container_width=True, hide_index=True)
+                    if st.button("🗑 전체 삭제", key="clear_backtest"):
+                        st.session_state.backtest_results = []
+                        save_backtest([])
+                        st.rerun()
+
+            # 스트레스 테스트 (last_tickers 기반)
+            last_tickers = st.session_state.get("last_tickers", [])
+            if last_tickers:
+                with st.expander("🚨 스트레스 테스트 — 과거 위기 시뮬레이션", expanded=False):
+                    SCENARIOS = {
+                        "코로나 폭락": ("2020-02-01", "2020-03-31"),
+                        "금리인상 쇼크": ("2022-01-01", "2022-10-31"),
+                        "미중 무역전쟁": ("2018-06-01", "2018-12-31"),
+                        "글로벌 금융위기": ("2008-09-01", "2009-03-31"),
+                        "미국-이란 전쟁": ("2026-02-28", "2026-04-30"),
+                    }
+                    selected = st.multiselect("시나리오 선택", options=list(SCENARIOS.keys()), default=[])
+                    if selected:
+                        stress_results = []
+                        for scenario in selected:
+                            s_start, s_end = SCENARIOS[scenario]
+                            try:
+                                s_df = yf.download(last_tickers, start=s_start, end=s_end, progress=False)["Close"]
+                                if isinstance(s_df, pd.Series):
+                                    s_df = s_df.to_frame()
+                                if len(s_df) >= 2:
+                                    s_ret = (s_df.iloc[-1] / s_df.iloc[0] - 1).mean() * 100
+                                    stress_results.append({
+                                        "시나리오": scenario,
+                                        "기간": f"{s_start} ~ {s_end}",
+                                        "예상 손익": f"{s_ret:+.1f}%",
+                                        "평가": "🟢 선방" if s_ret > -10 else ("🟡 주의" if s_ret > -20 else "🔴 위험"),
+                                        "_ret": s_ret
+                                    })
+                            except:
+                                pass
+                        if stress_results:
+                            st.dataframe(
+                                pd.DataFrame([{k: v for k, v in r.items() if k != "_ret"} for r in stress_results]),
+                                use_container_width=True, hide_index=True
+                            )
+                            fig_stress = go.Figure(go.Bar(
+                                x=[r["시나리오"] for r in stress_results],
+                                y=[r["_ret"] for r in stress_results],
+                                marker=dict(color=[CANDLE_UP if r["_ret"] >= 0 else CANDLE_DOWN for r in stress_results], opacity=0.85),
+                                text=[f"{r['_ret']:+.1f}%" for r in stress_results],
+                                textposition="outside",
+                            ))
+                            fig_stress.add_hline(y=0, line=dict(color=DIM, width=1, dash="dot"))
+                            fig_stress.update_layout(
+                                height=300, margin=dict(l=0, r=20, t=8, b=28),
+                                paper_bgcolor=BG, plot_bgcolor=BG,
+                                font=dict(family="Inter, sans-serif", color=TEXT, size=11),
+                                yaxis=dict(ticksuffix="%", side="right"),
+                                xaxis=dict(showgrid=False),
+                            )
+                            st.plotly_chart(fig_stress, use_container_width=True, config={"displayModeBar": False})
+
+            # 워크포워드 테스트
+            if wf_test:
+                card("🔄 워크포워드 테스트 결과", "과거로 최적화 → 미래로 검증 · 반복")
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    train_months = st.slider("학습 기간 (개월)", 12, 36, 24)
+                with col_b:
+                    test_months = st.slider("검증 기간 (개월)", 3, 12, 6)
+                with st.spinner("워크포워드 테스트 진행 중..."):
+                    wf_result = walk_forward_test(df, strategy, train_months, test_months)
+                if wf_result.empty:
+                    st.warning("데이터 기간이 너무 짧아요!")
+                else:
+                    avg_return = wf_result["검증 수익률 (%)"].mean()
+                    positive_count = (wf_result["검증 수익률 (%)"] > 0).sum()
+                    total_count = len(wf_result)
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("평균 검증 수익률", f"{avg_return:+.2f}%")
+                    with col2:
+                        st.metric("수익 구간", f"{positive_count}/{total_count}")
+                    with col3:
+                        st.metric("승률", f"{positive_count/total_count*100:.1f}%")
+                    st.dataframe(wf_result.style.map(color_val, subset=["검증 수익률 (%)"]), use_container_width=True, hide_index=True)
+                    fig_wf = go.Figure()
+                    fig_wf.add_trace(go.Bar(
+                        x=list(range(1, len(wf_result)+1)),
+                        y=wf_result["검증 수익률 (%)"],
+                        marker=dict(color=[CANDLE_UP if v > 0 else CANDLE_DOWN for v in wf_result["검증 수익률 (%)"]]),
+                        text=[f"{v:+.1f}%" for v in wf_result["검증 수익률 (%)"]],
+                        textposition="outside"
+                    ))
+                    fig_wf.add_hline(y=0, line=dict(color=DIM, width=1, dash="dot"))
+                    fig_wf.update_layout(height=300, margin=dict(l=8, r=20, t=8, b=28), paper_bgcolor=SURFACE_1, plot_bgcolor=SURFACE_1, font=dict(color=TEXT, size=11))
+                    st.plotly_chart(fig_wf, use_container_width=True, config={"displayModeBar": False})
+                    st.warning("⚠️ 과거 데이터 기반 테스트예요!")
+
+            # 최적화
+            if optimize:
+                card("⚡ 파라미터 최적화 결과", "과거 데이터 기준 최적값 탐색 · 과최적화 주의!")
+                with st.spinner("최적값 탐색 중..."):
+                    result_df = optimize_parameters(df, strategy)
+                    best = result_df.loc[result_df["수익률 (%)"].idxmax()]
+                    if strategy == "RSI 전략 (RSI)":
+                        st.success(f"✅ 최적 RSI 기준값: **{int(best['RSI 기준값'])}** → 수익률 **{best['수익률 (%)']:+.2f}%**")
+                        fig_opt = go.Figure()
+                        fig_opt.add_trace(go.Bar(
+                            x=result_df["RSI 기준값"], y=result_df["수익률 (%)"],
+                            marker=dict(color=[CANDLE_UP if v == best["RSI 기준값"] else ACCENT for v in result_df["RSI 기준값"]]),
+                            text=[f"{v:+.1f}%" for v in result_df["수익률 (%)"]],
+                            textposition="outside"
+                        ))
+                        fig_opt.update_layout(height=300, margin=dict(l=8, r=20, t=8, b=28), paper_bgcolor=SURFACE_1, plot_bgcolor=SURFACE_1, font=dict(color=TEXT, size=11))
+                        st.plotly_chart(fig_opt, use_container_width=True, config={"displayModeBar": False})
+                    elif strategy == "이동평균선 전략 (Moving Average)":
+                        st.success(f"✅ 최적 MA: 단기 **{int(best['단기 MA'])}** / 장기 **{int(best['장기 MA'])}** → 수익률 **{best['수익률 (%)']:+.2f}%**")
+                    elif strategy == "볼린저 밴드 전략 (Bollinger Bands)":
+                        st.success(f"✅ 최적 BB 기간: **{int(best['BB 기간'])}** → 수익률 **{best['수익률 (%)']:+.2f}%**")
+                        fig_opt = go.Figure()
+                        fig_opt.add_trace(go.Bar(
+                            x=result_df["BB 기간"], y=result_df["수익률 (%)"],
+                            marker=dict(color=[CANDLE_UP if v == best["BB 기간"] else ACCENT for v in result_df["BB 기간"]]),
+                            text=[f"{v:+.1f}%" for v in result_df["수익률 (%)"]],
+                            textposition="outside"
+                        ))
+                        fig_opt.update_layout(height=300, margin=dict(l=8, r=20, t=8, b=28), paper_bgcolor=SURFACE_1, plot_bgcolor=SURFACE_1, font=dict(color=TEXT, size=11))
+                        st.plotly_chart(fig_opt, use_container_width=True, config={"displayModeBar": False})
+                    else:
+                        st.success(f"✅ 최적값: RSI **{int(best['RSI'])}** / 단기MA **{int(best['단기 MA'])}** / 장기MA **{int(best['장기 MA'])}** → 수익률 **{best['수익률 (%)']:+.2f}%**")
+                    st.dataframe(result_df.sort_values("수익률 (%)", ascending=False).head(10).style.map(color_val, subset=["수익률 (%)"]), use_container_width=True, hide_index=True)
+                st.warning("⚠️ 과최적화 주의!")
+
+    # ── SUB 3 : 재무 & 뉴스 ──
+    with sub3:
+        if not analyzed:
+            st.info("사이드바에서 종목을 입력하고 🔍 분석 시작 버튼을 눌러주세요!")
+        else:
             card("📊 재무 지표", "ROE · PER · PBR · 시가총액 · 52주 범위 (DART 공식 기준)")
             try:
                 import FinanceDataReader as fdr
