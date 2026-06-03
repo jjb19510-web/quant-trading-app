@@ -19,17 +19,29 @@ def render_portfolio(KIS_AVAILABLE, get_kis_token, get_balance):
                 cash = int(output2.get("dnca_tot_amt", 0))
                 withdrawable = int(output2.get("nxdy_excc_amt", 0))
 
-                p1, p2, p3, p4 = st.columns(4)
-                with p1:
-                    st.metric("총 평가금액", f"{total_eval:,}원")
-                with p2:
-                    st.metric("평가손익", f"{total_profit:+,}원")
-                with p3:
-                    st.metric("예수금", f"{cash:,}원")
-                with p4:
-                    st.metric("출금가능금액", f"{withdrawable:,}원")
+                profit_color = "#ef4444" if total_profit >= 0 else "#3b82f6"
+                profit_arrow = "▲" if total_profit >= 0 else "▼"
+                st.markdown(f"""
+                <div style='display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px;'>
+                  <div style='background:#0f1117; border:0.5px solid #1e2330; border-radius:12px; padding:16px 20px; box-shadow:0 4px 24px rgba(0,0,0,0.4);'>
+                    <div style='font-size:11px; color:#9ca3af; margin-bottom:6px;'>💼 총 평가금액</div>
+                    <div style='font-size:22px; font-weight:600; font-family:JetBrains Mono;'>{total_eval:,}원</div>
+                  </div>
+                  <div style='background:#0f1117; border:0.5px solid rgba(239,68,68,0.3); border-radius:12px; padding:16px 20px; box-shadow:0 4px 24px rgba(0,0,0,0.4);'>
+                    <div style='font-size:11px; color:#9ca3af; margin-bottom:6px;'>📈 평가손익</div>
+                    <div style='font-size:22px; font-weight:600; font-family:JetBrains Mono; color:{profit_color};'>{profit_arrow} {total_profit:+,}원</div>
+                  </div>
+                  <div style='background:#0f1117; border:0.5px solid #1e2330; border-radius:12px; padding:16px 20px; box-shadow:0 4px 24px rgba(0,0,0,0.4);'>
+                    <div style='font-size:11px; color:#9ca3af; margin-bottom:6px;'>💰 예수금</div>
+                    <div style='font-size:22px; font-weight:600; font-family:JetBrains Mono;'>{cash:,}원</div>
+                  </div>
+                  <div style='background:#0f1117; border:0.5px solid #1e2330; border-radius:12px; padding:16px 20px; box-shadow:0 4px 24px rgba(0,0,0,0.4);'>
+                    <div style='font-size:11px; color:#9ca3af; margin-bottom:6px;'>🏧 출금가능금액</div>
+                    <div style='font-size:22px; font-weight:600; font-family:JetBrains Mono;'>{withdrawable:,}원</div>
+                  </div>
+                </div>
+                """, unsafe_allow_html=True)
 
-                st.write(output2)  # 디버깅
                 card("📋 보유종목", "현재 포지션 기준")
                 holdings_list = balance_data.get("output1", [])
                 if holdings_list:
