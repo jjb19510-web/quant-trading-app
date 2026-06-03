@@ -694,38 +694,113 @@ with tab2:
                     roe = get_dart_roe(raw_ticker)
                     roe_str = f"{roe:.1f}%" if roe is not None else "N/A"
                     dart_per, dart_pbr = get_dart_per_pbr(raw_ticker, curr_p)
-                    per = f"{dart_per:.1f}x" if dart_per is not None else "N/A"
-                    pbr = f"{dart_pbr:.1f}x" if dart_pbr is not None else "N/A"
+                    per = f"{dart_per:.1f}배" if dart_per is not None else "N/A"
+                    pbr = f"{dart_pbr:.1f}배" if dart_pbr is not None else "N/A"
+                    
+                    # 토스증권 스타일 패칭을 위한 데이터 초기화
+                    eps, bps, div_yield, div_payout, div_per_share = "N/A", "N/A", "N/A", "N/A", "N/A"
+                    
+                    # 네이버 통합 API 조회를 통한 가치평가 및 배당 데이터 보완 수집
+                    try:
+                        nv_url = f"https://m.stock.naver.com/api/stock/{raw_ticker}/integration"
+                        nv_res = requests.get(nv_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
+                        nv_data = nv_res.json()
+                        total_infos = nv_data.get("totalInfos", [])
+                        for info in total_infos:
+                            k = str(info.get("key", "")).upper()
+                            c = str(info.get("code", "")).lower()
+                            v = str(info.get("value", "")).strip()
+                            if not v or v == "-":
+                                continue
+                            
+                            # 정교한 소수점 반올림 및 투자 보조 단위 자동 포맷 가공
+                            if "PER" in k or "per" in c:
+                                if per == "N/A":
+                                    try: per = f"{float(v.replace(',', '')):.1f}배"
+                                    except: per = f"{v}배"
+                            elif "PBR" in k or "pbr" in c:
+                                if pbr == "N/A":
+                                    try: pbr = f"{float(v.replace(',', '')):.1f}배"
+                                    except: pbr = f"{v}배"
+                            elif "EPS" in k or "eps" in c:
+                                try: eps = f"{int(float(v.replace(',', ''))):,}원"
+                                except: eps = f"{v}원"
+                            elif "BPS" in k or "bps" in c:
+                                try: bps = f"{int(float(v.replace(',', ''))):,}원"
+                                except: bps = f"{v}원"
+                            elif "배당수익률" in k or "dividend" in c:
+                                try: div_yield = f"{float(v.replace('%', '').replace(',', '')):.2f}%"
+                                except: div_yield = f"{v}%"
+                            elif "배당성향" in k or "payout" in c:
+                                try: div_payout = f"{float(v.replace('%', '').replace(',', '')):.1f}%"
+                                except: div_payout = f"{v}%"
+                            elif "주당배당금" in k or "dps" in c:
+                                try: div_per_share = f"{int(float(v.replace(',', ''))):,}원"
+                                except: div_per_share = f"{v}원"
+                            elif "ROE" in k or "roe" in c:
+                                if roe_str == "N/A":
+                                    try: roe_str = f"{float(v.replace('%', '').replace(',', '')):.1f}%"
+                                    except: roe_str = f"{v}%"
+                    except:
+                        pass
 
-                    if per == "N/A" or pbr == "N/A":
-                        try:
-                            nv_url = f"https://m.stock.naver.com/api/stock/{raw_ticker}/integration"
-                            nv_res = requests.get(nv_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
-                            nv_data = nv_res.json()
-                            total_infos = nv_data.get("totalInfos", [])
-                            for info in total_infos:
-                                k = info.get("key", "")
-                                v = info.get("value", "")
-                                if "PER" in k and per == "N/A" and v:
-                                    per = f"{v}x"
-                                if "PBR" in k and pbr == "N/A" and v:
-                                    pbr = f"{v}x"
-                        except:
-                            pass
-
-                    f1, f2, f3, f4, f5, f6 = st.columns(6)
-                    with f1:
-                        st.metric("ROE", roe_str, help="자기자본이익률 — DART 정기 보고서 기준")
-                    with f2:
-                        st.metric("PER", per, help="주가수익비율 — DART 기준")
-                    with f3:
-                        st.metric("PBR", pbr, help="주가순자산비율 — DART 기준")
-                    with f4:
-                        st.metric("시가총액", mkt_str)
-                    with f5:
-                        st.metric("52주 고가", f"{int(high52):,}원" if high52 != 'N/A' else 'N/A')
-                    with f6:
-                        st.metric("52주 저가", f"{int(low52):,}원" if low52 != 'N/A' else 'N/A')
+                    # ── [토스증권 투자지표 스타일 컴포넌트 렌더링] ──
+                    st.markdown(f"""
+                    <div class="qf-toss-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; background: #0f1117; padding: 18px; border-radius: 14px; border: 0.5px solid #1e2330;">
+                      
+                      <!-- 가치평가 -->
+                      <div style="background: #13161f; padding: 16px; border-radius: 12px; border: 0.5px solid #1e2330;">
+                        <div style="font-size: 13.5px; font-weight: 600; color: #9ca3af; margin-bottom: 12px;">가치평가</div>
+                        <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 0.5px solid #1e2330;">
+                          <span style="color: #6b7280; font-size: 13px;">시가총액</span>
+                          <span style="color: #e2e8f0; font-size: 13px; font-weight: 600; font-family: 'JetBrains Mono';">{mkt_str}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 0.5px solid #1e2330;">
+                          <span style="color: #6b7280; font-size: 13px;">PER</span>
+                          <span style="color: #e2e8f0; font-size: 13px; font-weight: 600; font-family: 'JetBrains Mono';">{per}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; padding: 10px 0;">
+                          <span style="color: #6b7280; font-size: 13px;">PBR</span>
+                          <span style="color: #e2e8f0; font-size: 13px; font-weight: 600; font-family: 'JetBrains Mono';">{pbr}</span>
+                        </div>
+                      </div>
+                      
+                      <!-- 수익성 -->
+                      <div style="background: #13161f; padding: 16px; border-radius: 12px; border: 0.5px solid #1e2330;">
+                        <div style="font-size: 13.5px; font-weight: 600; color: #9ca3af; margin-bottom: 12px;">수익</div>
+                        <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 0.5px solid #1e2330;">
+                          <span style="color: #6b7280; font-size: 13px;">EPS</span>
+                          <span style="color: #e2e8f0; font-size: 13px; font-weight: 600; font-family: 'JetBrains Mono';">{eps}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 0.5px solid #1e2330;">
+                          <span style="color: #6b7280; font-size: 13px;">BPS</span>
+                          <span style="color: #e2e8f0; font-size: 13px; font-weight: 600; font-family: 'JetBrains Mono';">{bps}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; padding: 10px 0;">
+                          <span style="color: #6b7280; font-size: 13px;">ROE</span>
+                          <span style="color: #e2e8f0; font-size: 13px; font-weight: 600; font-family: 'JetBrains Mono';">{roe_str}</span>
+                        </div>
+                      </div>
+                      
+                      <!-- 배당 정보 -->
+                      <div style="background: #13161f; padding: 16px; border-radius: 12px; border: 0.5px solid #1e2330;">
+                        <div style="font-size: 13.5px; font-weight: 600; color: #9ca3af; margin-bottom: 12px;">배당 (최근 12개월)</div>
+                        <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 0.5px solid #1e2330;">
+                          <span style="color: #6b7280; font-size: 13px;">배당수익률</span>
+                          <span style="color: #e2e8f0; font-size: 13px; font-weight: 600; font-family: 'JetBrains Mono';">{div_yield}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 0.5px solid #1e2330;">
+                          <span style="color: #6b7280; font-size: 13px;">주당 배당금</span>
+                          <span style="color: #e2e8f0; font-size: 13px; font-weight: 600; font-family: 'JetBrains Mono';">{div_per_share}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; padding: 10px 0;">
+                          <span style="color: #6b7280; font-size: 13px;">배당성향</span>
+                          <span style="color: #e2e8f0; font-size: 13px; font-weight: 600; font-family: 'JetBrains Mono';">{div_payout}</span>
+                        </div>
+                      </div>
+                      
+                    </div>
+                    """, unsafe_allow_html=True)
                 else:
                     st.info("재무 데이터를 찾을 수 없어요.")
             except Exception as e:
