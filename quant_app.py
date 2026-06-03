@@ -266,7 +266,7 @@ with tab2:
                                     code = str(raw_code).split('.')[0].zfill(6)
                                     
                                     # 시장 정보 추출 (KOSPI -> .KS, KOSDAQ/KONEX -> .KQ)
-                                    mkt_info = str(matched_code.iloc[0].get('Market', 'KOSPI')).upper()
+                                    mkt_info = str(matched.iloc[0].get('Market', 'KOSPI')).upper()
                                     suffix = ".KS" if "KOSPI" in mkt_info else ".KQ"
                                     tickers_list.append(code + suffix)
                                 else:
