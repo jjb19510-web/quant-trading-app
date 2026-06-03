@@ -274,6 +274,7 @@ with tab2:
                                 else:
                                     tickers_list.append(t_clean + ".KS")
                             else:
+                                st.write(f"DEBUG: {t_clean} 검색 실패 → .KS로 시도")
                                 tickers_list.append(t_clean + ".KS")
                         else:
                             # 6자리 숫자로 입력 시 상장사 정보에서 시장 판별 후 알맞은 심볼 부착
