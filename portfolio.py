@@ -17,14 +17,17 @@ def render_portfolio(KIS_AVAILABLE, get_kis_token, get_balance):
                 total_eval = int(output2.get("scts_evlu_amt", 0))
                 total_profit = int(output2.get("evlu_pfls_smtl_amt", 0))
                 cash = int(output2.get("dnca_tot_amt", 0))
+                withdrawable = int(output2.get("nxdy_excc_amt", 0))
 
-                p1, p2, p3 = st.columns(3)
+                p1, p2, p3, p4 = st.columns(4)
                 with p1:
                     st.metric("총 평가금액", f"{total_eval:,}원")
                 with p2:
                     st.metric("평가손익", f"{total_profit:+,}원")
                 with p3:
                     st.metric("예수금", f"{cash:,}원")
+                with p4:
+                    st.metric("출금가능금액", f"{withdrawable:,}원")
 
                 st.write(output2)  # 디버깅
                 card("📋 보유종목", "현재 포지션 기준")
