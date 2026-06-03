@@ -33,6 +33,11 @@ def calculate_cagr(portfolio, days):
 
 
 def run_strategy(df, strategy, rsi_threshold, ma_short, ma_long, bb_period):
+    # ── [예외 처리] 비어 있는 데이터가 인자로 들어왔을 때 크래시 방어 ──
+    if df.empty:
+        import pandas as pd
+        return 0, pd.Series(dtype=float), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+
     rsi = df.apply(calculate_rsi)
     ma_s = df.rolling(ma_short).mean()
     ma_l = df.rolling(ma_long).mean()

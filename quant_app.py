@@ -276,6 +276,11 @@ with tab2:
                 close_p = df[chart_col]
                 volume = ohlc["Volume"][chart_col] if isinstance(ohlc["Volume"], pd.DataFrame) else ohlc["Volume"]
 
+        # ── [예외 처리] yfinance 수집 지연(IP 차단 등) 발생 시 앱 크래시 강제 제어 ──
+        if df.empty or close_p.empty:
+            st.error("❌ yfinance 서버 응답이 원활하지 않아 마켓 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.")
+            st.stop() # 에러를 뿜으며 뻗지 않고 깔끔한 알림만 보여준 뒤 정지
+
         strategy_pct, weighted_return, signal, rsi, ma_s, ma_l, bb_upper, bb_lower, bb_mid = run_strategy(
             df, strategy, rsi_threshold, ma_short, ma_long, bb_period
         )
