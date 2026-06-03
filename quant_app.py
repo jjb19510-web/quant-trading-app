@@ -389,7 +389,7 @@ with tab2:
                         arrow = "▲" if change >= 0 else "▼"
                         st.markdown(f"""
                         <div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:12px; padding:14px 18px; margin-bottom:8px;'>
-                            <div style='font-size:12px; color:{DIM}; margin-bottom:4px;'>{name_map.get(ticker.replace(".KS",""), ticker)}</div>
+                            <div style='font-size:16px; font-weight:600; color:{TEXT}; margin-bottom:4px;'>{name_map.get(ticker.replace(".KS",""), ticker)}</div>
                             <div style='font-family:JetBrains Mono; font-size:22px; font-weight:600;'>{current:,.0f}</div>
                             <div style='font-family:JetBrains Mono; font-size:12px; color:{color}; margin-top:2px;'>{arrow} {change:+,.0f} ({change_pct:+.2f}%)</div>
                         </div>
