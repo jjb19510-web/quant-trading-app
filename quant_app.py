@@ -279,6 +279,10 @@ with tab2:
         strategy_pct, weighted_return, signal, rsi, ma_s, ma_l, bb_upper, bb_lower, bb_mid = run_strategy(
             df, strategy, rsi_threshold, ma_short, ma_long, bb_period
         )
+        # 서브탭 메시지 출력에 필요한 최근 신호 및 RSI 지표 미리 연산
+        last_sig = signal.iloc[-1].values[0]
+        last_rsi = rsi[chart_col].iloc[-1] if isinstance(rsi, pd.DataFrame) else rsi.iloc[-1]
+
         sig = signal.iloc[:, 0]
         buy_idx = sig[(sig == 1) & (sig.shift(1) == 0)].index
         sell_idx = sig[(sig == 0) & (sig.shift(1) == 1)].index
