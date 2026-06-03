@@ -178,6 +178,18 @@ def apply_custom_css():
       div[data-testid="stDataFrame"] {{ background: {SURFACE_1}; border-radius: 8px; }}
       div[data-testid="stTextInput"] input {{ border: 1px solid {LINE} !important; background: {SURFACE_2} !important; }}
       div[data-testid="stTabs"] button {{ font-size: 11px !important; padding: 6px 8px !important; }}
+
+      /* ── 모바일 반응형 미디어 쿼리 추가 (f-string 더블 중괄호 처리) ── */
+      @media (max-width: 768px) {{
+        .qf-summary-grid, .qf-kpi-grid, .qf-toss-grid {{
+          grid-template-columns: 1fr !important; /* 모바일에서 찌그러지지 않고 세로로 정렬 */
+          gap: 12px;
+        }}
+        .qf-kpi {{
+          border-right: none !important;
+          border-bottom: 0.5px solid {LINE};
+        }}
+      }}
     </style>
     """, unsafe_allow_html=True)
 
