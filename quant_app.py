@@ -68,7 +68,8 @@ def load_market_data(tickers, start_date, end_date, market):
     if (df.empty or df.isna().all().all()) and market == "한국주식 (KS)":
         try:
             import FinanceDataReader as fdr
-            clean_tickers = [t.replace(".KS", "") for t in tickers]
+            # .KS와 .KQ 확장자를 모두 호환하여 공백 처리
+            clean_tickers = [t.replace(".KS", "").replace(".KQ", "") for t in tickers]
             if len(clean_tickers) == 1:
                 df_fdr = fdr.DataReader(clean_tickers[0], start_date, end_date)
                 if not df_fdr.empty:
@@ -235,7 +236,7 @@ with tab2:
             market = st.selectbox("시장 선택", ["한국주식 (KS)", "미국주식 (US)"])
 
             if market == "한국주식 (KS)":
-                st.caption("예시: 삼성전자, SK하이닉스, 005930")
+                st.caption("예시: 삼성전자, 에코프로, 005930")
                 default_ticker = st.session_state.get("selected_ticker", "")
                 tickers_raw = st.text_input("종목명 또는 코드 (쉼표로 구분)", value=default_ticker)
 
@@ -254,6 +255,8 @@ with tab2:
                         t_clean = t.strip()
                         if not t_clean:
                             continue
+                        
+                        # 종목명(한글) 입력 시 코스피(.KS) / 코스닥(.KQ) 자동 분류 판별
                         if not t_clean.isdigit() and df_krx is not None:
                             matched = df_krx[df_krx['Name'].str.upper() == t_clean.upper()]
                             if not matched.empty:
@@ -261,13 +264,27 @@ with tab2:
                                 if code_col:
                                     raw_code = matched.iloc[0][code_col]
                                     code = str(raw_code).split('.')[0].zfill(6)
-                                    tickers_list.append(code + ".KS")
+                                    
+                                    # 시장 정보 추출 (KOSPI -> .KS, KOSDAQ/KONEX -> .KQ)
+                                    mkt_info = str(matched.iloc[0].get('Market', 'KOSPI')).upper()
+                                    suffix = ".KS" if "KOSPI" in mkt_info else ".KQ"
+                                    tickers_list.append(code + suffix)
                                 else:
                                     tickers_list.append(t_clean + ".KS")
                             else:
                                 tickers_list.append(t_clean + ".KS")
                         else:
+                            # 6자리 숫자로 입력 시 상장사 정보에서 시장 판별 후 알맞은 심볼 부착
                             code_padded = t_clean.zfill(6) if len(t_clean) < 6 else t_clean
+                            if df_krx is not None:
+                                code_col = next((c for c in ['Symbol', 'Code', 'code'] if c in df_krx.columns), None)
+                                if code_col:
+                                    matched_code = df_krx[df_krx[code_col].astype(str).str.split('.').str[0].str.zfill(6) == code_padded]
+                                    if not matched_code.empty:
+                                        mkt_info = str(matched_code.iloc[0].get('Market', 'KOSPI')).upper()
+                                        suffix = ".KS" if "KOSPI" in mkt_info else ".KQ"
+                                        tickers_list.append(code_padded + suffix)
+                                        continue
                             tickers_list.append(code_padded + ".KS")
 
                 tickers = tickers_list
