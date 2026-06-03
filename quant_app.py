@@ -389,7 +389,7 @@ with tab2:
                         arrow = "▲" if change >= 0 else "▼"
                         st.markdown(f"""
                         <div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:12px; padding:14px 18px; margin-bottom:8px;'>
-                            <div style='font-size:12px; color:{DIM}; margin-bottom:4px;'>{ticker}</div>
+                            <div style='font-size:12px; color:{DIM}; margin-bottom:4px;'>{name_map.get(ticker.replace(".KS",""), ticker)}</div>
                             <div style='font-family:JetBrains Mono; font-size:22px; font-weight:600;'>{current:,.0f}</div>
                             <div style='font-family:JetBrains Mono; font-size:12px; color:{color}; margin-top:2px;'>{arrow} {change:+,.0f} ({change_pct:+.2f}%)</div>
                         </div>
@@ -502,8 +502,9 @@ with tab2:
             volatility = df.pct_change().std() * (252 ** 0.5) * 100
             last_signal = signal.iloc[-1]
             if len(tickers) == 1:
+                name_map = get_krx_name_map()
                 holdings = pd.DataFrame({
-                    "종목": df.columns,
+                    "종목": [f"{name_map.get(c.replace('.KS',''), c)}" for c in df.columns],
                     "수익률 (%)": period_returns.values.round(2),
                     "변동성 (%)": volatility.values.round(1),
                     "현재 포지션": ["보유중 ✅" if s == 1 else "현금 ❌" for s in last_signal.values]
@@ -525,7 +526,9 @@ with tab2:
                 st.session_state.backtest_results = load_backtest()
             col_save, col_clear = st.columns([3, 1])
             with col_save:
-                save_label = st.text_input("결과 저장 이름", value=f"{chart_col} {strategy[:3]} {dt.date.today()}", key="save_label")
+                name_map = get_krx_name_map()
+                display_name = name_map.get(chart_col.replace(".KS",""), chart_col)
+                save_label = st.text_input("결과 저장 이름", value=f"{display_name} {strategy[:3]} {dt.date.today()}", key="save_label")
             with col_clear:
                 st.markdown("<div style='margin-top:28px;'></div>", unsafe_allow_html=True)
                 if st.button("💾 저장", key="save_backtest"):
