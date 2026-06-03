@@ -55,6 +55,132 @@ def get_krx_name_map():
         pass
     return {}
 
+# ── [고성능 캐싱 기반 듀얼 주가 수집 엔진] ──
+@st.cache_data(ttl=600) # 10분간 메모리에 주가를 보관하여 중복 호출 및 서버 차단 원천 해결
+def load_market_data(tickers, start_date, end_date, market):
+    try:
+        ohlc = yf.download(tickers, start=str(start_date), end=str(end_date), progress=False)
+        df = ohlc["Close"] if isinstance(ohlc, pd.DataFrame) and "Close" in ohlc else pd.DataFrame()
+    except:
+        df = pd.DataFrame()
+        ohlc = pd.DataFrame()
+
+    if (df.empty or df.isna().all().all()) and market == "한국주식 (KS)":
+        try:
+            import FinanceDataReader as fdr
+            clean_tickers = [t.replace(".KS", "") for t in tickers]
+            if len(clean_tickers) == 1:
+                df_fdr = fdr.DataReader(clean_tickers[0], start_date, end_date)
+                if not df_fdr.empty:
+                    df = pd.DataFrame({tickers[0]: df_fdr["Close"]})
+                    open_p = df_fdr["Open"]
+                    high_p = df_fdr["High"]
+                    low_p = df_fdr["Low"]
+                    close_p = df_fdr["Close"]
+                    volume = df_fdr["Volume"]
+                    return df, open_p, high_p, low_p, close_p, volume
+            else:
+                dfs = []
+                for ct, t in zip(clean_tickers, tickers):
+                    temp_df = fdr.DataReader(ct, start_date, end_date)[["Close"]]
+                    temp_df.columns = [t]
+                    dfs.append(temp_df)
+                df = pd.concat(dfs, axis=1).dropna()
+                chart_col = df.columns[0]
+                chart_raw = chart_col.replace(".KS", "")
+                df_fdr_single = fdr.DataReader(chart_raw, start_date, end_date)
+                open_p = df_fdr_single["Open"]
+                high_p = df_fdr_single["High"]
+                low_p = df_fdr_single["Low"]
+                close_p = df_fdr_single["Close"]
+                volume = df_fdr_single["Volume"]
+                return df, open_p, high_p, low_p, close_p, volume
+        except:
+            pass
+
+    if not df.empty:
+        df.columns = [str(c) for c in df.columns]
+        chart_col = df.columns[0]
+        if len(tickers) == 1:
+            open_p = ohlc["Open"].squeeze() if "Open" in ohlc else pd.Series()
+            high_p = ohlc["High"].squeeze() if "High" in ohlc else pd.Series()
+            low_p = ohlc["Low"].squeeze() if "Low" in ohlc else pd.Series()
+            close_p = ohlc["Close"].squeeze() if "Close" in ohlc else pd.Series()
+            volume = ohlc["Volume"].squeeze() if "Volume" in ohlc else pd.Series()
+        else:
+            open_p = ohlc["Open"][chart_col] if isinstance(ohlc["Open"], pd.DataFrame) else ohlc["Open"]
+            high_p = ohlc["High"][chart_col] if isinstance(ohlc["High"], pd.DataFrame) else ohlc["High"]
+            low_p = ohlc["Low"][chart_col] if isinstance(ohlc["Low"], pd.DataFrame) else ohlc["Low"]
+            close_p = df[chart_col]
+            volume = ohlc["Volume"][chart_col] if isinstance(ohlc["Volume"], pd.DataFrame) else ohlc["Volume"]
+        return df, open_p, high_p, low_p, close_p, volume
+
+    return pd.DataFrame(), pd.Series(), pd.Series(), pd.Series(), pd.Series(), pd.Series()
+
+
+# ── [고성능 캐싱 기반 듀얼 주가 수집 엔진] ──
+@st.cache_data(ttl=600) # 10분간 메모리에 주가를 보관하여 중복 호출 및 서버 차단 원천 해결
+def load_market_data(tickers, start_date, end_date, market):
+    try:
+        ohlc = yf.download(tickers, start=str(start_date), end=str(end_date), progress=False)
+        df = ohlc["Close"] if isinstance(ohlc, pd.DataFrame) and "Close" in ohlc else pd.DataFrame()
+    except:
+        df = pd.DataFrame()
+        ohlc = pd.DataFrame()
+
+    if (df.empty or df.isna().all().all()) and market == "한국주식 (KS)":
+        try:
+            import FinanceDataReader as fdr
+            clean_tickers = [t.replace(".KS", "") for t in tickers]
+            if len(clean_tickers) == 1:
+                df_fdr = fdr.DataReader(clean_tickers[0], start_date, end_date)
+                if not df_fdr.empty:
+                    df = pd.DataFrame({tickers[0]: df_fdr["Close"]})
+                    open_p = df_fdr["Open"]
+                    high_p = df_fdr["High"]
+                    low_p = df_fdr["Low"]
+                    close_p = df_fdr["Close"]
+                    volume = df_fdr["Volume"]
+                    return df, open_p, high_p, low_p, close_p, volume
+            else:
+                dfs = []
+                for ct, t in zip(clean_tickers, tickers):
+                    temp_df = fdr.DataReader(ct, start_date, end_date)[["Close"]]
+                    temp_df.columns = [t]
+                    dfs.append(temp_df)
+                df = pd.concat(dfs, axis=1).dropna()
+                chart_col = df.columns[0]
+                chart_raw = chart_col.replace(".KS", "")
+                df_fdr_single = fdr.DataReader(chart_raw, start_date, end_date)
+                open_p = df_fdr_single["Open"]
+                high_p = df_fdr_single["High"]
+                low_p = df_fdr_single["Low"]
+                close_p = df_fdr_single["Close"]
+                volume = df_fdr_single["Volume"]
+                return df, open_p, high_p, low_p, close_p, volume
+        except:
+            pass
+
+    if not df.empty:
+        df.columns = [str(c) for c in df.columns]
+        chart_col = df.columns[0]
+        if len(tickers) == 1:
+            open_p = ohlc["Open"].squeeze() if "Open" in ohlc else pd.Series()
+            high_p = ohlc["High"].squeeze() if "High" in ohlc else pd.Series()
+            low_p = ohlc["Low"].squeeze() if "Low" in ohlc else pd.Series()
+            close_p = ohlc["Close"].squeeze() if "Close" in ohlc else pd.Series()
+            volume = ohlc["Volume"].squeeze() if "Volume" in ohlc else pd.Series()
+        else:
+            open_p = ohlc["Open"][chart_col] if isinstance(ohlc["Open"], pd.DataFrame) else ohlc["Open"]
+            high_p = ohlc["High"][chart_col] if isinstance(ohlc["High"], pd.DataFrame) else ohlc["High"]
+            low_p = ohlc["Low"][chart_col] if isinstance(ohlc["Low"], pd.DataFrame) else ohlc["Low"]
+            close_p = df[chart_col]
+            volume = ohlc["Volume"][chart_col] if isinstance(ohlc["Volume"], pd.DataFrame) else ohlc["Volume"]
+        return df, open_p, high_p, low_p, close_p, volume
+
+    return pd.DataFrame(), pd.Series(), pd.Series(), pd.Series(), pd.Series(), pd.Series()
+
+
 @st.cache_data(ttl=3600)
 def get_kis_token():
     try:
