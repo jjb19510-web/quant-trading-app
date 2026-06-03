@@ -40,7 +40,7 @@ def apply_custom_css():
         background: {SURFACE_1};
         border: 0.5px solid {LINE};
         border-radius: 12px;
-        padding: 14px 16px;
+        padding: 16px 20px; /* 내부 여백 통일 */
       }}
       .qf-summary-card.highlight {{
         border-color: rgba(239,68,68,0.3);
@@ -130,7 +130,7 @@ def apply_custom_css():
         background: {SURFACE_1};
         border: 0.5px solid {LINE};
         border-radius: 12px;
-        padding: 16px 18px;
+        padding: 16px 20px; /* 내부 여백 통일 */
         margin-bottom: 28px;
       }}
       .qf-card h3 {{
@@ -305,18 +305,18 @@ def style_fig(fig, height=400):
         margin=dict(l=0, r=60, t=8, b=28),
         paper_bgcolor=BG,
         plot_bgcolor=BG,
-        font=dict(family="Inter, sans-serif", color=TEXT, size=11),
+        font=dict(family="Inter, sans-serif", color=TEXT, size=11.5), # 차트 기본 폰트 크기 미세 상향
         showlegend=True,
         hovermode="x unified",
         legend=dict(
             bgcolor="rgba(0,0,0,0)",
             bordercolor="rgba(0,0,0,0)",
-            font=dict(size=10),
+            font=dict(size=11), # 범례 글꼴 크기 상향
             orientation="h",
             yanchor="bottom",
             y=1.02,
-            xanchor="left",
-            x=0
+            xanchor="right",  # 좌측 시간 선택 버튼과 겹치지 않도록 우측 정렬로 패치
+            x=1
         ),
         xaxis=dict(
             rangeslider=dict(visible=False),
@@ -330,21 +330,21 @@ def style_fig(fig, height=400):
                 ],
                 bgcolor=SURFACE_1,
                 activecolor=ACCENT,
-                font=dict(color=TEXT, size=10),
+                font=dict(color=TEXT, size=11), # 기간 선택 버튼 글꼴 크기 상향
                 bordercolor=LINE
             ),
             showgrid=True,
             gridcolor="rgba(255,255,255,0.03)",
             linecolor=LINE,
             zeroline=False,
-            tickfont=dict(color=DIM, size=10),
+            tickfont=dict(color="#9ca3af", size=11), # 축 눈금 가독성(대비/크기) 개선
         ),
         yaxis=dict(
             showgrid=True,
             gridcolor="rgba(255,255,255,0.03)",
             linecolor=LINE,
             zeroline=False,
-            tickfont=dict(color=DIM, size=10),
+            tickfont=dict(color="#9ca3af", size=11), # 축 눈금 가독성(대비/크기) 개선
             side="right",
         )
     )
