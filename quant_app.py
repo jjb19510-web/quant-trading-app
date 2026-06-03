@@ -395,7 +395,10 @@ with tab2:
     if analyze:
         st.session_state["analyzed"] = True
 
-    analyzed = st.session_state.get("analyzed") and 'tickers' in locals() and tickers
+    if 'tickers' in locals() and tickers:
+        st.session_state["last_tickers"] = tickers
+    tickers = st.session_state.get("last_tickers", [])
+    analyzed = st.session_state.get("analyzed") and bool(tickers)
 
     if analyzed:
         with st.spinner("데이터 분석 준비 중..."):
