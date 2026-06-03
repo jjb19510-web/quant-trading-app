@@ -9,7 +9,7 @@ RED = "#ef4444"
 GREEN = "#34d399"
 CANDLE_UP = "#ef4444"
 CANDLE_DOWN = "#3b82f6"
-DIM = "#6b7280"
+DIM = "#9ca3af"
 TEXT = "#e2e8f0"
 SURFACE_1 = "#0f1117"
 SURFACE_2 = "#13161f"
@@ -41,6 +41,7 @@ def apply_custom_css():
         border: 0.5px solid {LINE};
         border-radius: 12px;
         padding: 16px 20px; /* 내부 여백 통일 */
+        box-shadow: 0 4px 24px rgba(0,0,0,0.4);
       }}
       .qf-summary-card.highlight {{
         border-color: rgba(239,68,68,0.3);
@@ -132,6 +133,7 @@ def apply_custom_css():
         border-radius: 12px;
         padding: 16px 20px; /* 내부 여백 통일 */
         margin-bottom: 28px;
+        box-shadow: 0 4px 24px rgba(0,0,0,0.4);
       }}
       .qf-card h3 {{
         margin: 0 0 2px;
