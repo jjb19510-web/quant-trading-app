@@ -891,7 +891,7 @@ with tab2:
         if not analyzed:
             st.info("사이드바에서 종목을 입력하고 🔍 분석 시작 버튼을 눌러주세요!")
         else:
-            card("📊 재무 지표", "ROE · PER · PBR · 시가총액 · 52주 범위 (DART 공식 기준)")
+            card("📊 재무제표", "ROE · PER · PBR · 시가총액 · 52주 범위 (DART 공식 기준)")
             try:
                 import FinanceDataReader as fdr
                 raw_ticker = chart_col.replace(".KS", "").replace(".KQ", "")
@@ -926,6 +926,10 @@ with tab2:
                         nv_res = requests.get(nv_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
                         nv_data = nv_res.json()
                         total_infos = nv_data.get("totalInfos", [])
+                        # 수집된 원본 데이터에 이미 기호가 붙어있을 때를 대비해 완전히 기호를 씻어주는 클렌징 헬퍼 함수
+                        def clean_val(val_str):
+                            return val_str.replace("원", "").replace("%", "").replace("배", "").replace("x", "").replace(",", "").strip()
+
                         for info in total_infos:
                             k = str(info.get("key", "")).upper()
                             c = str(info.get("code", "")).lower()
@@ -933,34 +937,38 @@ with tab2:
                             if not v or v == "-":
                                 continue
                             
-                            # 정교한 소수점 반올림 및 투자 보조 단위 자동 포맷 가공
-                            if "PER" in k or "per" in c:
+                            val_clean = clean_val(v)
+                            
+                            # 정확히 일치하는(==) 키워드로 파싱하여 데이터 중복 및 기호 중첩 차단
+                            if c == "per" or k == "PER":
                                 if per == "N/A":
-                                    try: per = f"{float(v.replace(',', '')):.1f}배"
-                                    except: per = f"{v}배"
-                            elif "PBR" in k or "pbr" in c:
+                                    try: per = f"{float(val_clean):.1f}배"
+                                    except: per = f"{v}배" if "배" not in v else v
+                            elif c == "pbr" or k == "PBR":
                                 if pbr == "N/A":
-                                    try: pbr = f"{float(v.replace(',', '')):.1f}배"
-                                    except: pbr = f"{v}배"
-                            elif "EPS" in k or "eps" in c:
-                                try: eps = f"{int(float(v.replace(',', ''))):,}원"
-                                except: eps = f"{v}원"
-                            elif "BPS" in k or "bps" in c:
-                                try: bps = f"{int(float(v.replace(',', ''))):,}원"
-                                except: bps = f"{v}원"
-                            elif "배당수익률" in k or "dividend" in c:
-                                try: div_yield = f"{float(v.replace('%', '').replace(',', '')):.2f}%"
-                                except: div_yield = f"{v}%"
-                            elif "배당성향" in k or "payout" in c:
-                                try: div_payout = f"{float(v.replace('%', '').replace(',', '')):.1f}%"
-                                except: div_payout = f"{v}%"
-                            elif "주당배당금" in k or "dps" in c:
-                                try: div_per_share = f"{int(float(v.replace(',', ''))):,}원"
-                                except: div_per_share = f"{v}원"
-                            elif "ROE" in k or "roe" in c:
+                                    try: pbr = f"{float(val_clean):.1f}배"
+                                    except: pbr = f"{v}배" if "배" not in v else v
+                            elif c == "eps" or k == "EPS":
+                                try: eps = f"{int(float(val_clean)):,}원"
+                                except: eps = f"{v}원" if "원" not in v else v
+                            elif c == "bps" or k == "BPS":
+                                try: bps = f"{int(float(val_clean)):,}원"
+                                except: bps = f"{v}원" if "원" not in v else v
+                            elif c == "roe" or k == "ROE":
                                 if roe_str == "N/A":
-                                    try: roe_str = f"{float(v.replace('%', '').replace(',', '')):.1f}%"
-                                    except: roe_str = f"{v}%"
+                                    try: roe_str = f"{float(val_clean):.1f}%"
+                                    except: roe_str = f"{v}%" if "%" not in v else v
+                            elif c == "dividendyield" or k == "배당수익률":
+                                try: div_yield = f"{float(val_clean):.2f}%"
+                                except: div_yield = f"{v}%" if "%" not in v else v
+                            elif c in ["dividend", "dps"] or k == "주당배당금":
+                                try: div_per_share = f"{int(float(val_clean)):,}원"
+                                except: div_per_share = f"{v}원" if "원" not in v else v
+                            elif c in ["payoutratio", "dividendpayoutratio"] or "배당성향" in k:
+                                try: div_payout = f"{float(val_clean):.1f}%"
+                                except: div_payout = f"{v}%" if "%" not in v else v
+                            elif c == "marketvalue" or k == "시가총액":
+                                mkt_str = v # 네이버 실시간 시총 (예: 10조 1,234억원)으로 즉시 대체 주입
                     except:
                         pass
 
