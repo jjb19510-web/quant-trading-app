@@ -55,6 +55,7 @@ def run_strategy(df, strategy, rsi_threshold, ma_short, ma_long, bb_period, fee_
     signal_count = signal.sum(axis=1).replace(0, 1)
     returns = df.pct_change()
     weighted_return = (returns * signal.shift(1)).sum(axis=1) / signal_count.shift(1)
-    portfolio = (1 + weighted_return).cumprod()
+    # 첫날 주가 변동률 공백(NaN)이 복리 연산 전체를 nan으로 오염시키는 현상 원천 방지
+    portfolio = (1 + weighted_return.fillna(0)).cumprod()
     total_return = (portfolio.iloc[-1] - 1) * 100
     return total_return, weighted_return, signal, rsi, ma_s, ma_l, bb_upper, bb_lower, bb_mid

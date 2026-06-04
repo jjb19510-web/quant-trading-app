@@ -27,7 +27,7 @@ def safe_run_strategy(df, strategy, rsi_threshold, ma_short, ma_long, bb_period,
         returns = df.pct_change()
         daily_fees = signal.diff().abs().fillna(0) * (fee_pct / 100 / 2)
         weighted_return = (returns * signal.shift(1) - daily_fees).sum(axis=1) / signal_count.shift(1)
-        portfolio = (1 + weighted_return).cumprod()
+        portfolio = (1 + weighted_return.fillna(0)).cumprod()
         total_return = (portfolio.iloc[-1] - 1) * 100
         return total_return, weighted_return, signal, rsi, ma_s, ma_l, bb_upper, bb_lower, bb_mid
 from ui_components import (
@@ -522,7 +522,7 @@ with tab2:
         buy_idx = sig[(sig == 1) & (sig.shift(1) == 0)].index
         sell_idx = sig[(sig == 0) & (sig.shift(1) == 1)].index
         equal_return = df.pct_change().mean(axis=1)
-        portfolio_strategy = (1 + weighted_return).cumprod()
+        portfolio_strategy = (1 + weighted_return.fillna(0)).cumprod()
         portfolio_equal = (1 + equal_return).cumprod()
         days = max((df.index[-1] - df.index[0]).days, 1)
         equal_pct = (portfolio_equal.iloc[-1] - 1) * 100
@@ -767,10 +767,17 @@ with tab2:
             trade_count_series = signal.diff().abs().fillna(0).sum()
             invest_won = investment * 10000
             
+            # 라이브 한글 사명 변환 맵 추출
+            name_map = get_krx_name_map()
+
             holdings_list_data = []
             for col in df.columns:
                 col_idx = df.columns.get_loc(col)
                 ticker_trade_count = int(trade_count_series.iloc[col_idx]) if isinstance(trade_count_series, pd.Series) else int(trade_count_series)
+                
+                # 종목 코드를 깔끔한 한글 사명으로 변환 (예: 047810.KS -> 디에이테크놀로지)
+                raw_code = col.replace(".KS", "").replace(".KQ", "")
+                display_name = name_map.get(raw_code, col)
                 
                 # 총 납부 거래세 및 수수료 % 계산 (왕복 거래비용 / 2 * 거래 횟수)
                 total_fee_pct = ticker_trade_count * (fee_pct / 2)
@@ -792,7 +799,7 @@ with tab2:
                 pos_status = "보유중 ✅" if (last_signal.iloc[col_idx] == 1 if isinstance(last_signal, pd.Series) else last_signal == 1) else "현금 ❌"
                 
                 holdings_list_data.append({
-                    "종목": col,
+                    "종목": display_name, # 코드 대신 수려한 한글 사명 대입
                     "세후 전략수익률": f"{ticker_return_pct:+.2f}%",
                     "예상 순수익금": f"{int(ticker_profit_won):+,}원",
                     "총 거래 횟수": f"{ticker_trade_count}회",
