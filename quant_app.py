@@ -504,6 +504,30 @@ with tab2:
         if not analyzed:
             st.info("사이드바에서 종목을 입력하고 🔍 분석 시작 버튼을 눌러주세요!")
         else:
+            # 1. 백테스트 탭 내부로 실시간 수수료 제어 슬라이더 배치
+            fee_pct = st.slider(
+                "💸 거래 비용 설정 (왕복 수수료 + 매도세금) (%)", 
+                min_value=0.00, 
+                max_value=1.50, 
+                value=0.23, 
+                step=0.01,
+                key="main_fee_slider",
+                help="왕복 1회 매매 시 발생하는 수수료와 거래세의 합계입니다. 국내 주식의 표준 권장 비용은 0.23% 입니다."
+            )
+            
+            # 슬라이더 조작에 실시간 반응하는 수수료 차감 주가 재연산 수행
+            strategy_pct, weighted_return, signal, rsi, ma_s, ma_l, bb_upper, bb_lower, bb_mid = safe_run_strategy(
+                df, strategy, rsi_threshold, ma_short, ma_long, bb_period, fee_pct=fee_pct, open_p=open_p, high_p=high_p, low_p=low_p
+            )
+            portfolio_strategy = (1 + weighted_return.fillna(0)).cumprod()
+            mdd_s = calculate_mdd(portfolio_strategy)
+            sharpe_s = calculate_sharpe(weighted_return.dropna())
+            cagr_s = calculate_cagr(portfolio_strategy, days)
+            strategy_profit = (investment * 10000) * (strategy_pct / 100)
+            strategy_final = (investment * 10000) + strategy_profit
+            excess = strategy_profit - equal_profit
+            
+            # 실시간 수수료 차감이 반영된 성적 지표 카드 출력
             render_kpi_strip(strategy_pct, equal_pct, cagr_s, cagr_e, sharpe_s, sharpe_e, mdd_s, mdd_e)
             render_strategy_expander(strategy)
 
@@ -518,29 +542,56 @@ with tab2:
                 card("📅 월별 수익률", "막대가 위로 → 수익 🔴 · 아래로 → 손실 🔵")
                 st.plotly_chart(make_monthly_bar_chart(weighted_return), use_container_width=True, config={"displayModeBar": False})
 
-            card("📊 종목별 성과", "기간 수익률 및 현재 포지션")
-            period_returns = (df.iloc[-1] / df.iloc[0] - 1) * 100
+            # 2. 종목별 상세 성과 매트릭스 테이블 생성 (세후 순수익금 및 총 거래비용 산출)
+            card("📊 종목별 세부 성과 (수수료/순수익금 시뮬레이션)", "실전 세금/수수료를 감안한 세후 순수익금과 성과를 정밀 분석합니다.")
             volatility = df.pct_change().std() * (252 ** 0.5) * 100
             last_signal = signal.iloc[-1]
+            
+            # 총 매매 거래 횟수 연산 (signal.diff().abs()가 1인 영업일 합산)
+            trade_count_series = signal.diff().abs().fillna(0).sum()
+            invest_won = investment * 10000
             name_map = get_krx_name_map()
-            if len(tickers) == 1:
-                holdings = pd.DataFrame({
-                    "종목": [name_map.get(c.replace('.KS','').replace('.KQ',''), c) for c in df.columns],
-                    "수익률 (%)": period_returns.values.round(2),
-                    "변동성 (%)": volatility.values.round(1),
-                    "현재 포지션": ["보유중 ✅" if s == 1 else "현금 ❌" for s in last_signal.values]
+            
+            holdings_list_data = []
+            for col in df.columns:
+                col_idx = df.columns.get_loc(col)
+                ticker_trade_count = int(trade_count_series.iloc[col_idx]) if isinstance(trade_count_series, pd.Series) else int(trade_count_series)
+                
+                # 종목 코드를 깔끔한 한글 사명으로 변환 (예: 047810.KS -> 디에이테크놀로지)
+                raw_code = col.replace(".KS", "").replace(".KQ", "")
+                display_name = name_map.get(raw_code, col)
+                
+                # 총 납부 거래세 및 수수료 % 계산 (왕복 거래비용 / 2 * 거래 횟수)
+                total_fee_pct = ticker_trade_count * (fee_pct / 2)
+                
+                # 포트폴리오 동일가중치 투자금 분할 계산
+                allocated_invest = invest_won / len(tickers)
+                total_fee_won = allocated_invest * (total_fee_pct / 100)
+                
+                # 수수료 차감 후 예상 순수익금 및 평가금 산출
+                if len(tickers) == 1:
+                    ticker_return_pct = strategy_pct
+                    ticker_profit_won = strategy_profit
+                    ticker_final_won = strategy_final
+                else:
+                    ticker_return_pct = (portfolio_strategy.iloc[-1] - 1) * 100
+                    ticker_profit_won = allocated_invest * (ticker_return_pct / 100)
+                    ticker_final_won = allocated_invest + ticker_profit_won
+                
+                pos_status = "보유중 ✅" if (last_signal.iloc[col_idx] == 1 if isinstance(last_signal, pd.Series) else last_signal == 1) else "현금 ❌"
+                
+                holdings_list_data.append({
+                    "종목": display_name, # 코드 대신 수려한 한글 사명 대입
+                    "세후 전략수익률": f"{ticker_return_pct:+.2f}%",
+                    "예상 순수익금": f"{int(ticker_profit_won):+,}원",
+                    "총 거래 횟수": f"{ticker_trade_count}회",
+                    "누적 거래비용": f"{int(total_fee_won):,}원 ({total_fee_pct:.2f}%)",
+                    "최종 평가자산": f"{int(ticker_final_won):,}원",
+                    "현재 포지션": pos_status
                 })
-                st.dataframe(holdings.style.map(color_val, subset=["수익률 (%)"]), use_container_width=True, hide_index=True)
-            else:
-                weights = 1 / len(tickers)
-                holdings = pd.DataFrame({
-                    "종목": [name_map.get(c.replace('.KS','').replace('.KQ',''), c) for c in df.columns],
-                    "수익률 (%)": period_returns.values.round(2),
-                    "기여도 (pp)": (period_returns.values * weights).round(2),
-                    "변동성 (%)": volatility.values.round(1),
-                    "현재 포지션": ["보유중 ✅" if s == 1 else "현금 ❌" for s in last_signal.values]
-                })
-                st.dataframe(holdings.style.map(color_val, subset=["수익률 (%)", "기여도 (pp)"]), use_container_width=True, hide_index=True)
+                
+            holdings_df = pd.DataFrame(holdings_list_data)
+            st.dataframe(holdings_df.style.map(color_val, subset=["세후 전략수익률", "예상 순수익금"]), use_container_width=True, hide_index=True)
 
             if "backtest_results" not in st.session_state:
                 st.session_state.backtest_results = load_backtest()
