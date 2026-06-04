@@ -279,7 +279,7 @@ with tab2:
         fee_pct = st.session_state.get("main_fee_slider", 0.23)
 
         strategy_pct, weighted_return, signal, rsi, ma_s, ma_l, bb_upper, bb_lower, bb_mid = run_strategy(
-            df, strategy, rsi_threshold, ma_short, ma_long, bb_period, fee_pct=fee_pct, open_p=open_p, high_p=high_p, low_p=low_p
+            df, strategy, rsi_threshold, ma_short, ma_long, bb_period
         )
         sig = signal.iloc[:, 0]
         buy_idx = sig[(sig == 1) & (sig.shift(1) == 0)].index
