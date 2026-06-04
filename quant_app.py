@@ -3,6 +3,60 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
+
+# ── [안전 우회 컴파일 엔진] strategies.py 롤백 시에도 수수료와 돌파 전략이 크래시 없이 작동하도록 자체 수동 연산 수행 ──
+def safe_run_strategy(df, strategy, rsi_threshold, ma_short, ma_long, bb_period, fee_pct=0.0, open_p=None, high_p=None, low_p=None):
+    import inspect
+    sig_params = inspect.signature(run_strategy).parameters
+    
+    # 1. 서버의 run_strategy가 실제로 수용하는 인자만 동적으로 추출하여 안전하게 호출 구성 (unexpected keyword argument 방어)
+    kwargs = {}
+    if "fee_pct" in sig_params: kwargs["fee_pct"] = fee_pct
+    if "open_p" in sig_params: kwargs["open_p"] = open_p
+    if "high_p" in sig_params: kwargs["high_p"] = high_p
+    if "low_p" in sig_params: kwargs["low_p"] = low_p
+    
+    # 서버에 변동성 돌파 로직 수식이 누락된 롤백 상태인 경우 자체 백업 연산 작동
+    run_custom_vb_backup = (strategy == "변동성 돌파 전략 (Volatility Breakout)" and "open_p" not in sig_params)
+    
+    if not run_custom_vb_backup:
+        total_return, weighted_return, signal, rsi, ma_s, ma_l, bb_upper, bb_lower, bb_mid = run_strategy(
+            df, strategy, rsi_threshold, ma_short, ma_long, bb_period, **kwargs
+        )
+    else:
+        # ── [변동성 돌파 백업 연산 엔진] strategies.py 롤백 시에도 quant_app이 자체적으로 완벽 보정 연산 ──
+        rsi = df.apply(lambda x: pd.Series(0.0, index=df.index))
+        ma_s = df.rolling(ma_short).mean()
+        ma_l = df.rolling(ma_long).mean()
+        bb_upper = df.rolling(bb_period).mean()
+        bb_lower = bb_upper
+        bb_mid = bb_upper
+
+        op = open_p.to_frame() if isinstance(open_p, pd.Series) else open_p
+        hp = high_p.to_frame() if isinstance(high_p, pd.Series) else high_p
+        lp = low_p.to_frame() if isinstance(low_p, pd.Series) else low_p
+        
+        yesterday_range = hp.shift(1) - lp.shift(1)
+        target_price = op + yesterday_range * rsi_threshold
+        signal = (hp > target_price).astype(int)
+        
+        signal_count = signal.sum(axis=1).replace(0, 1)
+        returns = df.pct_change()
+        daily_fees = signal.diff().abs().fillna(0) * (fee_pct / 100 / 2)
+        weighted_return = (returns * signal.shift(1) - daily_fees).sum(axis=1) / signal_count.shift(1)
+        portfolio = (1 + weighted_return.fillna(0)).cumprod()
+        total_return = (portfolio.iloc[-1] - 1) * 100
+
+    # 2. 수수료 기능 동기화 지연 시 수동 우회 보정 차감 적용
+    if "fee_pct" not in sig_params and fee_pct > 0 and not run_custom_vb_backup:
+        signal_count = signal.sum(axis=1).replace(0, 1)
+        returns = df.pct_change()
+        daily_fees = signal.diff().abs().fillna(0) * (fee_pct / 100 / 2)
+        weighted_return = (returns * signal.shift(1) - daily_fees).sum(axis=1) / signal_count.shift(1)
+        portfolio = (1 + weighted_return.fillna(0)).cumprod()
+        total_return = (portfolio.iloc[-1] - 1) * 100
+        
+    return total_return, weighted_return, signal, rsi, ma_s, ma_l, bb_upper, bb_lower, bb_mid
 import datetime as dt
 import json
 import os
