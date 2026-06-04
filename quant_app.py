@@ -108,14 +108,12 @@ with tab2:
                         t_clean = t.strip()
                         if not t_clean:
                             continue
-                        
-                        t_clean_fixed = t_clean.replace("테이먼트", "테인먼트").replace("엔터테이먼트", "엔터테인먼트").replace("YG", "와이지").replace("yg", "와이지").replace("에스케이", "SK").replace("엘지", "LG")
-                        
-                        if not t_clean_fixed.isdigit() and df_krx is not None:
-                            matched = df_krx[df_krx['Name'].str.upper() == t_clean_fixed.upper()]
+
+                        if not t_clean.isdigit() and df_krx is not None:
+                            matched = df_krx[df_krx['Name'].str.upper() == t_clean.upper()]
                             if matched.empty:
-                                matched = df_krx[df_krx['Name'].str.upper().str.contains(t_clean_fixed.upper(), na=False)]
-                                
+                                matched = df_krx[df_krx['Name'].str.upper().str.contains(t_clean.upper(), na=False)]
+
                             if not matched.empty:
                                 code_col = next((c for c in ['Symbol', 'Code', 'code'] if c in df_krx.columns), None)
                                 if code_col:
@@ -125,20 +123,40 @@ with tab2:
                                     suffix = ".KS" if "KOSPI" in mkt_info else ".KQ"
                                     tickers_list.append(code + suffix)
                                 else:
-                                    tickers_list.append(t_clean_fixed + ".KS")
+                                    tickers_list.append(t_clean + ".KS")
                             else:
-                                tickers_list.append(t_clean_fixed + ".KS")
+                                # FDR 백업
+                                try:
+                                    import FinanceDataReader as fdr
+                                    krx_all = fdr.StockListing('KRX')
+                                    name_col = next((c for c in ['Name'] if c in krx_all.columns), None)
+                                    code_col2 = next((c for c in ['Symbol', 'Code'] if c in krx_all.columns), None)
+                                    if name_col and code_col2:
+                                        matched2 = krx_all[krx_all[name_col].str.upper() == t_clean.upper()]
+                                        if not matched2.empty:
+                                            raw_code2 = matched2.iloc[0][code_col2]
+                                            code2 = str(raw_code2).split('.')[0].zfill(6)
+                                            mkt2 = str(matched2.iloc[0].get('Market', 'KOSPI')).upper()
+                                            suffix2 = ".KS" if "KOSPI" in mkt2 else ".KQ"
+                                            tickers_list.append(code2 + suffix2)
+                                            continue
+                                except:
+                                    pass
+                                tickers_list.append(t_clean + ".KS")
                         else:
-                            code_padded = t_clean_fixed.zfill(6) if len(t_clean_fixed) < 6 else t_clean_fixed
+                            code_padded = t_clean.zfill(6) if len(t_clean) < 6 else t_clean
                             if df_krx is not None:
                                 code_col = next((c for c in ['Symbol', 'Code', 'code'] if c in df_krx.columns), None)
                                 if code_col:
-                                    matched_code = df_krx[df_krx[code_col].astype(str).str.split('.').str[0].str.zfill(6) == code_padded]
-                                    if not matched_code.empty:
-                                        mkt_info = str(matched_code.iloc[0].get('Market', 'KOSPI')).upper()
-                                        suffix = ".KS" if "KOSPI" in mkt_info else ".KQ"
-                                        tickers_list.append(code_padded + suffix)
-                                        continue
+                                    try:
+                                        matched_code = df_krx[df_krx[code_col].astype(str).str.split('.').str[0].str.zfill(6) == code_padded]
+                                        if not matched_code.empty:
+                                            mkt_info = str(matched_code.iloc[0].get('Market', 'KOSPI')).upper()
+                                            suffix = ".KS" if "KOSPI" in mkt_info else ".KQ"
+                                            tickers_list.append(code_padded + suffix)
+                                            continue
+                                    except:
+                                        pass
                             tickers_list.append(code_padded + ".KS")
 
                 tickers = tickers_list
@@ -213,7 +231,7 @@ with tab2:
                 ma_long = st.slider("장기(Slow) EMA", 20, 100, 26)
                 rsi_threshold, bb_period = 40, 20
             elif strategy == "변동성 돌파 전략 (Volatility Breakout)":
-                rsi_threshold = st.slider("돌파 계수 (K)", 0.40, 0.90, 0.50, 0.05, help="수급 강도 결정 계수입니다. 래리 윌리엄스 표준값은 0.50 입니다.")
+                rsi_threshold = st.slider("돌파 계수 (K)", 0.40, 0.90, 0.50, 0.05)
                 ma_short, ma_long, bb_period = 20, 60, 20
             else:
                 rsi_threshold = st.slider("RSI 기준값", 10, 70, 40)
@@ -251,36 +269,38 @@ with tab2:
 
         st.markdown("<div style='margin-top:8px;'></div>", unsafe_allow_html=True)
         analyze = st.button("🔍 분석 시작", use_container_width=True)
-        
         if strategy == "변동성 돌파 전략 (Volatility Breakout)":
             optimize = False
             wf_test = False
-            st.sidebar.caption("💡 변동성 돌파 전략은 고정 상수 K=0.50을 표준으로 삼으므로, 최적화가 비활성화됩니다.")
         else:
             optimize = st.button("⚡ 최적값 자동 탐색", use_container_width=True)
             wf_test = st.button("🔄 워크포워드 테스트", use_container_width=True)
 
-    # ── [전략 분석 공통 연산 영역] ──
+    # ── 분석 공통 연산 ──
     if analyze:
         st.session_state["analyzed"] = True
 
-    analyzed = st.session_state.get("analyzed") and 'tickers' in locals() and tickers
+    if 'tickers' in locals() and tickers:
+        st.session_state["last_tickers"] = tickers
+    tickers = st.session_state.get("last_tickers", [])
+    analyzed = st.session_state.get("analyzed") and bool(tickers)
 
     if analyzed:
-        target_name = tickers_raw.strip() if tickers_raw else "선택 종목"
-        with st.spinner(f"📡 {target_name}의 마켓 데이터 수집 및 백테스트 분석 진행 중..."):
+        with st.spinner("데이터 분석 준비 중..."):
             df, open_p, high_p, low_p, close_p, volume = load_market_data(tuple(tickers), start_date, end_date, market)
 
-        if df.empty or 'close_p' not in locals() or close_p.empty:
-            st.error("❌ 주가 데이터 서버(Yahoo Finance/Naver) 응답이 원활하지 않습니다. 잠시 후 다시 시도해 주세요.")
+        if df.empty or close_p.empty:
+            st.error("❌ 주가 데이터를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.")
             st.stop()
 
         chart_col = df.columns[0]
-        fee_pct = st.session_state.get("main_fee_slider", 0.23)
 
         strategy_pct, weighted_return, signal, rsi, ma_s, ma_l, bb_upper, bb_lower, bb_mid = run_strategy(
             df, strategy, rsi_threshold, ma_short, ma_long, bb_period
         )
+        last_sig = signal.iloc[-1].values[0]
+        last_rsi = rsi[chart_col].iloc[-1] if isinstance(rsi, pd.DataFrame) else rsi.iloc[-1]
+
         sig = signal.iloc[:, 0]
         buy_idx = sig[(sig == 1) & (sig.shift(1) == 0)].index
         sell_idx = sig[(sig == 0) & (sig.shift(1) == 1)].index
@@ -301,7 +321,7 @@ with tab2:
         equal_profit = invest_won * (equal_pct / 100)
         excess = strategy_profit - equal_profit
 
-    # ── [메인 콘텐츠 서브탭 영역] ──
+    # ── 서브탭 ──
     sub1, sub2, sub3 = st.tabs(["📈 주가 & 신호", "📊 백테스트", "🔍 재무제표 & 뉴스"])
 
     # ── SUB 1 : 주가 & 신호 ──
@@ -311,7 +331,7 @@ with tab2:
             def get_today_signals(watchlist, strategy_name, rsi_thr, ma_s, ma_l, bb_p):
                 buy_list, sell_list = [], []
                 for item in watchlist:
-                    ticker = item + ".KS" if not item.endswith(".KS") else item
+                    ticker = item + ".KS" if not item.endswith(".KS") and not item.endswith(".KQ") else item
                     try:
                         df_w = yf.download(ticker, period="6mo", progress=False)["Close"]
                         if isinstance(df_w, pd.Series):
@@ -359,12 +379,13 @@ with tab2:
             card("💹 현재가", "실시간 주가 · KIS API 기준" if KIS_AVAILABLE else "주가 · yfinance 기준")
             price_cols = st.columns(len(tickers))
             kis_token = get_kis_token() if KIS_AVAILABLE else None
+            name_map = get_krx_name_map()
             for i, ticker in enumerate(tickers):
                 with price_cols[i]:
                     price_data = None
                     if KIS_AVAILABLE and kis_token and market == "한국주식 (KS)":
                         try:
-                            raw_ticker = ticker.replace(".KS", "")
+                            raw_ticker = ticker.replace(".KS", "").replace(".KQ", "")
                             price_data = kis_get_price(raw_ticker, kis_token)
                         except:
                             pass
@@ -379,6 +400,7 @@ with tab2:
                                 price_data = {"current": current, "change": change, "change_pct": change_pct}
                         except:
                             pass
+                    display_name = name_map.get(ticker.replace(".KS","").replace(".KQ",""), ticker)
                     if price_data:
                         current = price_data["current"]
                         change = price_data["change"]
@@ -387,7 +409,7 @@ with tab2:
                         arrow = "▲" if change >= 0 else "▼"
                         st.markdown(f"""
                         <div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:12px; padding:14px 18px; margin-bottom:8px;'>
-                            <div style='font-size:12px; color:{DIM}; margin-bottom:4px;'>{ticker}</div>
+                            <div style='font-size:16px; font-weight:600; color:{TEXT}; margin-bottom:4px;'>{display_name}</div>
                             <div style='font-family:JetBrains Mono; font-size:22px; font-weight:600;'>{current:,.0f}</div>
                             <div style='font-family:JetBrains Mono; font-size:12px; color:{color}; margin-top:2px;'>{arrow} {change:+,.0f} ({change_pct:+.2f}%)</div>
                         </div>
@@ -395,7 +417,7 @@ with tab2:
                     else:
                         st.markdown(f"""
                         <div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:12px; padding:14px 18px; margin-bottom:8px;'>
-                            <div style='font-size:12px; color:{DIM};'>{ticker}</div>
+                            <div style='font-size:12px; color:{DIM};'>{display_name}</div>
                             <div style='font-size:14px; color:{DIM};'>조회 실패</div>
                         </div>
                         """, unsafe_allow_html=True)
@@ -422,7 +444,6 @@ with tab2:
                 else:
                     st.info(f"🛡 손절까지 {current_pct + stop_pct:.1f}% 여유 (손절 -{stop_pct}%)")
 
-            # 현재 포지션 메시지
             if last_sig == 1:
                 if strategy == "RSI 전략 (RSI)":
                     reason = f"RSI {last_rsi:.1f} — 과매도 구간 진입, 매수 신호"
@@ -431,9 +452,9 @@ with tab2:
                 elif strategy == "볼린저 밴드 전략 (Bollinger Bands)":
                     reason = "주가가 볼린저 하단 밴드 아래 — 매수 신호"
                 elif strategy == "MACD 전략 (MACD)":
-                    reason = "MACD선이 시그널선을 상향 골든크로스 돌파 — 추세 전환, 매수 신호"
+                    reason = "MACD선이 시그널선 상향 돌파 — 매수 신호"
                 elif strategy == "변동성 돌파 전략 (Volatility Breakout)":
-                    reason = f"주가가 가상의 시가 돌파 타겟가(K={rsi_threshold})를 돌파 — 수급 상승, 매수 신호"
+                    reason = f"시가 돌파 타겟가(K={rsi_threshold}) 돌파 — 매수 신호"
                 else:
                     reason = f"RSI {last_rsi:.1f} + 골든크로스 동시 충족 — 강한 매수 신호"
                 st.success(f"🟢 현재 포지션: 매수 · {reason}")
@@ -445,14 +466,13 @@ with tab2:
                 elif strategy == "볼린저 밴드 전략 (Bollinger Bands)":
                     reason = "주가가 볼린저 하단 밴드 위 — 현금 대기"
                 elif strategy == "MACD 전략 (MACD)":
-                    reason = "MACD선이 시그널선 아래 존재 — 추세 하락, 현금 대기"
+                    reason = "MACD선이 시그널선 아래 — 현금 대기"
                 elif strategy == "변동성 돌파 전략 (Volatility Breakout)":
-                    reason = "당일 돌파 기준선 돌파 실패 — 노이즈 방지, 현금 관망"
+                    reason = "돌파 기준선 돌파 실패 — 현금 관망"
                 else:
                     reason = "매수 조건 미충족 — 현금 대기"
                 st.warning(f"⚪ 현재 포지션: 현금 · {reason}")
 
-            # 전략 지표 그래프
             card("📈 전략 지표 그래프", f"{chart_col} · 상승 🔴 하락 🔵 · ▲매수 ▼매도")
             rsi_chart = rsi[chart_col] if isinstance(rsi, pd.DataFrame) else rsi
             if strategy == "이동평균선 전략 (Moving Average)":
@@ -479,136 +499,33 @@ with tab2:
 
             st.plotly_chart(fig1, use_container_width=True, config={"displayModeBar": False, "scrollZoom": True})
 
-    # ── SUB 2 : 백테스트 성과 ──
+    # ── SUB 2 : 백테스트 ──
     with sub2:
-        # 1. 백테스트 탭 내부로 수수료 슬라이더 배치 (가시성 및 직관성 극대화!)
-        fee_pct = st.slider(
-            "💸 거래 비용 설정 (왕복 수수료 + 매도세금) (%)", 
-            min_value=0.00, 
-            max_value=1.50, 
-            value=0.23, 
-            step=0.01,
-            key="main_fee_slider",
-            help="왕복 1회 매매 시 발생하는 수수료와 거래세의 합계입니다. 국내 주식의 표준 권장 비용은 0.23% 입니다."
-        )
-        
-        # 슬라이더 조작에 반응하는 수수료 기반 주가 실시간 재연산 수행
-        strategy_pct, weighted_return, signal, rsi, ma_s, ma_l, bb_upper, bb_lower, bb_mid = safe_run_strategy(
-            df, strategy, rsi_threshold, ma_short, ma_long, bb_period, fee_pct=fee_pct, open_p=open_p, high_p=high_p, low_p=low_p
-        )
-        portfolio_strategy = (1 + weighted_return.fillna(0)).cumprod()
-        mdd_s = calculate_mdd(portfolio_strategy)
-        sharpe_s = calculate_sharpe(weighted_return.dropna())
-        cagr_s = calculate_cagr(portfolio_strategy, days)
-        strategy_profit = (investment * 10000) * (strategy_pct / 100)
-        strategy_final = (investment * 10000) + strategy_profit
-        excess = strategy_profit - equal_profit
         if not analyzed:
             st.info("사이드바에서 종목을 입력하고 🔍 분석 시작 버튼을 눌러주세요!")
         else:
-            # 1. 백테스트 탭 내부로 수수료 슬라이더 배치 (가시성 및 직관성 극대화!)
-            fee_pct = st.slider(
-                "💸 거래 비용 설정 (왕복 수수료 + 매도세금) (%)", 
-                min_value=0.00, 
-                max_value=1.50, 
-                value=0.23, 
-                step=0.01,
-                key="main_fee_slider",
-                help="왕복 1회 매매 시 발생하는 수수료와 거래세의 합계입니다. 국내 주식의 표준 권장 비용은 0.23% 입니다."
-            )
-            
-            # 슬라이더 조작에 반응하는 수수료 기반 주가 재연산 수행
-            strategy_pct, weighted_return, signal, rsi, ma_s, ma_l, bb_upper, bb_lower, bb_mid = safe_run_strategy(
-                df, strategy, rsi_threshold, ma_short, ma_long, bb_period, fee_pct=fee_pct, open_p=open_p, high_p=high_p, low_p=low_p
-            )
-            portfolio_strategy = (1 + weighted_return.fillna(0)).cumprod()
-            mdd_s = calculate_mdd(portfolio_strategy)
-            sharpe_s = calculate_sharpe(weighted_return.dropna())
-            cagr_s = calculate_cagr(portfolio_strategy, days)
-            strategy_profit = (investment * 10000) * (strategy_pct / 100)
-            strategy_final = (investment * 10000) + strategy_profit
-            excess = strategy_profit - equal_profit
-            
-            # 수수료가 실시간 반영된 KPI 지표 및 설명서 출력
             render_kpi_strip(strategy_pct, equal_pct, cagr_s, cagr_e, sharpe_s, sharpe_e, mdd_s, mdd_e)
             render_strategy_expander(strategy)
 
-            # 수수료가 실시간 반영된 누적 수익률 비교 차트
             card("💰 수익률 비교", "누적 수익률 (%)")
             st.plotly_chart(make_return_chart(portfolio_equal, portfolio_strategy, strategy), use_container_width=True, config={"displayModeBar": False, "scrollZoom": True})
 
-            # 수수료가 실시간 반영된 낙폭 및 월별 수익률 차트
             col1, col2 = st.columns([1, 1])
             with col1:
-                card("📉 자산 낙폭 (Drawdown)", "자산이 역대 최고점에서 얼마나 떨어졌었는지 보여주는 위기 고통 지표예요.")
-                st.markdown("""
-                <div style='background: rgba(239,68,68,0.03); border: 0.5px solid rgba(239,68,68,0.2); border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; font-size: 11.5px; color: #9ca3af;'>
-                  💡 <b>0%는 자산이 역대 최고점(무손실)</b>인 상태를 뜻합니다. 가장 밑바닥 계곡이 <b>역사상 가장 크게 돈을 잃었던 순간(MDD)</b>입니다.
-                </div>
-                """, unsafe_allow_html=True)
+                card("📉 자산 낙폭 (Drawdown)", "자산이 역대 최고점에서 얼마나 떨어졌었는지 보여주는 지표예요.")
                 st.plotly_chart(make_drawdown_chart(portfolio_strategy), use_container_width=True, config={"displayModeBar": False, "scrollZoom": True})
             with col2:
                 card("📅 월별 수익률", "막대가 위로 → 수익 🔴 · 아래로 → 손실 🔵")
                 st.plotly_chart(make_monthly_bar_chart(weighted_return), use_container_width=True, config={"displayModeBar": False})
 
-            # 2. 종목별 상세 성과 매트릭스 테이블 생성 (세후 순수익금 및 총 거래비용 산출)
-            card("📊 종목별 세부 성과 (수수료/순수익금 시뮬레이션)", "실전 세금/수수료를 감안한 세후 순수익금과 성과를 정밀 분석합니다.")
-            volatility = df.pct_change().std() * (252 ** 0.5) * 100
-            last_signal = signal.iloc[-1]
-            
-            # 총 매매 거래 횟수 연산 (signal.diff().abs()가 1인 영업일 합산)
-            trade_count_series = signal.diff().abs().fillna(0).sum()
-            invest_won = investment * 10000
-            
-            # 라이브 한글 사명 변환 맵 추출
-            name_map = get_krx_name_map()
-
-            holdings_list_data = []
-            for col in df.columns:
-                col_idx = df.columns.get_loc(col)
-                ticker_trade_count = int(trade_count_series.iloc[col_idx]) if isinstance(trade_count_series, pd.Series) else int(trade_count_series)
-                
-                # 종목 코드를 깔끔한 한글 사명으로 변환 (예: 047810.KS -> 디에이테크놀로지)
-                raw_code = col.replace(".KS", "").replace(".KQ", "")
-                display_name = name_map.get(raw_code, col)
-                
-                # 총 납부 거래세 및 수수료 % 계산 (왕복 거래비용 / 2 * 거래 횟수)
-                total_fee_pct = ticker_trade_count * (fee_pct / 2)
-                
-                # 포트폴리오 동일가중치 투자금 분할 계산
-                allocated_invest = invest_won / len(tickers)
-                total_fee_won = allocated_invest * (total_fee_pct / 100)
-                
-                # 수수료 차감 후 예상 순수익금 및 평가금 산출
-                if len(tickers) == 1:
-                    ticker_return_pct = strategy_pct
-                    ticker_profit_won = strategy_profit
-                    ticker_final_won = strategy_final
-                else:
-                    ticker_return_pct = (portfolio_strategy.iloc[-1] - 1) * 100
-                    ticker_profit_won = allocated_invest * (ticker_return_pct / 100)
-                    ticker_final_won = allocated_invest + ticker_profit_won
-                
-                pos_status = "보유중 ✅" if (last_signal.iloc[col_idx] == 1 if isinstance(last_signal, pd.Series) else last_signal == 1) else "현금 ❌"
-                
-                holdings_list_data.append({
-                    "종목": display_name, # 코드 대신 수려한 한글 사명 대입
-                    "세후 전략수익률": f"{ticker_return_pct:+.2f}%",
-                    "예상 순수익금": f"{int(ticker_profit_won):+,}원",
-                    "총 거래 횟수": f"{ticker_trade_count}회",
-                    "누적 거래비용": f"{int(total_fee_won):,}원 ({total_fee_pct:.2f}%)",
-                    "최종 평가자산": f"{int(ticker_final_won):,}원",
-                    "현재 포지션": pos_status
-                })
-                
-            holdings_df = pd.DataFrame(holdings_list_data)
-            st.dataframe(holdings_df.style.map(color_val, subset=["세후 전략수익률", "예상 순수익금"]), use_container_width=True, hide_index=True)
+            card("📊 종목별 성과", "기간 수익률 및 현재 포지션")
             period_returns = (df.iloc[-1] / df.iloc[0] - 1) * 100
             volatility = df.pct_change().std() * (252 ** 0.5) * 100
             last_signal = signal.iloc[-1]
+            name_map = get_krx_name_map()
             if len(tickers) == 1:
                 holdings = pd.DataFrame({
-                    "종목": df.columns,
+                    "종목": [name_map.get(c.replace('.KS','').replace('.KQ',''), c) for c in df.columns],
                     "수익률 (%)": period_returns.values.round(2),
                     "변동성 (%)": volatility.values.round(1),
                     "현재 포지션": ["보유중 ✅" if s == 1 else "현금 ❌" for s in last_signal.values]
@@ -617,7 +534,7 @@ with tab2:
             else:
                 weights = 1 / len(tickers)
                 holdings = pd.DataFrame({
-                    "종목": df.columns,
+                    "종목": [name_map.get(c.replace('.KS','').replace('.KQ',''), c) for c in df.columns],
                     "수익률 (%)": period_returns.values.round(2),
                     "기여도 (pp)": (period_returns.values * weights).round(2),
                     "변동성 (%)": volatility.values.round(1),
@@ -625,12 +542,12 @@ with tab2:
                 })
                 st.dataframe(holdings.style.map(color_val, subset=["수익률 (%)", "기여도 (pp)"]), use_container_width=True, hide_index=True)
 
-            # 백테스트 저장/비교
             if "backtest_results" not in st.session_state:
                 st.session_state.backtest_results = load_backtest()
             col_save, col_clear = st.columns([3, 1])
             with col_save:
-                save_label = st.text_input("결과 저장 이름", value=f"{chart_col} {strategy[:3]} {dt.date.today()}", key="save_label")
+                display_name = name_map.get(chart_col.replace(".KS","").replace(".KQ",""), chart_col)
+                save_label = st.text_input("결과 저장 이름", value=f"{display_name} {strategy[:3]} {dt.date.today()}", key="save_label")
             with col_clear:
                 st.markdown("<div style='margin-top:28px;'></div>", unsafe_allow_html=True)
                 if st.button("💾 저장", key="save_backtest"):
@@ -651,7 +568,6 @@ with tab2:
                         save_backtest([])
                         st.rerun()
 
-            # 스트레스 테스트 (last_tickers 기반)
             last_tickers = st.session_state.get("last_tickers", [])
             if last_tickers:
                 with st.expander("🚨 스트레스 테스트 — 과거 위기 시뮬레이션", expanded=False):
@@ -704,7 +620,6 @@ with tab2:
                             )
                             st.plotly_chart(fig_stress, use_container_width=True, config={"displayModeBar": False})
 
-            # 워크포워드 테스트
             if wf_test:
                 card("🔄 워크포워드 테스트 결과", "과거로 최적화 → 미래로 검증 · 반복")
                 col_a, col_b = st.columns(2)
@@ -741,7 +656,6 @@ with tab2:
                     st.plotly_chart(fig_wf, use_container_width=True, config={"displayModeBar": False})
                     st.warning("⚠️ 과거 데이터 기반 테스트예요!")
 
-            # 최적화
             if optimize:
                 card("⚡ 파라미터 최적화 결과", "과거 데이터 기준 최적값 탐색 · 과최적화 주의!")
                 with st.spinner("최적값 탐색 중..."):
@@ -775,3 +689,159 @@ with tab2:
                         st.success(f"✅ 최적값: RSI **{int(best['RSI'])}** / 단기MA **{int(best['단기 MA'])}** / 장기MA **{int(best['장기 MA'])}** → 수익률 **{best['수익률 (%)']:+.2f}%**")
                     st.dataframe(result_df.sort_values("수익률 (%)", ascending=False).head(10).style.map(color_val, subset=["수익률 (%)"]), use_container_width=True, hide_index=True)
                 st.warning("⚠️ 과최적화 주의!")
+
+    # ── SUB 3 : 재무 & 뉴스 ──
+    with sub3:
+        if not analyzed:
+            st.info("사이드바에서 종목을 입력하고 🔍 분석 시작 버튼을 눌러주세요!")
+        else:
+            card("📊 재무 지표", "ROE · PER · PBR · 시가총액 · 52주 범위 (DART 공식 기준)")
+            try:
+                import FinanceDataReader as fdr
+                raw_ticker = chart_col.replace(".KS", "").replace(".KQ", "")
+                try:
+                    fi = pd.read_csv("https://raw.githubusercontent.com/corazzon/finance-data-analysis/main/krx.csv")
+                except:
+                    fi = fdr.StockListing('KRX')
+
+                code_col = next((c for c in ['Symbol', 'Code', 'code'] if c in fi.columns), None)
+                row = fi[fi[code_col].astype(str).str.split('.').str[0].str.zfill(6) == raw_ticker] if code_col else pd.DataFrame()
+
+                if not row.empty:
+                    mkt = row.iloc[0].get('Marcap', 0)
+                    mkt_str = f"{int(mkt)/1e12:.1f}조" if mkt else 'N/A'
+                    high52 = row.iloc[0].get('High', 'N/A')
+                    low52 = row.iloc[0].get('Low', 'N/A')
+                    curr_p = float(close_p.iloc[-1]) if not close_p.empty else 0
+
+                    from dart_utils import get_dart_roe, get_dart_per_pbr
+                    roe = get_dart_roe(raw_ticker)
+                    roe_str = f"{roe:.1f}%" if roe is not None else "N/A"
+                    dart_per, dart_pbr = get_dart_per_pbr(raw_ticker, curr_p)
+                    per = f"{dart_per:.1f}배" if dart_per is not None else "N/A"
+                    pbr = f"{dart_pbr:.1f}배" if dart_pbr is not None else "N/A"
+
+                    eps, bps, div_yield, div_payout, div_per_share = "N/A", "N/A", "N/A", "N/A", "N/A"
+                    try:
+                        nv_url = f"https://m.stock.naver.com/api/stock/{raw_ticker}/integration"
+                        nv_res = requests.get(nv_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
+                        nv_data = nv_res.json()
+                        total_infos = nv_data.get("totalInfos", [])
+                        for info in total_infos:
+                            k = str(info.get("key", "")).upper()
+                            c = str(info.get("code", "")).lower()
+                            v = str(info.get("value", "")).strip()
+                            if not v or v == "-":
+                                continue
+                            if "PER" in k or "per" in c:
+                                if per == "N/A":
+                                    try: per = f"{float(v.replace(',', '')):.1f}배"
+                                    except: per = f"{v}배"
+                            elif "PBR" in k or "pbr" in c:
+                                if pbr == "N/A":
+                                    try: pbr = f"{float(v.replace(',', '')):.1f}배"
+                                    except: pbr = f"{v}배"
+                            elif "EPS" in k or "eps" in c:
+                                try: eps = f"{int(float(v.replace(',', ''))):,}원"
+                                except: eps = f"{v}원"
+                            elif "BPS" in k or "bps" in c:
+                                try: bps = f"{int(float(v.replace(',', ''))):,}원"
+                                except: bps = f"{v}원"
+                            elif "배당수익률" in k or "dividend" in c:
+                                try: div_yield = f"{float(v.replace('%', '').replace(',', '')):.2f}%"
+                                except: div_yield = f"{v}%"
+                            elif "배당성향" in k or "payout" in c:
+                                try: div_payout = f"{float(v.replace('%', '').replace(',', '')):.1f}%"
+                                except: div_payout = f"{v}%"
+                            elif "주당배당금" in k or "dps" in c:
+                                try: div_per_share = f"{int(float(v.replace(',', ''))):,}원"
+                                except: div_per_share = f"{v}원"
+                            elif "ROE" in k or "roe" in c:
+                                if roe_str == "N/A":
+                                    try: roe_str = f"{float(v.replace('%', '').replace(',', '')):.1f}%"
+                                    except: roe_str = f"{v}%"
+                    except:
+                        pass
+
+                    st.markdown(f"""
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; background: #0f1117; padding: 18px; border-radius: 14px; border: 0.5px solid #1e2330;">
+                      <div style="background: #13161f; padding: 16px; border-radius: 12px; border: 0.5px solid #1e2330;">
+                        <div style="font-size: 13.5px; font-weight: 600; color: #9ca3af; margin-bottom: 12px;">가치평가</div>
+                        <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 0.5px solid #1e2330;">
+                          <span style="color: #6b7280; font-size: 13px;">시가총액</span>
+                          <span style="color: #e2e8f0; font-size: 13px; font-weight: 600; font-family: 'JetBrains Mono';">{mkt_str}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 0.5px solid #1e2330;">
+                          <span style="color: #6b7280; font-size: 13px;">PER</span>
+                          <span style="color: #e2e8f0; font-size: 13px; font-weight: 600; font-family: 'JetBrains Mono';">{per}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; padding: 10px 0;">
+                          <span style="color: #6b7280; font-size: 13px;">PBR</span>
+                          <span style="color: #e2e8f0; font-size: 13px; font-weight: 600; font-family: 'JetBrains Mono';">{pbr}</span>
+                        </div>
+                      </div>
+                      <div style="background: #13161f; padding: 16px; border-radius: 12px; border: 0.5px solid #1e2330;">
+                        <div style="font-size: 13.5px; font-weight: 600; color: #9ca3af; margin-bottom: 12px;">수익</div>
+                        <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 0.5px solid #1e2330;">
+                          <span style="color: #6b7280; font-size: 13px;">EPS</span>
+                          <span style="color: #e2e8f0; font-size: 13px; font-weight: 600; font-family: 'JetBrains Mono';">{eps}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 0.5px solid #1e2330;">
+                          <span style="color: #6b7280; font-size: 13px;">BPS</span>
+                          <span style="color: #e2e8f0; font-size: 13px; font-weight: 600; font-family: 'JetBrains Mono';">{bps}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; padding: 10px 0;">
+                          <span style="color: #6b7280; font-size: 13px;">ROE</span>
+                          <span style="color: #e2e8f0; font-size: 13px; font-weight: 600; font-family: 'JetBrains Mono';">{roe_str}</span>
+                        </div>
+                      </div>
+                      <div style="background: #13161f; padding: 16px; border-radius: 12px; border: 0.5px solid #1e2330;">
+                        <div style="font-size: 13.5px; font-weight: 600; color: #9ca3af; margin-bottom: 12px;">배당 (최근 12개월)</div>
+                        <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 0.5px solid #1e2330;">
+                          <span style="color: #6b7280; font-size: 13px;">배당수익률</span>
+                          <span style="color: #e2e8f0; font-size: 13px; font-weight: 600; font-family: 'JetBrains Mono';">{div_yield}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 0.5px solid #1e2330;">
+                          <span style="color: #6b7280; font-size: 13px;">주당 배당금</span>
+                          <span style="color: #e2e8f0; font-size: 13px; font-weight: 600; font-family: 'JetBrains Mono';">{div_per_share}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; padding: 10px 0;">
+                          <span style="color: #6b7280; font-size: 13px;">배당성향</span>
+                          <span style="color: #e2e8f0; font-size: 13px; font-weight: 600; font-family: 'JetBrains Mono';">{div_payout}</span>
+                        </div>
+                      </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    st.info("재무 데이터를 찾을 수 없어요.")
+            except Exception as e:
+                st.error(f"재무 데이터 오류: {e}")
+
+            card("📰 관련 뉴스", f"{chart_col} 최신 뉴스")
+            try:
+                naver_id = st.secrets.get("NAVER_CLIENT_ID", "")
+                naver_secret = st.secrets.get("NAVER_CLIENT_SECRET", "")
+                query = chart_col.replace(".KS", "").replace(".KQ", "")
+                url = f"https://openapi.naver.com/v1/search/news.json?query={query}&display=5&sort=date"
+                res = requests.get(url, headers={"X-Naver-Client-Id": naver_id, "X-Naver-Client-Secret": naver_secret}, timeout=5)
+                items = res.json().get("items", [])
+                if items:
+                    for item in items:
+                        title = item["title"].replace("<b>", "").replace("</b>", "")
+                        link = item["link"]
+                        date = item["pubDate"][:16]
+                        st.markdown(f"""
+                        <div style='background:{SURFACE_1}; border:0.5px solid {LINE}; border-radius:10px; padding:12px 14px; margin-bottom:8px;'>
+                            <a href='{link}' target='_blank' style='color:{TEXT}; text-decoration:none; font-size:13px; font-weight:500;'>{title}</a>
+                            <div style='font-size:11px; color:{DIM}; margin-top:4px;'>{date}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    st.info("뉴스를 불러오지 못했어요.")
+            except:
+                st.info("뉴스를 불러오지 못했어요.")
+
+            st.caption(f"Data: yfinance · {df.index[0].date()} → {df.index[-1].date()} · {len(df)} trading days")
+
+with tab3:
+    render_portfolio(KIS_AVAILABLE, get_kis_token, get_balance if KIS_AVAILABLE else lambda x: {})
