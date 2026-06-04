@@ -10,6 +10,26 @@ import requests
 
 from strategies import calculate_mdd, calculate_sharpe, calculate_cagr, run_strategy
 from optimization import optimize_parameters, walk_forward_test
+
+# ── [안전 우회 컴파일 엔진] strategies.py 파일 동기화 지연 시에도 크래시를 차단하고 수수료를 강제 연산 ──
+def safe_run_strategy(df, strategy, rsi_threshold, ma_short, ma_long, bb_period, fee_pct=0.0):
+    import inspect
+    sig_params = inspect.signature(run_strategy).parameters
+    if "fee_pct" in sig_params:
+        # 파일이 잘 연동된 상태라면 본래의 퀀트 모듈 호출
+        return run_strategy(df, strategy, rsi_threshold, ma_short, ma_long, bb_period, fee_pct=fee_pct)
+    else:
+        # 동기화 지연으로 에러 발생 시, quant_app 내부에서 직접 수수료 자동 우회 차감 계산
+        total_return, weighted_return, signal, rsi, ma_s, ma_l, bb_upper, bb_lower, bb_mid = run_strategy(
+            df, strategy, rsi_threshold, ma_short, ma_long, bb_period
+        )
+        signal_count = signal.sum(axis=1).replace(0, 1)
+        returns = df.pct_change()
+        daily_fees = signal.diff().abs().fillna(0) * (fee_pct / 100 / 2)
+        weighted_return = (returns * signal.shift(1) - daily_fees).sum(axis=1) / signal_count.shift(1)
+        portfolio = (1 + weighted_return).cumprod()
+        total_return = (portfolio.iloc[-1] - 1) * 100
+        return total_return, weighted_return, signal, rsi, ma_s, ma_l, bb_upper, bb_lower, bb_mid
 from ui_components import (
     apply_custom_css, card, render_kpi_strip, render_strategy_expander,
     render_summary_cards, color_val,
@@ -491,7 +511,7 @@ with tab2:
         # 메인 화면 슬라이더 값을 세션 상태에서 선감지하여 연동 (기본값 0.23% 세팅)
         fee_pct = st.session_state.get("main_fee_slider", 0.23)
 
-        strategy_pct, weighted_return, signal, rsi, ma_s, ma_l, bb_upper, bb_lower, bb_mid = run_strategy(
+        strategy_pct, weighted_return, signal, rsi, ma_s, ma_l, bb_upper, bb_lower, bb_mid = safe_run_strategy(
             df, strategy, rsi_threshold, ma_short, ma_long, bb_period, fee_pct=fee_pct
         )
         # 서브탭 메시지 출력에 필요한 최근 신호 및 RSI 지표 미리 연산
@@ -705,7 +725,7 @@ with tab2:
             )
             
             # 슬라이더 조작에 반응하는 수수료 기반 주가 재연산 수행
-            strategy_pct, weighted_return, signal, rsi, ma_s, ma_l, bb_upper, bb_lower, bb_mid = run_strategy(
+            strategy_pct, weighted_return, signal, rsi, ma_s, ma_l, bb_upper, bb_lower, bb_mid = safe_run_strategy(
                 df, strategy, rsi_threshold, ma_short, ma_long, bb_period, fee_pct=fee_pct
             )
             portfolio_strategy = (1 + weighted_return).cumprod()
