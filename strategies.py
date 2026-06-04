@@ -32,7 +32,7 @@ def calculate_cagr(portfolio, days):
     return ((portfolio.iloc[-1] / portfolio.iloc[0]) ** (365 / days) - 1) * 100
 
 
-def run_strategy(df, strategy, rsi_threshold, ma_short, ma_long, bb_period):
+def run_strategy(df, strategy, rsi_threshold, ma_short, ma_long, bb_period, fee_pct=0.0):
     # ── [예외 처리] 비어 있는 데이터가 인자로 들어왔을 때 크래시 방어 ──
     if df.empty:
         import pandas as pd
