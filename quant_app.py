@@ -10,6 +10,26 @@ import requests
 
 from strategies import calculate_mdd, calculate_sharpe, calculate_cagr, run_strategy
 from optimization import optimize_parameters, walk_forward_test
+
+# ── [안전 우회 컴파일 엔진] strategies.py 파일의 수수료 매개변수 유무를 자동 판별하여 수수료 실시간 차감 연산 수행 ──
+def safe_run_strategy(df, strategy, rsi_threshold, ma_short, ma_long, bb_period, fee_pct=0.0, open_p=None, high_p=None, low_p=None):
+    import inspect
+    sig_params = inspect.signature(run_strategy).parameters
+    if "fee_pct" in sig_params:
+        # strategies.py에 fee_pct가 존재하면 정식 연산 수행
+        return run_strategy(df, strategy, rsi_threshold, ma_short, ma_long, bb_period, fee_pct=fee_pct, open_p=open_p, high_p=high_p, low_p=low_p)
+    else:
+        # strategies.py에 수수료 인자가 지워져 있는 경우, quant_app 내부에서 자체적으로 수수료 강제 차감 보정 계산 수행
+        total_return, weighted_return, signal, rsi, ma_s, ma_l, bb_upper, bb_lower, bb_mid = run_strategy(
+            df, strategy, rsi_threshold, ma_short, ma_long, bb_period, open_p=open_p, high_p=high_p, low_p=low_p
+        )
+        signal_count = signal.sum(axis=1).replace(0, 1)
+        returns = df.pct_change()
+        daily_fees = signal.diff().abs().fillna(0) * (fee_pct / 100 / 2)
+        weighted_return = (returns * signal.shift(1) - daily_fees).sum(axis=1) / signal_count.shift(1)
+        portfolio = (1 + weighted_return.fillna(0)).cumprod()
+        total_return = (portfolio.iloc[-1] - 1) * 100
+        return total_return, weighted_return, signal, rsi, ma_s, ma_l, bb_upper, bb_lower, bb_mid
 from ui_components import (
     apply_custom_css, card, render_kpi_strip, render_strategy_expander,
     render_summary_cards, color_val,
