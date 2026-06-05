@@ -581,131 +581,52 @@ with tab2:
                 st.plotly_chart(make_monthly_bar_chart(weighted_return), use_container_width=True, config={"displayModeBar": False})
 
             # ── [토스증권형 종목별 실시간 성적표 통합 렌더링 영역] ──
-            # ── [종목별 실시간 성적표 - 네이티브 12열 성적표 빌드] ──
-            card("📊 종목별 실시간 성적표", "실전 거래 비용을 제하고 남은 세후 순수익금과 퀀트 승률, 진입 일수 및 이격도를 정밀 추적합니다.")
+            # ── [종목별 실시간 성적표 - 슬림형 네이티브 성적표 교체] ──
+            card("💼 종목별 퀀트 포지션 요약", "전략 시그널 판단과 투입자금 대비 세후 성과를 한눈에 모니터링합니다.")
             
             name_map = get_krx_name_map()
             alloc_won = invest_won / len(tickers) if len(tickers) > 0 else invest_won
             
-            def get_col_data(data, t_name):
-                if data is None:
-                    return None
-                if isinstance(data, pd.Series):
-                    return data
-                if isinstance(data, pd.DataFrame):
-                    return data[[t_name]] if t_name in data.columns else data.iloc[:, [0]]
-                return data
-
             scorecard_rows = []
             for ticker in tickers:
                 try:
                     t_df = df[[ticker]] if ticker in df.columns else df.iloc[:, [0]]
-                    t_open = get_col_data(open_p, ticker)
-                    t_high = get_col_data(high_p, ticker)
-                    t_low = get_col_data(low_p, ticker)
                     
-                    t_pct, _, t_sig, t_rsi, _, _, _, _, _ = safe_run_strategy(
+                    # 5대 필수 지표 연산을 위한 독립 시뮬레이션
+                    t_pct, _, t_sig, _, _, _, _, _, _ = safe_run_strategy(
                         t_df, strategy, rsi_threshold, ma_short, ma_long, bb_period, fee_pct=fee_pct,
-                        open_p=t_open, high_p=t_high, low_p=t_low
+                        open_p=open_p[[ticker]] if open_p is not None else None,
+                        high_p=high_p[[ticker]] if high_p is not None else None,
+                        low_p=low_p[[ticker]] if low_p is not None else None
                     )
                     
                     sig_series = t_sig.iloc[:, 0] if isinstance(t_sig, pd.DataFrame) else t_sig
                     close_series = df[ticker] if ticker in df.columns else df.iloc[:, 0]
                     t_last_sig = sig_series.iloc[-1]
                     
-                    # 1. 포지션 정보 기입
-                    position_str = "🟢 매수 보유" if t_last_sig == 1 else "⚪ 현금 관망"
-                    
-                    # 2. 거래 기록 파싱 (승률 및 PF 연산)
-                    trades_returns = []
-                    in_pos = False
-                    buy_price = 0.0
-                    buy_date = None
-                    
-                    for date, pos in sig_series.items():
-                        if pos == 1 and not in_pos:
-                            buy_price = close_series.loc[date]
-                            buy_date = date
-                            in_pos = True
-                        elif pos == 0 and in_pos:
-                            sell_price = close_series.loc[date]
-                            trade_return = (sell_price / buy_price - 1) - (fee_pct / 100)
-                            trades_returns.append(trade_return)
-                            in_pos = False
-                    
-                    if in_pos:
-                        sell_price = close_series.iloc[-1]
-                        trade_return = (sell_price / buy_price - 1) - (fee_pct / 100)
-                        trades_returns.append(trade_return)
-                    
-                    wins = sum(1 for r in trades_returns if r > 0)
-                    losses = sum(1 for r in trades_returns if r <= 0)
-                    total_trades = len(trades_returns)
-                    win_rate_str = f"{wins}승 {losses}패 ({(wins / total_trades) * 100:.1f}%)" if total_trades > 0 else "ㅡ"
-                    
-                    win_sum = sum(r for r in trades_returns if r > 0)
-                    loss_sum = abs(sum(r for r in trades_returns if r < 0))
-                    pf_str = f"{win_sum / loss_sum:.2f}" if loss_sum > 0 else ("ㅡ" if win_sum == 0 else "∞")
+                    # 1. 포지션 정보 (이모지 매핑)
+                    position_str = "🟢 보유 (BUY)" if t_last_sig == 1 else "⚪ 관망 (WAIT)"
                     
                     curr_p_val = float(close_series.iloc[-1])
-                    
-                    if t_last_sig == 1 and buy_date is not None:
-                        elapsed_str = f"{buy_date.strftime('%m/%d')} ({(df.index[-1] - buy_date).days}일)"
-                    else:
-                        elapsed_str = "ㅡ"
-                        
-                    rsi_series = t_rsi.iloc[:, 0] if isinstance(t_rsi, pd.DataFrame) else t_rsi
-                    last_rsi_val = rsi_series.iloc[-1]
-                    rsi_status = "과열" if last_rsi_val >= 70 else ("과매도" if last_rsi_val <= 30 else "보통")
-                    rsi_str = f"{last_rsi_val:.1f} ({rsi_status})"
-                    
                     t_profit_won = float(alloc_won * (t_pct / 100))
-                    
-                    if t_last_sig == 1 and buy_price > 0:
-                        current_trade_return_pct = (curr_p_val / buy_price - 1) * 100
-                        target_val = target_pct - current_trade_return_pct
-                        target_str = f"+{target_val:.1f}%" if target_val > 0 else "달성 🎉"
-                        
-                        stop_val = current_trade_return_pct + stop_pct
-                        stop_str = f"-{stop_val:.1f}%" if stop_val > 0 else "이탈 🛑"
-                    else:
-                        target_str = "ㅡ"
-                        stop_str = "ㅡ"
-                        
-                    t_trades_total = int(sig_series.diff().abs().fillna(0).sum())
-                    t_fees_won = float(t_trades_total * (fee_pct / 100 / 2) * alloc_won)
                     
                     display_name = name_map.get(ticker.replace('.KS','').replace('.KQ',''), ticker)
                     
                     scorecard_rows.append({
                         "종목명": f"{display_name} ({ticker})",
-                        "현재 포지션": position_str,
+                        "전략 시그널": position_str,
                         "현재가": curr_p_val,
-                        "진입일 (경과)": elapsed_str,
-                        "현재 RSI": rsi_str,
-                        "세후 누적률 (%)": float(t_pct),
-                        "예상 순수익금": t_profit_won,
-                        "퀀트 승률": win_rate_str,
-                        "손익비 (PF)": pf_str,
-                        "목표가까지": target_str,
-                        "손절가까지": stop_str,
-                        "총 수수료": t_fees_won
+                        "세후 수익률": float(t_pct),
+                        "예상 순수익금": t_profit_won
                     })
                 except Exception as ex:
                     display_name = name_map.get(ticker.replace('.KS','').replace('.KQ',''), ticker)
                     scorecard_rows.append({
                         "종목명": f"{display_name} ({ticker})",
-                        "현재 포지션": "🚨 연산 실패",
+                        "전략 시그널": "🚨 연산 오류",
                         "현재가": 0.0,
-                        "진입일 (경과)": "ㅡ",
-                        "현재 RSI": "ㅡ",
-                        "세후 누적률 (%)": 0.0,
-                        "예상 순수익금": 0.0,
-                        "퀀트 승률": "ㅡ",
-                        "손익비 (PF)": "ㅡ",
-                        "목표가까지": "ㅡ",
-                        "손절가까지": "ㅡ",
-                        "총 수수료": 0.0
+                        "세후 수익률": 0.0,
+                        "예상 순수익금": 0.0
                     })
             
             if scorecard_rows:
@@ -714,22 +635,14 @@ with tab2:
                     scorecard_df,
                     column_config={
                         "종목명": st.column_config.TextColumn("종목명"),
-                        "현재 포지션": st.column_config.TextColumn("현재 포지션"),
+                        "전략 시그널": st.column_config.TextColumn("전략 시그널"),
                         "현재가": st.column_config.NumberColumn("현재가", format="%d원" if market == "한국주식 (KS)" else "$%.2f"),
-                        "진입일 (경과)": st.column_config.TextColumn("진입일 (경과)"),
-                        "현재 RSI": st.column_config.TextColumn("현재 RSI"),
-                        "세후 누적률 (%)": st.column_config.NumberColumn("세후 누적률 (%)", format="%.2f%%"),
+                        "세후 수익률": st.column_config.NumberColumn("세후 수익률", format="%.2f%%"),
                         "예상 순수익금": st.column_config.NumberColumn("예상 순수익금", format="%+d원" if market == "한국주식 (KS)" else "$%+.2f"),
-                        "퀀트 승률": st.column_config.TextColumn("퀀트 승률"),
-                        "손익비 (PF)": st.column_config.TextColumn("손익비 (PF)"),
-                        "목표가까지": st.column_config.TextColumn("목표가까지"),
-                        "손절가까지": st.column_config.TextColumn("손절가까지"),
-                        "총 수수료": st.column_config.NumberColumn("총 수수료", format="%d원" if market == "한국주식 (KS)" else "$%.2f"),
                     },
                     use_container_width=True,
                     hide_index=True
                 )
-            
             # ── [종목별 실시간 성적표 통합 렌더링 끝] ──
 
             if "backtest_results" not in st.session_state:
