@@ -712,21 +712,21 @@ with tab2:
                     
                     display_name = name_map.get(ticker.replace('.KS','').replace('.KQ',''), ticker)
                     
-                    # 개별 행 조립
+                    # 개별 행 조립 (배경색 직접 지정 및 깔끔한 정리)
                     rows_html += f"""
-                    <tr style="border-bottom: 1px solid #1e2330; background: {BG}; transition: background 0.15s ease;">
-                      <td style="padding: 14px 16px; font-weight: 600; color:{TEXT}; font-size:13.5px; text-align: left;">
+                    <tr style="border-bottom: 1px solid #1e2330; background: #080a0f; transition: background 0.15s ease;">
+                      <td style="padding: 14px 16px; font-weight: 600; color:#e2e8f0; font-size:13.5px; text-align: left;">
                         {display_name}
-                        <div style="font-size: 10px; color: {DIM}; font-family: 'JetBrains Mono'; margin-top: 2px;">{ticker}</div>
+                        <div style="font-size: 10px; color: #9ca3af; font-family: 'JetBrains Mono'; margin-top: 2px;">{ticker}</div>
                       </td>
                       <td style="padding: 14px 16px; text-align: center;">{badge_html}</td>
                       <td style="padding: 14px 16px; text-align: right; font-family:'JetBrains Mono'; font-weight:600; color:#f8fafc; font-size:13.5px;">{curr_p_str}</td>
-                      <td style="padding: 14px 16px; text-align: center; color:{DIM}; font-size:12.5px;">{elapsed_str}</td>
-                      <td style="padding: 14px 16px; text-align: center; color:{TEXT}; font-size:12.5px;">{rsi_str}</td>
+                      <td style="padding: 14px 16px; text-align: center; color:#9ca3af; font-size:12.5px;">{elapsed_str}</td>
+                      <td style="padding: 14px 16px; text-align: center; color:#e2e8f0; font-size:12.5px;">{rsi_str}</td>
                       <td style="padding: 14px 16px; text-align: center; {bg_style} color:{color}; font-weight:600; font-family:'JetBrains Mono'; font-size:13.5px;">{return_str}</td>
                       <td style="padding: 14px 16px; text-align: right; font-family:'JetBrains Mono'; color:{color}; font-weight:600; font-size:13.5px;">{profit_str}</td>
-                      <td style="padding: 14px 16px; text-align: center; color:{DIM}; font-family:'JetBrains Mono'; font-size:12.5px;">{win_rate_str}</td>
-                      <td style="padding: 14px 16px; text-align: center; color:{TEXT}; font-family:'JetBrains Mono'; font-weight:600; font-size:12.5px;">{pf_str}</td>
+                      <td style="padding: 14px 16px; text-align: center; color:#9ca3af; font-family:'JetBrains Mono'; font-size:12.5px;">{win_rate_str}</td>
+                      <td style="padding: 14px 16px; text-align: center; color:#e2e8f0; font-family:'JetBrains Mono'; font-weight:600; font-size:12.5px;">{pf_str}</td>
                       <td style="padding: 14px 16px; text-align: center; color:#f59e0b; font-size:12px; font-weight: 600;">{target_str}</td>
                       <td style="padding: 14px 16px; text-align: center; color:#3b82f6; font-size:12px; font-weight: 600;">{stop_str}</td>
                       <td style="padding: 14px 16px; text-align: right; color:#6b7280; font-family:'JetBrains Mono'; font-size:12px;">{fees_str}</td>
@@ -734,14 +734,14 @@ with tab2:
                     """
                 except Exception as ex:
                     rows_html += f"""
-                    <tr style="border-bottom: 1px solid #1e2330; background: {BG};">
-                      <td style="padding: 14px 16px; color: {DIM};" colspan="12">🚨 {ticker} 연산 실패 ({ex})</td>
+                    <tr style="border-bottom: 1px solid #1e2330; background: #080a0f;">
+                      <td style="padding: 14px 16px; color: #9ca3af;" colspan="12">🚨 {ticker} 연산 실패 ({ex})</td>
                     </tr>
                     """
 
-            # ── [중요] 단 한번의 st.markdown 호출로 테이블 헤더부터 tbody 바디까지 온전하게 렌더링 ──
+            # 안전 통합 렌더링 (헤더와 바디 결합)
             html_table = f"""
-            <div style="overflow-x: auto; border: 0.5px solid {LINE}; border-radius: 14px; background: {BG}; margin-top: 10px; margin-bottom: 24px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);">
+            <div style="overflow-x: auto; border: 0.5px solid {LINE}; border-radius: 14px; background: #080a0f; margin-top: 10px; margin-bottom: 24px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);">
               <table style="width: 100%; border-collapse: collapse; text-align: left; color: {TEXT};">
                 <thead>
                   <tr style="border-bottom: 0.5px solid {LINE}; background: {SURFACE_1}; color: {DIM}; font-size: 12.5px; letter-spacing: 0.5px;">
@@ -756,7 +756,7 @@ with tab2:
                     <th style="padding: 14px 16px; font-weight: 600; text-align: center;">손익비 (PF)</th>
                     <th style="padding: 14px 16px; font-weight: 600; text-align: center; color: #f59e0b;">목표가까지</th>
                     <th style="padding: 14px 16px; font-weight: 600; text-align: center; color: #3b82f6;">손절가까지</th>
-                    <th style="padding: 14px 16px; font-weight: 600; text-align: right;">총 수수료(세금)</th>
+                    <th style="padding: 14px 16px; font-weight: 600; text-align: right;">총 수수료</th>
                   </tr>
                 </thead>
                 <tbody>
