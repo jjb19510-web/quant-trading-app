@@ -598,7 +598,6 @@ with tab2:
             rows_html = ""
             for ticker in tickers:
                 try:
-                    # 개별 종목 데이터 슬라이싱 및 전략 독립 시뮬레이션
                     t_df = df[[ticker]] if ticker in df.columns else df.iloc[:, [0]]
                     t_open = get_col_data(open_p, ticker)
                     t_high = get_col_data(high_p, ticker)
@@ -612,10 +611,8 @@ with tab2:
                     sig_series = t_sig.iloc[:, 0] if isinstance(t_sig, pd.DataFrame) else t_sig
                     close_series = df[ticker] if ticker in df.columns else df.iloc[:, 0]
                     
-                    # 1. 현재 포지션 정보
                     t_last_sig = sig_series.iloc[-1]
                     
-                    # 2. 거래 세션 매핑 및 승률/PF 연산
                     trades_returns = []
                     in_pos = False
                     buy_price = 0.0
@@ -637,87 +634,60 @@ with tab2:
                         trade_return = (sell_price / buy_price - 1) - (fee_pct / 100)
                         trades_returns.append(trade_return)
                     
-                    # 퀀트 승률 계산
                     wins = sum(1 for r in trades_returns if r > 0)
                     losses = sum(1 for r in trades_returns if r <= 0)
                     total_trades = len(trades_returns)
                     if total_trades > 0:
-                        win_rate = (wins / total_trades) * 100
-                        win_rate_str = f"{wins}승 {losses}패 ({win_rate:.1f}%)"
+                        win_rate_str = f"{wins}승 {losses}패 ({(wins / total_trades) * 100:.1f}%)"
                     else:
                         win_rate_str = "ㅡ"
                         
-                    # 손익비 (PF) 계산
                     win_sum = sum(r for r in trades_returns if r > 0)
                     loss_sum = abs(sum(r for r in trades_returns if r < 0))
-                    if loss_sum > 0:
-                        pf_str = f"{win_sum / loss_sum:.2f}"
-                    else:
-                        pf_str = "ㅡ" if win_sum == 0 else "∞"
+                    pf_str = f"{win_sum / loss_sum:.2f}" if loss_sum > 0 else ("ㅡ" if win_sum == 0 else "∞")
                     
-                    # 3. 현재가 포맷
                     curr_p_val = close_series.iloc[-1]
                     curr_p_str = f"{int(curr_p_val):,}원" if market == "한국주식 (KS)" else f"${curr_p_val:,.2f}"
                     
-                    # 4. 진입일 (경과) 연산
                     if t_last_sig == 1 and buy_date is not None:
-                        elapsed_days = (df.index[-1] - buy_date).days
-                        elapsed_str = f"{buy_date.strftime('%m/%d')} ({elapsed_days}일)"
+                        elapsed_str = f"{buy_date.strftime('%m/%d')} ({(df.index[-1] - buy_date).days}일)"
                     else:
                         elapsed_str = "ㅡ"
                         
-                    # 5. 현재 RSI 상태 매핑
                     rsi_series = t_rsi.iloc[:, 0] if isinstance(t_rsi, pd.DataFrame) else t_rsi
                     last_rsi_val = rsi_series.iloc[-1]
-                    rsi_status = "보통"
-                    if last_rsi_val >= 70:
-                        rsi_status = "과열"
-                    elif last_rsi_val <= 30:
-                        rsi_status = "과매도"
+                    rsi_status = "과열" if last_rsi_val >= 70 else ("과매도" if last_rsi_val <= 30 else "보통")
                     rsi_str = f"{last_rsi_val:.1f} ({rsi_status})"
                     
-                    # 6. 세후 누적률 & 예상 순수익금
                     color = CANDLE_UP if t_pct >= 0 else CANDLE_DOWN
                     sign = "+" if t_pct >= 0 else ""
                     bg_style = "background: rgba(239, 68, 68, 0.039);" if t_pct >= 0 else "background: rgba(59, 130, 246, 0.039);"
-                    
                     return_str = f"🔴▲ +{t_pct:.2f}%" if t_pct >= 0 else f"🔵▼ {t_pct:.2f}%"
                     
                     t_profit_won = alloc_won * (t_pct / 100)
                     profit_str = f"{sign}{int(t_profit_won):,}원" if market == "한국주식 (KS)" else f"{sign}${t_profit_won:,.2f}"
                     
-                    # 7. 목표가 / 손절가까지 잔여 이격도 계산
                     if t_last_sig == 1 and buy_price > 0:
                         current_trade_return_pct = (curr_p_val / buy_price - 1) * 100
-                        
-                        rem_target = target_pct - current_trade_return_pct
-                        target_str = f"+{rem_target:.1f}%" if rem_target > 0 else "달성 🎉"
-                        
-                        rem_stop = current_trade_return_pct + stop_pct
-                        stop_str = f"-{rem_stop:.1f}%" if rem_stop > 0 else "이탈 🛑"
+                        target_str = f"+{target_pct - current_trade_return_pct:.1f}%" if (target_pct - current_trade_return_pct) > 0 else "달성 🎉"
+                        stop_str = f"-{current_trade_return_pct + stop_pct:.1f}%" if (current_trade_return_pct + stop_pct) > 0 else "이탈 🛑"
                     else:
                         target_str = "ㅡ"
                         stop_str = "ㅡ"
                         
-                    # 8. 총 수수료 (세금)
                     t_trades_total = int(sig_series.diff().abs().fillna(0).sum())
                     t_fees_won = t_trades_total * (fee_pct / 100 / 2) * alloc_won
                     fees_str = f"{int(t_fees_won):,}원 ({fee_pct * t_trades_total / 2:.1f}%)" if market == "한국주식 (KS)" else f"${t_fees_won:,.2f} ({fee_pct * t_trades_total / 2:.1f}%)"
                     
-                    # 9. 현재 포지션 배지 바인딩
-                    if t_last_sig == 1:
-                        badge_html = f"<span style='background:rgba(239,68,68,0.12); color:{CANDLE_UP}; padding:3px 8px; border-radius:6px; font-size:11.5px; font-weight:600;'>매수 보유 🟢</span>"
-                    else:
-                        badge_html = f"<span style='background:rgba(107,114,128,0.12); color:#9ca3af; padding:3px 8px; border-radius:6px; font-size:11.5px; font-weight:600;'>현금 관망 ❌</span>"
+                    badge_html = f"<span style='background:rgba(239,68,68,0.12); color:{CANDLE_UP}; padding:3px 8px; border-radius:6px; font-size:11.5px; font-weight:600;'>매수 보유 🟢</span>" if t_last_sig == 1 else f"<span style='background:rgba(107,114,128,0.12); color:#9ca3af; padding:3px 8px; border-radius:6px; font-size:11.5px; font-weight:600;'>현금 관망 ❌</span>"
                     
                     display_name = name_map.get(ticker.replace('.KS','').replace('.KQ',''), ticker)
                     
-                    # 개별 행 조립 (배경색 직접 지정 및 깔끔한 정리)
                     rows_html += f"""
                     <tr style="border-bottom: 1px solid #1e2330; background: #080a0f; transition: background 0.15s ease;">
-                      <td style="padding: 14px 16px; font-weight: 600; color:#e2e8f0; font-size:13.5px; text-align: left;">
+                      <td style="padding: 14px 16px; font-weight: 600; color:{TEXT}; font-size:13.5px; text-align: left;">
                         {display_name}
-                        <div style="font-size: 10px; color: #9ca3af; font-family: 'JetBrains Mono'; margin-top: 2px;">{ticker}</div>
+                        <div style="font-size: 10px; color: {DIM}; font-family: 'JetBrains Mono'; margin-top: 2px;">{ticker}</div>
                       </td>
                       <td style="padding: 14px 16px; text-align: center;">{badge_html}</td>
                       <td style="padding: 14px 16px; text-align: right; font-family:'JetBrains Mono'; font-weight:600; color:#f8fafc; font-size:13.5px;">{curr_p_str}</td>
@@ -735,11 +705,10 @@ with tab2:
                 except Exception as ex:
                     rows_html += f"""
                     <tr style="border-bottom: 1px solid #1e2330; background: #080a0f;">
-                      <td style="padding: 14px 16px; color: #9ca3af;" colspan="12">🚨 {ticker} 연산 실패 ({ex})</td>
+                      <td style="padding: 14px 16px; color: {DIM};" colspan="12">🚨 {ticker} 연산 실패 ({ex})</td>
                     </tr>
                     """
 
-            # 안전 통합 렌더링 (헤더와 바디 결합)
             html_table = f"""
             <div style="overflow-x: auto; border: 0.5px solid {LINE}; border-radius: 14px; background: #080a0f; margin-top: 10px; margin-bottom: 24px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);">
               <table style="width: 100%; border-collapse: collapse; text-align: left; color: {TEXT};">
@@ -766,6 +735,7 @@ with tab2:
             </div>
             """
             st.markdown(html_table, unsafe_allow_html=True)
+            
             # ── [종목별 실시간 성적표 통합 렌더링 끝] ──
 
             if "backtest_results" not in st.session_state:
