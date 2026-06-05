@@ -533,29 +533,156 @@ with tab2:
                 card("📅 월별 수익률", "막대가 위로 → 수익 🔴 · 아래로 → 손실 🔵")
                 st.plotly_chart(make_monthly_bar_chart(weighted_return), use_container_width=True, config={"displayModeBar": False})
 
-            card("📊 종목별 성과", "기간 수익률 및 현재 포지션")
-            period_returns = (df.iloc[-1] / df.iloc[0] - 1) * 100
+            # 2. 종목별 상세 성과 매트릭스 테이블 생성 (실시간 승률, 손익비, 보유일수, 이격도 정밀 연산)
+            card("📊 종목별 실시간 성적표 (Toss 가치평가 및 수수료 시뮬레이션)", "실전 거래 비용을 제하고 남은 세후 순수익금과 퀀트 승률, 진입 일수 및 이격도를 정밀 추적합니다.")
             volatility = df.pct_change().std() * (252 ** 0.5) * 100
             last_signal = signal.iloc[-1]
+            
+            # 총 매매 거래 횟수 연산
+            trade_count_series = signal.diff().abs().fillna(0).sum()
+            invest_won = investment * 10000
             name_map = get_krx_name_map()
-            if len(tickers) == 1:
-                holdings = pd.DataFrame({
-                    "종목": [name_map.get(c.replace('.KS','').replace('.KQ',''), c) for c in df.columns],
-                    "수익률 (%)": period_returns.values.round(2),
-                    "변동성 (%)": volatility.values.round(1),
-                    "현재 포지션": ["보유중 ✅" if s == 1 else "현금 ❌" for s in last_signal.values]
-                })
-                st.dataframe(holdings.style.map(color_val, subset=["수익률 (%)"]), use_container_width=True, hide_index=True)
-            else:
-                weights = 1 / len(tickers)
-                holdings = pd.DataFrame({
-                    "종목": [name_map.get(c.replace('.KS','').replace('.KQ',''), c) for c in df.columns],
-                    "수익률 (%)": period_returns.values.round(2),
-                    "기여도 (pp)": (period_returns.values * weights).round(2),
-                    "변동성 (%)": volatility.values.round(1),
-                    "현재 포지션": ["보유중 ✅" if s == 1 else "현금 ❌" for s in last_signal.values]
-                })
-                st.dataframe(holdings.style.map(color_val, subset=["수익률 (%)", "기여도 (pp)"]), use_container_width=True, hide_index=True)
+            
+            html_rows = ""
+            for col in df.columns:
+                col_idx = df.columns.get_loc(col)
+                ticker_trade_count = int(trade_count_series.iloc[col_idx]) if isinstance(trade_count_series, pd.Series) else int(trade_count_series)
+                
+                # 종목 코드를 깔끔한 한글 사명으로 변환
+                raw_code = col.replace(".KS", "").replace(".KQ", "")
+                display_name = name_map.get(raw_code, col)
+                
+                # ── [퀀트 연산 1] 거래별 승률 및 손익비(Profit Factor) 계산 (0.001초 연산) ──
+                sig_col = signal[col]
+                buy_dates = sig_col[(sig_col == 1) & (sig_col.shift(1) == 0)].index
+                sell_dates = sig_col[(sig_col == 0) & (sig_col.shift(1) == 1)].index
+                
+                completed_trades = []
+                for b_dt in buy_dates:
+                    future_sells = sell_dates[sell_dates > b_dt]
+                    if not future_sells.empty:
+                        s_dt = future_sells[0]
+                        b_p = df[col].loc[b_dt]
+                        s_p = df[col].loc[s_dt]
+                        # 왕복 수수료 감안한 순 거래 수익률 계산
+                        trade_ret = (s_p - b_p) / b_p * 100 - fee_pct
+                        completed_trades.append(trade_ret)
+                
+                wins = [r for r in completed_trades if r > 0]
+                losses = [r for r in completed_trades if r <= 0]
+                total_trades = len(completed_trades)
+                
+                win_rate_str = f"{len(wins)}승 {len(losses)}패 ({len(wins)/total_trades*100:.1f}%)" if total_trades > 0 else "0승 0패 (0%)"
+                gross_profit = sum(wins)
+                gross_loss = abs(sum(losses))
+                profit_factor = gross_profit / gross_loss if gross_loss > 0 else (gross_profit if gross_profit > 0 else 0.0)
+                pf_str = f"{profit_factor:.2f}" if gross_loss > 0 else ("무한대(∞)" if gross_profit > 0 else "0.00")
+                
+                # ── [퀀트 연산 2] 현재 보유 기간(일수) 및 최근 매수일 계산 ──
+                is_holding = (last_signal.iloc[col_idx] == 1 if isinstance(last_signal, pd.Series) else last_signal == 1)
+                if is_holding:
+                    recent_buys = buy_dates[buy_dates <= df.index[-1]]
+                    if not recent_buys.empty:
+                        last_buy_date = recent_buys[-1]
+                        holding_days = (df.index[-1] - last_buy_date).days
+                        holding_str = f"{holding_days}일째 ({last_buy_date.strftime('%m-%d')})"
+                    else:
+                        holding_str = "보유중"
+                    pos_badge = "<span style='background:rgba(52,211,153,0.12); color:#34d399; padding:3px 8px; border-radius:6px; font-size:11.5px; font-weight:600;'>보유중 ✅</span>"
+                else:
+                    holding_str = "ㅡ"
+                    pos_badge = "<span style='background:rgba(107,114,128,0.12); color:#9ca3af; padding:3px 8px; border-radius:6px; font-size:11.5px; font-weight:600;'>현금 관망 ❌</span>"
+                
+                # ── [퀀트 연산 3] 현재 실시간 RSI 지표 수준 추출 ──
+                rsi_col = rsi[col] if isinstance(rsi, pd.DataFrame) else rsi
+                last_rsi_val = rsi_col.iloc[-1]
+                if last_rsi_val < 30:
+                    rsi_str = f"<span style='color:#3b82f6; font-weight:600;'>{last_rsi_val:.1f} (침체 🔵)</span>"
+                elif last_rsi_val > 70:
+                    rsi_str = f"<span style='color:#ef4444; font-weight:600;'>{last_rsi_val:.1f} (과열 🔴)</span>"
+                else:
+                    rsi_str = f"{last_rsi_val:.1f} (보통)"
+                
+                # ── [퀀트 연산 4] 목표가 및 손절선 이격도 (%) 실시간 추적 ──
+                if is_holding and not recent_buys.empty:
+                    pchs_price = df[col].loc[last_buy_date]
+                    curr_price_val = df[col].iloc[-1]
+                    target_price_val = pchs_price * (1 + target_pct / 100)
+                    stop_price_val = pchs_price * (1 - stop_pct / 100)
+                    
+                    to_target = (target_price_val - curr_price_val) / curr_price_val * 100
+                    to_stop = (curr_price_val - stop_price_val) / curr_price_val * 100
+                    
+                    target_str = f"{to_target:.1f}% 남음" if to_target > 0 else "🎯 목표가 도달!"
+                    stop_str = f"{to_stop:.1f}% 남음" if to_stop > 0 else "🛑 이탈 청산!"
+                else:
+                    target_str = "ㅡ"
+                    stop_str = "ㅡ"
+                
+                # 수수료 차감 후 예상 순수익금 및 평가금 산출
+                total_fee_pct = ticker_trade_count * (fee_pct / 2)
+                allocated_invest = invest_won / len(tickers)
+                total_fee_won = allocated_invest * (total_fee_pct / 100)
+                
+                if len(tickers) == 1:
+                    ticker_return_pct = strategy_pct
+                    ticker_profit_won = strategy_profit
+                    ticker_final_won = strategy_final
+                else:
+                    ticker_return_pct = (portfolio_strategy.iloc[-1] - 1) * 100
+                    ticker_profit_won = allocated_invest * (ticker_return_pct / 100)
+                    ticker_final_won = allocated_invest + ticker_profit_won
+
+                # 수익률에 따른 🔴▲ / 🔵▼ 아이콘 및 색상 분기
+                ret_color = "#ef4444" if ticker_return_pct >= 0 else "#3b82f6"
+                ret_icon = "🔴▲" if ticker_return_pct >= 0 else "🔵▼"
+                ret_bg_opacity = min(abs(ticker_return_pct) / 100 * 0.15, 0.15) # 수익률 강도에 따른 배경색 히트맵 농도
+                ret_style = f"background:rgba({'239,68,68' if ticker_return_pct >= 0 else '59,130,246'}, {ret_bg_opacity:.3f}); color:{ret_color}; font-weight:600;"
+
+                # HTML 행 마크업 작성
+                html_rows += f"""
+                <tr style="border-bottom: 1px solid #1e2330; transition: background 0.15s ease;">
+                  <td style="padding: 14px 16px; font-weight: 600; color:#e2e8f0; font-size:13.5px;">{display_name}</td>
+                  <td style="padding: 14px 16px; text-align: center;">{pos_badge}</td>
+                  <td style="padding: 14px 16px; text-align: right; font-family:'JetBrains Mono'; font-weight:600; color:#f8fafc; font-size:13.5px;">{int(df[col].iloc[-1]):,}원</td>
+                  <td style="padding: 14px 16px; text-align: center; color:#9ca3af; font-size:12.5px;">{holding_str}</td>
+                  <td style="padding: 14px 16px; text-align: center; color:#e2e8f0; font-size:12.5px;">{rsi_str}</td>
+                  <td style="padding: 14px 16px; text-align: center; {ret_style} font-family:'JetBrains Mono'; font-size:13.5px;">{ret_icon} {ticker_return_pct:+.2f}%</td>
+                  <td style="padding: 14px 16px; text-align: right; font-family:'JetBrains Mono'; color:{ret_color}; font-weight:600; font-size:13.5px;">{int(ticker_profit_won):+,}원</td>
+                  <td style="padding: 14px 16px; text-align: center; color:#9ca3af; font-family:'JetBrains Mono'; font-size:12.5px;">{win_rate_str}</td>
+                  <td style="padding: 14px 16px; text-align: center; color:#e2e8f0; font-family:'JetBrains Mono'; font-weight:600; font-size:12.5px;">{pf_str}</td>
+                  <td style="padding: 14px 16px; text-align: center; color:#f59e0b; font-size:12px;">{target_str}</td>
+                  <td style="padding: 14px 16px; text-align: center; color:#3b82f6; font-size:12px;">{stop_str}</td>
+                  <td style="padding: 14px 16px; text-align: right; color:#6b7280; font-family:'JetBrains Mono'; font-size:12px;">{int(total_fee_won):,}원 ({total_fee_pct:.1f}%)</td>
+                </tr>
+                """
+
+            # ── [전체 토스증권 고대비 HTML 테이블 출격] ──
+            st.markdown(f"""
+            <div style="overflow-x: auto; background: #0f1117; border-radius: 14px; border: 0.5px solid #1e2330; padding: 4px;">
+              <table style="width: 100%; border-collapse: collapse; text-align: left; background: transparent;">
+                <thead>
+                  <tr style="border-bottom: 1.5px solid #1e2330; background: #13161f;">
+                    <th style="padding: 12px 16px; color:#6b7280; font-size:12px; font-weight:600;">종목명</th>
+                    <th style="padding: 12px 16px; color:#6b7280; font-size:12px; font-weight:600; text-align: center;">현재 포지션</th>
+                    <th style="padding: 12px 16px; color:#6b7280; font-size:12px; font-weight:600; text-align: right;">현재가</th>
+                    <th style="padding: 12px 16px; color:#6b7280; font-size:12px; font-weight:600; text-align: center;">진입일 (경과)</th>
+                    <th style="padding: 12px 16px; color:#6b7280; font-size:12px; font-weight:600; text-align: center;">현재 RSI</th>
+                    <th style="padding: 12px 16px; color:#6b7280; font-size:12px; font-weight:600; text-align: center;">세후 누적익률</th>
+                    <th style="padding: 12px 16px; color:#6b7280; font-size:12px; font-weight:600; text-align: right;">예상 순수익금</th>
+                    <th style="padding: 12px 16px; color:#6b7280; font-size:12px; font-weight:600; text-align: center;">퀀트 승률</th>
+                    <th style="padding: 12px 16px; color:#6b7280; font-size:12px; font-weight:600; text-align: center;">손익비(PF)</th>
+                    <th style="padding: 12px 16px; color:#6b7280; font-size:12px; font-weight:600; text-align: center; color:#f59e0b;">목표가까지</th>
+                    <th style="padding: 12px 16px; color:#6b7280; font-size:12px; font-weight:600; text-align: center; color:#3b82f6;">손절까지</th>
+                    <th style="padding: 12px 16px; color:#6b7280; font-size:12px; font-weight:600; text-align: right;">총 수수료(세금)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {html_rows}
+                </tbody>
+              </table>
+            </div>
+            """, unsafe_allow_html=True)
 
             if "backtest_results" not in st.session_state:
                 st.session_state.backtest_results = load_backtest()
