@@ -630,19 +630,104 @@ with tab2:
                     })
             
             if scorecard_rows:
-                scorecard_df = pd.DataFrame(scorecard_rows)
-                st.dataframe(
-                    scorecard_df,
-                    column_config={
-                        "종목명": st.column_config.TextColumn("종목명"),
-                        "전략 시그널": st.column_config.TextColumn("전략 시그널"),
-                        "현재가": st.column_config.NumberColumn("현재가", format="%d원" if market == "한국주식 (KS)" else "$%.2f"),
-                        "세후 수익률": st.column_config.NumberColumn("세후 수익률", format="%.2f%%"),
-                        "예상 순수익금": st.column_config.NumberColumn("예상 순수익금", format="%+d원" if market == "한국주식 (KS)" else "$%+.2f"),
-                    },
-                    use_container_width=True,
-                    hide_index=True
-                )
+                cols = st.columns(min(len(scorecard_rows), 3))
+                for idx, row in enumerate(scorecard_rows):
+                    with cols[idx % 3]:
+                        is_buy = "보유" in row["전략 시그널"]
+                        sig_color = "#ef4444" if is_buy else "#6b7280"
+                        sig_bg = "rgba(239,68,68,0.08)" if is_buy else "rgba(107,114,128,0.08)"
+                        ret_color = "#ef4444" if row["세후 수익률"] >= 0 else "#3b82f6"
+                        ret_arrow = "▲" if row["세후 수익률"] >= 0 else "▼"
+                        profit_color = "#ef4444" if row["예상 순수익금"] >= 0 else "#3b82f6"
+
+                        # RSI 게이지 계산
+                        try:
+                            ticker_code = row["종목명"].split("(")[-1].replace(")", "").strip()
+                            t_df_rsi = df[[ticker_code]] if ticker_code in df.columns else df.iloc[:, [0]]
+                            from strategies import calculate_rsi
+                            rsi_series = calculate_rsi(t_df_rsi.iloc[:, 0])
+                            rsi_val = float(rsi_series.iloc[-1])
+                            rsi_pct = min(max(rsi_val, 0), 100)
+                            rsi_color = "#ef4444" if rsi_val < 30 else ("#f59e0b" if rsi_val < 50 else "#3b82f6")
+                            rsi_label = "과매도 🔴" if rsi_val < 30 else ("중립 🟡" if rsi_val < 70 else "과매수 🔵")
+                        except:
+                            rsi_val = 0
+                            rsi_pct = 0
+                            rsi_color = "#6b7280"
+                            rsi_label = "N/A"
+
+                        # 목표가/손절 여유
+                        try:
+                            curr = row["현재가"]
+                            entry_price = curr / (1 + row["세후 수익률"] / 100) if row["세후 수익률"] != -100 else curr
+                            target_price_val = entry_price * (1 + target_pct / 100)
+                            stop_price_val = entry_price * (1 - stop_pct / 100)
+                            to_target = ((target_price_val - curr) / curr * 100) if curr > 0 else 0
+                            to_stop = ((curr - stop_price_val) / curr * 100) if curr > 0 else 0
+                        except:
+                            to_target = 0
+                            to_stop = 0
+
+                        st.markdown(f"""
+                        <div style='background:#13161f; border:0.5px solid #1e2330; border-radius:14px; padding:18px; margin-bottom:12px; box-shadow:0 4px 24px rgba(0,0,0,0.4);'>
+                          
+                          <!-- 종목명 & 코드 -->
+                          <div style='font-size:15px; font-weight:700; color:#e2e8f0; margin-bottom:2px;'>{row["종목명"].split("(")[0].strip()}</div>
+                          <div style='font-size:11px; color:#6b7280; margin-bottom:12px;'>{row["종목명"].split("(")[-1].replace(")", "").strip()}</div>
+                          
+                          <!-- 전략 시그널 배지 -->
+                          <div style='display:inline-block; background:{sig_bg}; border:0.5px solid {sig_color}; border-radius:20px; padding:3px 10px; font-size:11.5px; font-weight:600; color:{sig_color}; margin-bottom:14px;'>
+                            {row["전략 시그널"]}
+                          </div>
+                          
+                          <!-- 현재가 -->
+                          <div style='display:flex; justify-content:space-between; padding:8px 0; border-bottom:0.5px solid #1e2330;'>
+                            <span style='color:#6b7280; font-size:12px;'>현재가</span>
+                            <span style='color:#e2e8f0; font-size:13px; font-weight:600; font-family:JetBrains Mono;'>{int(row["현재가"]):,}원</span>
+                          </div>
+                          
+                          <!-- 세후 수익률 -->
+                          <div style='display:flex; justify-content:space-between; padding:8px 0; border-bottom:0.5px solid #1e2330;'>
+                            <span style='color:#6b7280; font-size:12px;'>세후 수익률</span>
+                            <span style='color:{ret_color}; font-size:13px; font-weight:600; font-family:JetBrains Mono;'>{ret_arrow} {row["세후 수익률"]:+.2f}%</span>
+                          </div>
+                          
+                          <!-- 예상 순수익금 -->
+                          <div style='display:flex; justify-content:space-between; padding:8px 0; border-bottom:0.5px solid #1e2330;'>
+                            <span style='color:#6b7280; font-size:12px;'>예상 순수익금</span>
+                            <span style='color:{profit_color}; font-size:13px; font-weight:600; font-family:JetBrains Mono;'>{int(row["예상 순수익금"]):+,}원</span>
+                          </div>
+                          
+                          <!-- RSI 게이지 -->
+                          <div style='padding:10px 0; border-bottom:0.5px solid #1e2330;'>
+                            <div style='display:flex; justify-content:space-between; margin-bottom:6px;'>
+                              <span style='color:#6b7280; font-size:12px;'>RSI</span>
+                              <span style='color:{rsi_color}; font-size:12px; font-weight:600;'>{rsi_val:.1f} — {rsi_label}</span>
+                            </div>
+                            <div style='background:#1e2330; border-radius:4px; height:5px; width:100%;'>
+                              <div style='background:{rsi_color}; border-radius:4px; height:5px; width:{rsi_pct}%;'></div>
+                            </div>
+                            <div style='display:flex; justify-content:space-between; margin-top:3px;'>
+                              <span style='color:#6b7280; font-size:10px;'>과매도</span>
+                              <span style='color:#6b7280; font-size:10px;'>중립</span>
+                              <span style='color:#6b7280; font-size:10px;'>과매수</span>
+                            </div>
+                          </div>
+                          
+                          <!-- 목표가/손절 -->
+                          <div style='display:flex; gap:8px; margin-top:10px;'>
+                            <div style='flex:1; background:rgba(239,68,68,0.06); border:0.5px solid rgba(239,68,68,0.2); border-radius:8px; padding:7px 10px; text-align:center;'>
+                              <div style='font-size:10px; color:#9ca3af; margin-bottom:2px;'>🎯 목표까지</div>
+                              <div style='font-size:12px; font-weight:600; color:#ef4444;'>{to_target:.1f}%</div>
+                            </div>
+                            <div style='flex:1; background:rgba(59,130,246,0.06); border:0.5px solid rgba(59,130,246,0.2); border-radius:8px; padding:7px 10px; text-align:center;'>
+                              <div style='font-size:10px; color:#9ca3af; margin-bottom:2px;'>🛡 손절여유</div>
+                              <div style='font-size:12px; font-weight:600; color:#3b82f6;'>{to_stop:.1f}%</div>
+                            </div>
+                          </div>
+                          
+                        </div>
+                        """, unsafe_allow_html=True)
             # ── [종목별 실시간 성적표 통합 렌더링 끝] ──
 
             if "backtest_results" not in st.session_state:
