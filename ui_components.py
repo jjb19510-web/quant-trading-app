@@ -230,6 +230,23 @@ def apply_custom_css():
           border-bottom: 0.5px solid {LINE};
         }}
       }}
+    /* ── 토스형 뉴스 카드 커스텀 컴포넌트 ── */
+      .qf-news-card {{
+        background: {SURFACE_2} !important; /* SURFACE_1 배경 위에서 완전히 분리되도록 어두운 톤 적용 */
+        border: 1.2px solid {LINE} !important; /* 테두리를 조금 더 뚜렷하게 조정 */
+        border-radius: 10px !important;
+        padding: 14px 18px !important;
+        margin-bottom: 12px !important; /* 간격을 넓혀 독립된 개별 카드로 분리 */
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important; /* 부드러운 유기적 물리 효과 */
+        display: block !important;
+        text-decoration: none !important;
+      }}
+      .qf-news-card:hover {{
+        transform: translateY(-3px) !important; /* 마우스 오버 시 위로 공중 부양 */
+        border-color: {ACCENT} !important; /* 테두리 발광 피드백 */
+        background: {SURFACE_3} !important; /* 배경색을 한 단계 밝혀 초점 집중 */
+        box-shadow: 0 6px 16px rgba(59, 130, 246, 0.12) !important; /* 은은한 푸른 광원 그림자 효과 */
+      }}
     </style>
     """, unsafe_allow_html=True)
 
