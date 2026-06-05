@@ -593,11 +593,15 @@ with tab2:
                     t_df = df[[ticker]] if ticker in df.columns else df.iloc[:, [0]]
                     
                     # 5대 필수 지표 연산을 위한 독립 시뮬레이션
+                    try:
+                        _op = open_p[[ticker]] if open_p is not None and ticker in open_p else None
+                        _hp = high_p[[ticker]] if high_p is not None and ticker in high_p else None
+                        _lp = low_p[[ticker]] if low_p is not None and ticker in low_p else None
+                    except:
+                        _op, _hp, _lp = None, None, None
                     t_pct, _, t_sig, _, _, _, _, _, _ = safe_run_strategy(
                         t_df, strategy, rsi_threshold, ma_short, ma_long, bb_period, fee_pct=fee_pct,
-                        open_p=open_p[[ticker]] if open_p is not None else None,
-                        high_p=high_p[[ticker]] if high_p is not None else None,
-                        low_p=low_p[[ticker]] if low_p is not None else None
+                        open_p=_op, high_p=_hp, low_p=_lp
                     )
                     
                     sig_series = t_sig.iloc[:, 0] if isinstance(t_sig, pd.DataFrame) else t_sig
@@ -675,9 +679,14 @@ with tab2:
                           <div style='font-size:15px; font-weight:700; color:#e2e8f0; margin-bottom:2px;'>{row["종목명"].split("(")[0].strip()}</div>
                           <div style='font-size:11px; color:#6b7280; margin-bottom:12px;'>{row["종목명"].split("(")[-1].replace(")", "").strip()}</div>
                           
-                          <!-- 전략 시그널 배지 -->
-                          <div style='display:inline-block; background:{sig_bg}; border:0.5px solid {sig_color}; border-radius:20px; padding:3px 10px; font-size:11.5px; font-weight:600; color:{sig_color}; margin-bottom:14px;'>
-                            {row["전략 시그널"]}
+                          <!-- 전략명 + 시그널 배지 -->
+                          <div style='display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px;'>
+                            <div style='display:inline-block; background:rgba(59,130,246,0.08); border:0.5px solid rgba(59,130,246,0.3); border-radius:20px; padding:3px 10px; font-size:11px; font-weight:600; color:#3b82f6;'>
+                              {strategy.split("(")[0].strip()}
+                            </div>
+                            <div style='display:inline-block; background:{sig_bg}; border:0.5px solid {sig_color}; border-radius:20px; padding:3px 10px; font-size:11.5px; font-weight:600; color:{sig_color};'>
+                              {row["전략 시그널"]}
+                            </div>
                           </div>
                           
                           <!-- 현재가 -->
