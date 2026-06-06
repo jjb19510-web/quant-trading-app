@@ -275,7 +275,99 @@ def render_daily_report():
 
     st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
 
-    # ── 6. 시장 이슈 & 뉴스 ──
+    # ── 6. 수급 동향 ──
+    card("💰 수급 동향", "외국인 · 기관 순매수 상위 종목")
+
+    @st.cache_data(ttl=300)
+    def get_supply_demand():
+        try:
+            from bs4 import BeautifulSoup
+            headers = {"User-Agent": "Mozilla/5.0"}
+            result = {}
+            url = "https://finance.naver.com/sise/sise_net_search.naver?sosok=0&target=frg"
+            res = requests.get(url, headers=headers, timeout=5)
+            soup = BeautifulSoup(res.text, "html.parser")
+            rows = soup.select("table.type_2 tr")
+            foreign = []
+            for row in rows[2:7]:
+                cols = row.select("td")
+                if len(cols) >= 2:
+                    name = cols[0].text.strip()
+                    val = cols[1].text.strip()
+                    if name:
+                        foreign.append({"종목": name, "순매수(억)": val})
+            result["외국인"] = foreign
+            url2 = "https://finance.naver.com/sise/sise_net_search.naver?sosok=0&target=org"
+            res2 = requests.get(url2, headers=headers, timeout=5)
+            soup2 = BeautifulSoup(res2.text, "html.parser")
+            rows2 = soup2.select("table.type_2 tr")
+            organ = []
+            for row in rows2[2:7]:
+                cols = row.select("td")
+                if len(cols) >= 2:
+                    name = cols[0].text.strip()
+                    val = cols[1].text.strip()
+                    if name:
+                        organ.append({"종목": name, "순매수(억)": val})
+            result["기관"] = organ
+            return result
+        except:
+            return {}
+
+    with st.spinner("수급 데이터 불러오는 중..."):
+        supply_data = get_supply_demand()
+
+    if supply_data:
+        col_f, col_o = st.columns(2)
+        with col_f:
+            st.markdown("<div style='font-size:13px; font-weight:600; color:#9ca3af; margin-bottom:8px;'>🌍 외국인 순매수 TOP 5</div>", unsafe_allow_html=True)
+            if supply_data.get("외국인"):
+                st.dataframe(pd.DataFrame(supply_data["외국인"]), use_container_width=True, hide_index=True)
+        with col_o:
+            st.markdown("<div style='font-size:13px; font-weight:600; color:#9ca3af; margin-bottom:8px;'>🏦 기관 순매수 TOP 5</div>", unsafe_allow_html=True)
+            if supply_data.get("기관"):
+                st.dataframe(pd.DataFrame(supply_data["기관"]), use_container_width=True, hide_index=True)
+    else:
+        st.info("수급 데이터를 불러오지 못했어요.")
+
+    st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
+
+    # ── 7. 거래대금 상위 ──
+    card("📊 거래대금 상위 TOP 10", "오늘 가장 많이 거래된 종목")
+
+    @st.cache_data(ttl=300)
+    def get_top_volume():
+        try:
+            from bs4 import BeautifulSoup
+            headers = {"User-Agent": "Mozilla/5.0"}
+            url = "https://finance.naver.com/sise/sise_quant.naver?sosok=0"
+            res = requests.get(url, headers=headers, timeout=5)
+            soup = BeautifulSoup(res.text, "html.parser")
+            rows = soup.select("table.type_2 tr")
+            result = []
+            for row in rows[2:12]:
+                cols = row.select("td")
+                if len(cols) >= 3:
+                    name = cols[1].text.strip()
+                    price = cols[2].text.strip()
+                    volume = cols[5].text.strip() if len(cols) > 5 else "-"
+                    if name:
+                        result.append({"종목": name, "현재가": price, "거래량": volume})
+            return result
+        except:
+            return []
+
+    with st.spinner("거래대금 데이터 불러오는 중..."):
+        volume_data = get_top_volume()
+
+    if volume_data:
+        st.dataframe(pd.DataFrame(volume_data), use_container_width=True, hide_index=True)
+    else:
+        st.info("거래대금 데이터를 불러오지 못했어요.")
+
+    st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
+
+    # ── 8. 시장 이슈 & 뉴스 ──
     card("📰 시장 이슈 & 뉴스", "오늘의 주요 시장 뉴스")
     try:
         naver_id = st.secrets.get("NAVER_CLIENT_ID", "")
