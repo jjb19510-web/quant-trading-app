@@ -276,59 +276,51 @@ def render_daily_report():
     st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
 
     # ── 6. 수급 동향 ──
-    card("💰 수급 동향", "외국인 · 기관 순매수 상위 종목")
+    card("💰 수급 동향", "외국인 · 기관 · 개인 순매수 상위 종목 (KIS API)")
 
-    @st.cache_data(ttl=300)
-    def get_supply_demand():
-        try:
-            from bs4 import BeautifulSoup
-            headers = {"User-Agent": "Mozilla/5.0"}
-            result = {}
-            url = "https://finance.naver.com/sise/sise_net_search.naver?sosok=0&target=frg"
-            res = requests.get(url, headers=headers, timeout=5)
-            soup = BeautifulSoup(res.text, "html.parser")
-            rows = soup.select("table.type_2 tr")
-            foreign = []
-            for row in rows[2:7]:
-                cols = row.select("td")
-                if len(cols) >= 2:
-                    name = cols[0].text.strip()
-                    val = cols[1].text.strip()
-                    if name:
-                        foreign.append({"종목": name, "순매수(억)": val})
-            result["외국인"] = foreign
-            url2 = "https://finance.naver.com/sise/sise_net_search.naver?sosok=0&target=org"
-            res2 = requests.get(url2, headers=headers, timeout=5)
-            soup2 = BeautifulSoup(res2.text, "html.parser")
-            rows2 = soup2.select("table.type_2 tr")
-            organ = []
-            for row in rows2[2:7]:
-                cols = row.select("td")
-                if len(cols) >= 2:
-                    name = cols[0].text.strip()
-                    val = cols[1].text.strip()
-                    if name:
-                        organ.append({"종목": name, "순매수(억)": val})
-            result["기관"] = organ
-            return result
-        except:
-            return {}
+    try:
+        from broker import get_access_token, get_foreign_institution_trade
+        token = get_access_token()
 
-    with st.spinner("수급 데이터 불러오는 중..."):
-        supply_data = get_supply_demand()
+        def parse_supply(data):
+            rows = []
+            for item in data.get("output", [])[:5]:
+                name = item.get("hts_kor_isnm", "")
+                buy = item.get("frgn_ntby_qty", "0")
+                if name:
+                    rows.append({"종목": name, "순매수(주)": buy})
+            return rows
 
-    if supply_data:
-        col_f, col_o = st.columns(2)
+        with st.spinner("수급 데이터 불러오는 중..."):
+            foreign_raw = get_foreign_institution_trade(token, div_cls="0")
+            institution_raw = get_foreign_institution_trade(token, div_cls="1")
+            individual_raw = get_foreign_institution_trade(token, div_cls="2")
+
+        foreign_rows = parse_supply(foreign_raw)
+        institution_rows = parse_supply(institution_raw)
+        individual_rows = parse_supply(individual_raw)
+
+        col_f, col_i, col_p = st.columns(3)
         with col_f:
             st.markdown("<div style='font-size:13px; font-weight:600; color:#9ca3af; margin-bottom:8px;'>🌍 외국인 순매수 TOP 5</div>", unsafe_allow_html=True)
-            if supply_data.get("외국인"):
-                st.dataframe(pd.DataFrame(supply_data["외국인"]), use_container_width=True, hide_index=True)
-        with col_o:
+            if foreign_rows:
+                st.dataframe(pd.DataFrame(foreign_rows), use_container_width=True, hide_index=True)
+            else:
+                st.info("데이터 없음")
+        with col_i:
             st.markdown("<div style='font-size:13px; font-weight:600; color:#9ca3af; margin-bottom:8px;'>🏦 기관 순매수 TOP 5</div>", unsafe_allow_html=True)
-            if supply_data.get("기관"):
-                st.dataframe(pd.DataFrame(supply_data["기관"]), use_container_width=True, hide_index=True)
-    else:
-        st.info("수급 데이터를 불러오지 못했어요.")
+            if institution_rows:
+                st.dataframe(pd.DataFrame(institution_rows), use_container_width=True, hide_index=True)
+            else:
+                st.info("데이터 없음")
+        with col_p:
+            st.markdown("<div style='font-size:13px; font-weight:600; color:#9ca3af; margin-bottom:8px;'>👤 개인 순매수 TOP 5</div>", unsafe_allow_html=True)
+            if individual_rows:
+                st.dataframe(pd.DataFrame(individual_rows), use_container_width=True, hide_index=True)
+            else:
+                st.info("데이터 없음")
+    except Exception as e:
+        st.info(f"수급 데이터를 불러오지 못했어요. ({e})")
 
     st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
 
