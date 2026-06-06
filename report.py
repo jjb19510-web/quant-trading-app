@@ -280,7 +280,10 @@ def render_daily_report():
 
     try:
         from broker import get_access_token, get_foreign_institution_trade
-        token = get_access_token()
+        token = st.session_state.get("kis_token")
+        if not token:
+            token = get_access_token()
+            st.session_state["kis_token"] = token
 
         def parse_supply(data):
             rows = []
