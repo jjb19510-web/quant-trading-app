@@ -869,8 +869,8 @@ with tab2:
                         ))
                         fig_opt.update_layout(height=300, margin=dict(l=8, r=20, t=8, b=28), paper_bgcolor=SURFACE_1, plot_bgcolor=SURFACE_1, font=dict(color=TEXT, size=11))
                         st.plotly_chart(fig_opt, use_container_width=True, config={"displayModeBar": False})
-                    elif strategy == "이동평균선 전략 (Moving Average)":
-                        st.success(f"✅ 최적 MA: 단기 **{int(best['단기 MA'])}** / 장기 **{int(best['장기 MA'])}** → 수익률 **{best['수익률 (%)']:+.2f}%**")
+                    if strategy == "MACD 전략 (MACD)":
+                        st.success(f"✅ 최적 MACD: Fast **{int(best['Fast EMA'])}** / Slow **{int(best['Slow EMA'])}** → 수익률 **{best['수익률 (%)']:+.2f}%**")
                     elif strategy == "볼린저 밴드 전략 (Bollinger Bands)":
                         st.success(f"✅ 최적 BB 기간: **{int(best['BB 기간'])}** → 수익률 **{best['수익률 (%)']:+.2f}%**")
                         fig_opt = go.Figure()

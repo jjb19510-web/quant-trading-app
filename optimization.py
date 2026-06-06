@@ -34,6 +34,17 @@ def optimize_parameters(df, strategy, metric="수익률"):
             results.append({"BB 기간": val, "수익률 (%)": round(ret, 2),
                           "샤프지수": round(sharpe, 2), "MDD (%)": round(mdd, 2)})
 
+    elif strategy == "MACD 전략 (MACD)":
+        for fast in range(5, 21, 3):
+            for slow in range(15, 51, 5):
+                if fast >= slow:
+                    continue
+                ret, wr, _, _, _, _, _, _, _ = run_strategy(df, strategy, 40, fast, slow, 20)
+                sharpe = calculate_sharpe(wr.dropna())
+                mdd = calculate_mdd((1 + wr).cumprod())
+                results.append({"Fast EMA": fast, "Slow EMA": slow, "수익률 (%)": round(ret, 2),
+                              "샤프지수": round(sharpe, 2), "MDD (%)": round(mdd, 2)})
+
     else:  # Combined
         for rsi_val in range(10, 71, 10):
             for short in range(5, 31, 5):
