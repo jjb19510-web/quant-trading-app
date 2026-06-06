@@ -1,6 +1,7 @@
-﻿import streamlit as st
+import streamlit as st
 import yfinance as yf
 import pandas as pd
+import numpy as np
 import plotly.graph_objects as go
 import datetime as dt
 import requests
@@ -10,15 +11,14 @@ from ui_components import (
 
 def render_report():
     st.markdown(
-        "<div style='font-size:22px; font-weight:700; margin-bottom:4px;'>?뱥 Daily Quantfolio Report</div>"
-        f"<div style='font-size:12px; color:{DIM}; margin-bottom:24px;'>{dt.datetime.now():%Y??%m??%d??%H:%M} 湲곗?</div>",
+        "<div style='font-size:22px; font-weight:700; margin-bottom:4px;'>📋 Daily Quantfolio Report</div>"
+        f"<div style='font-size:12px; color:{DIM}; margin-bottom:24px;'>{dt.datetime.now():%Y년 %m월 %d일 %H:%M} 기준</div>",
         unsafe_allow_html=True
     )
 
-    # ?? ?쇨컙/二쇨컙 ?좉? ??
-    report_type = st.radio("由ы룷???좏삎", ["?뱟 ?쇨컙 由ы룷??, "?뱠 二쇨컙 由ы룷??], horizontal=True)
+    report_type = st.radio("리포트 유형", ["📅 일간 리포트", "📆 주간 리포트"], horizontal=True)
 
-    if report_type == "?뱟 ?쇨컙 由ы룷??:
+    if report_type == "📅 일간 리포트":
         render_daily_report()
     else:
         render_weekly_report()
@@ -26,19 +26,19 @@ def render_report():
 
 def render_daily_report():
 
-    # ?? 1. ?쒖옣 ?꾪솴 ??
-    card("?뙋 ?쒖옣 ?꾪솴", "二쇱슂 吏??쨌 ?섏쑉 쨌 ?먯옄???ㅼ떆媛?)
+    # ── 1. 시장 현황 ──
+    card("🌐 시장 현황", "주요 지수 · 환율 · 원자재 실시간")
 
     @st.cache_data(ttl=300)
     def get_market_data():
         indices = {
-            "肄붿뒪??: "^KS11",
-            "肄붿뒪??: "^KQ11",
-            "?섏뒪??: "^IXIC",
-            "???щ윭": "USDKRW=X",
-            "WTI??: "CL=F",
-            "湲?: "GC=F",
-            "誘멸뎅10?꾩콈": "^TNX"
+            "코스피": "^KS11",
+            "코스닥": "^KQ11",
+            "나스닥": "^IXIC",
+            "원/달러": "USDKRW=X",
+            "WTI유": "CL=F",
+            "금": "GC=F",
+            "미국10년채": "^TNX"
         }
         result = []
         for name, ticker in indices.items():
@@ -54,7 +54,7 @@ def render_daily_report():
                 pass
         return result
 
-    with st.spinner("?쒖옣 ?곗씠??遺덈윭?ㅻ뒗 以?.."):
+    with st.spinner("시장 데이터 불러오는 중..."):
         market_data = get_market_data()
 
     if market_data:
@@ -62,7 +62,7 @@ def render_daily_report():
         for i, idx in enumerate(market_data):
             with cols[i % 4]:
                 color = CANDLE_UP if idx["change"] >= 0 else CANDLE_DOWN
-                arrow = "?? if idx["change"] >= 0 else "??
+                arrow = "▲" if idx["change"] >= 0 else "▼"
                 st.markdown(f"""
                 <div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:12px; padding:12px 16px; margin-bottom:12px; box-shadow:0 4px 24px rgba(0,0,0,0.4);'>
                     <div style='font-size:11px; color:#9ca3af; margin-bottom:4px; font-weight:500;'>{idx["name"]}</div>
@@ -73,9 +73,9 @@ def render_daily_report():
 
     st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
 
-    # ?? 2. 愿?ъ쥌紐??좏샇 由ы룷????
+    # ── 2. 관심종목 신호 리포트 ──
     if st.session_state.get("watchlist"):
-        card("?뵒 愿?ъ쥌紐??좏샇 由ы룷??, "RSI 湲곗? 留ㅼ닔/留ㅻ룄 ?좏샇 쨌 ?댁씪 蹂?숈꽦 ?뚰뙆 紐⑺몴媛")
+        card("🔔 관심종목 신호 리포트", "RSI 기준 매수/매도 신호 · 내일 변동성 돌파 목표가")
 
         @st.cache_data(ttl=300)
         def get_signal_report(watchlist):
@@ -92,31 +92,30 @@ def render_daily_report():
                     df_w = close.to_frame()
                     df_w.columns = [ticker]
 
-                    _, _, sig, _, _, _, _, _, _ = run_strategy(df_w, "RSI ?꾨왂 (RSI)", 40, 20, 60, 20)
+                    _, _, sig, _, _, _, _, _, _ = run_strategy(df_w, "RSI 전략 (RSI)", 40, 20, 60, 20)
                     last_sig = sig.iloc[-1].values[0]
                     rsi_series = calculate_rsi(close)
                     rsi_val = float(rsi_series.iloc[-1])
 
-                    # 蹂?숈꽦 ?뚰뙆 ?댁씪 紐⑺몴媛
                     today_open = float(hist["Open"].iloc[-1])
                     yesterday_high = float(high.iloc[-2])
                     yesterday_low = float(low.iloc[-2])
                     vb_target = today_open + (yesterday_high - yesterday_low) * 0.5
 
-                    signal_str = "?윟 留ㅼ닔" if last_sig == 1 else "??愿留?
-                    rsi_label = "怨쇰ℓ?? if rsi_val < 30 else ("怨쇰ℓ?? if rsi_val > 70 else "以묐┰")
+                    signal_str = "🟢 매수" if last_sig == 1 else "⚪ 관망"
+                    rsi_label = "과매도" if rsi_val < 30 else ("과매수" if rsi_val > 70 else "중립")
 
                     rows.append({
-                        "醫낅ぉ": item,
-                        "?좏샇": signal_str,
+                        "종목": item,
+                        "신호": signal_str,
                         "RSI": f"{rsi_val:.1f} ({rsi_label})",
-                        "?댁씪 蹂?숈꽦 紐⑺몴媛": f"{int(vb_target):,}??,
+                        "내일 변동성 목표가": f"{int(vb_target):,}원",
                     })
                 except:
                     pass
             return rows
 
-        with st.spinner("?좏샇 遺꾩꽍 以?.."):
+        with st.spinner("신호 분석 중..."):
             signal_rows = get_signal_report(tuple(st.session_state.watchlist))
 
         if signal_rows:
@@ -124,13 +123,13 @@ def render_daily_report():
 
         st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
 
-    # ?? 3. ?ы듃?대━???꾪솴 ??
+    # ── 3. 포트폴리오 현황 ──
     try:
         from broker import get_access_token, get_balance
         token = get_access_token()
         balance_data = get_balance(token)
         if balance_data.get("rt_cd") == "0":
-            card("?뮳 ?ы듃?대━???꾪솴", "KIS API ?ㅼ떆媛?湲곗?")
+            card("💼 포트폴리오 현황", "KIS API 실시간 기준")
             output2 = balance_data.get("output2", [{}])[0]
             total_eval = int(output2.get("scts_evlu_amt", 0))
             total_profit = int(output2.get("evlu_pfls_smtl_amt", 0))
@@ -138,14 +137,14 @@ def render_daily_report():
             withdrawable = int(output2.get("nxdy_excc_amt", 0))
 
             profit_color = "#ef4444" if total_profit >= 0 else "#3b82f6"
-            profit_arrow = "?? if total_profit >= 0 else "??
+            profit_arrow = "▲" if total_profit >= 0 else "▼"
 
             p1, p2, p3, p4 = st.columns(4)
             for col, label, value, color in [
-                (p1, "?뮳 珥??됯?湲덉븸", f"{total_eval:,}??, TEXT),
-                (p2, "?뱢 ?됯??먯씡", f"{profit_arrow} {total_profit:+,}??, profit_color),
-                (p3, "?뮥 ?덉닔湲?, f"{cash:,}??, TEXT),
-                (p4, "?룲 異쒓툑媛??, f"{withdrawable:,}??, TEXT),
+                (p1, "💼 총 평가금액", f"{total_eval:,}원", TEXT),
+                (p2, "📈 평가손익", f"{profit_arrow} {total_profit:+,}원", profit_color),
+                (p3, "💰 예수금", f"{cash:,}원", TEXT),
+                (p4, "🏧 출금가능", f"{withdrawable:,}원", TEXT),
             ]:
                 with col:
                     st.markdown(f"""
@@ -158,24 +157,24 @@ def render_daily_report():
             holdings = balance_data.get("output1", [])
             if holdings:
                 hdf = pd.DataFrame([{
-                    "醫낅ぉ": h.get("prdt_name", ""),
-                    "?섎웾": int(h.get("hldg_qty", 0)),
-                    "?꾩옱媛": f"{int(h.get('prpr', 0)):,}??,
-                    "?됯퇏?④?": f"{float(h.get('pchs_avg_pric', 0)):,.0f}??,
-                    "?됯??먯씡": f"{float(h.get('evlu_pfls_amt', 0)):+,.0f}??,
-                    "?섏씡瑜?: f"{float(h.get('evlu_pfls_rt', 0)):+.2f}%"
+                    "종목": h.get("prdt_name", ""),
+                    "수량": int(h.get("hldg_qty", 0)),
+                    "현재가": f"{int(h.get('prpr', 0)):,}원",
+                    "평균단가": f"{float(h.get('pchs_avg_pric', 0)):,.0f}원",
+                    "평가손익": f"{float(h.get('evlu_pfls_amt', 0)):+,.0f}원",
+                    "수익률": f"{float(h.get('evlu_pfls_rt', 0)):+.2f}%"
                 } for h in holdings if int(h.get("hldg_qty", 0)) > 0])
                 if not hdf.empty:
                     st.dataframe(hdf, use_container_width=True, hide_index=True)
     except:
-        card("?뮳 ?ы듃?대━???꾪솴", "KIS API ?곌껐 ?꾩슂")
-        st.info("KIS API媛 ?곌껐?섏? ?딆븯?댁슂.")
+        card("💼 포트폴리오 현황", "KIS API 연결 필요")
+        st.info("KIS API가 연결되지 않았어요.")
 
     st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
 
-    # ?? 4. ?곴?愿怨?遺뺢눼 寃쎈낫 ??
+    # ── 4. 상관관계 붕괴 경보 ──
     if st.session_state.get("watchlist") and len(st.session_state.watchlist) >= 2:
-        card("?슚 ?곴?愿怨?遺뺢눼 寃쎈낫", "蹂댁쑀醫낅ぉ 媛?濡ㅻ쭅 ?곴?愿怨?쨌 1.0??媛源뚯슱?섎줉 遺꾩궛 臾대젰??)
+        card("🚨 상관관계 붕괴 경보", "보유종목 간 롤링 상관관계 · 1.0에 가까울수록 분산 무력화")
 
         @st.cache_data(ttl=300)
         def get_rolling_corr(watchlist):
@@ -195,13 +194,14 @@ def render_daily_report():
 
         corr = get_rolling_corr(tuple(st.session_state.watchlist))
         if corr is not None:
-            avg_corr = corr.where(~np.eye(len(corr), dtype=bool)).stack().mean()
+            mask = ~np.eye(len(corr), dtype=bool)
+            avg_corr = corr.where(mask).stack().mean()
             if avg_corr > 0.8:
-                st.error(f"?좑툘 ?됯퇏 ?곴?愿怨?{avg_corr:.2f} ??遺꾩궛 ?④낵 嫄곗쓽 ?놁쓬! ?꾧툑 鍮꾩쨷 ?뺣? 沅뚭퀬")
+                st.error(f"⚠️ 평균 상관관계 {avg_corr:.2f} — 분산 효과 거의 없음! 현금 비중 확대 권고")
             elif avg_corr > 0.6:
-                st.warning(f"?윞 ?됯퇏 ?곴?愿怨?{avg_corr:.2f} ??遺꾩궛 ?④낵 ?쏀솕 以? 二쇱쓽 ?꾩슂")
+                st.warning(f"🟡 평균 상관관계 {avg_corr:.2f} — 분산 효과 약화 중, 주의 필요")
             else:
-                st.success(f"?윟 ?됯퇏 ?곴?愿怨?{avg_corr:.2f} ??遺꾩궛 ?④낵 ?묓샇")
+                st.success(f"🟢 평균 상관관계 {avg_corr:.2f} — 분산 효과 양호")
 
             fig_corr = go.Figure(go.Heatmap(
                 z=corr.values,
@@ -225,8 +225,8 @@ def render_daily_report():
 
     st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
 
-    # ?? 5. ?ㅻ쭏??癒몃땲 ?몃뜳????
-    card("?쭬 ?ㅻ쭏??癒몃땲 ?몃뜳??, "???쒖옉 30遺?vs 留덇컧 30遺??깅씫 ?ㅽ봽?덈뱶 쨌 湲곌?쨌?몄씤 ?섎룄 異붿쟻")
+    # ── 5. 스마트 머니 인덱스 ──
+    card("🧠 스마트 머니 인덱스", "장 시작 30분 vs 마감 30분 등락 스프레드 · 기관·외인 의도 추적")
     try:
         from broker import get_access_token
         token = get_access_token()
@@ -254,33 +254,33 @@ def render_daily_report():
                 "FID_INPUT_DATE_2": today,
                 "FID_PW_DATA_INCU_YN": "N"
             }
-            res = requests.get(f"{BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-time-itemchartprice",
-                             headers=headers, params=params)
+            res = requests.get(
+                f"{BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-time-itemchartprice",
+                headers=headers, params=params
+            )
             data = res.json()
             if data.get("rt_cd") == "0":
                 output = data.get("output2", [])
                 if len(output) >= 2:
-                    df_min = pd.DataFrame(output)
-                    df_min["stck_bsop_date"] = pd.to_datetime(df_min["stck_cntg_hour"], format="%H%M%S")
-                    return df_min
+                    return pd.DataFrame(output)
             return None
 
         smi_data = get_smi(token)
         if smi_data is not None:
-            st.success("?ㅻ쭏??癒몃땲 ?몃뜳???곗씠???섏쭛 ?꾨즺")
+            st.success("스마트 머니 인덱스 데이터 수집 완료")
         else:
-            st.info("?뱤 ??以묒뿉留??ㅻ쭏??癒몃땲 ?몃뜳?ㅺ? ?쒖꽦?붾뤌?? (09:00 ~ 15:30)")
+            st.info("📊 장 중에만 스마트 머니 인덱스가 활성화돼요. (09:00 ~ 15:30)")
     except:
-        st.info("?뱤 KIS API ?곌껐 ???ㅻ쭏??癒몃땲 ?몃뜳?ㅺ? ?쒖꽦?붾뤌??")
+        st.info("📊 KIS API 연결 시 스마트 머니 인덱스가 활성화돼요.")
 
     st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
 
-    # ?? 6. ?쒖옣 ?댁뒋 & ?댁뒪 ??
-    card("?벐 ?쒖옣 ?댁뒋 & ?댁뒪", "?ㅻ뒛??二쇱슂 ?쒖옣 ?댁뒪")
+    # ── 6. 시장 이슈 & 뉴스 ──
+    card("📰 시장 이슈 & 뉴스", "오늘의 주요 시장 뉴스")
     try:
         naver_id = st.secrets.get("NAVER_CLIENT_ID", "")
         naver_secret = st.secrets.get("NAVER_CLIENT_SECRET", "")
-        url = "https://openapi.naver.com/v1/search/news.json?query=二쇱떇+肄붿뒪??display=5&sort=date"
+        url = "https://openapi.naver.com/v1/search/news.json?query=주식+코스피&display=5&sort=date"
         res = requests.get(url, headers={
             "X-Naver-Client-Id": naver_id,
             "X-Naver-Client-Secret": naver_secret
@@ -298,27 +298,26 @@ def render_daily_report():
                 </div>
                 """, unsafe_allow_html=True)
         else:
-            st.info("?댁뒪瑜?遺덈윭?ㅼ? 紐삵뻽?댁슂.")
+            st.info("뉴스를 불러오지 못했어요.")
     except:
-        st.info("?댁뒪瑜?遺덈윭?ㅼ? 紐삵뻽?댁슂.")
+        st.info("뉴스를 불러오지 못했어요.")
 
-    # ?? PDF ?ㅼ슫濡쒕뱶 踰꾪듉 (異뷀썑 援ы쁽) ??
     st.markdown("<div style='margin-top:32px;'></div>", unsafe_allow_html=True)
-    st.info("?뱞 PDF ?ㅼ슫濡쒕뱶 諛?移댁뭅?ㅽ넚 ?먮룞 諛쒖넚 湲곕뒫? 怨?異붽??쇱슂!")
+    st.info("📄 PDF 다운로드 및 카카오톡 자동 발송 기능은 곧 추가돼요!")
 
 
 def render_weekly_report():
     st.markdown(
-        f"<div style='font-size:15px; color:{DIM}; margin-bottom:20px;'>二쇨컙 由ы룷????{dt.datetime.now():%Y??%m?? 湲곗?</div>",
+        f"<div style='font-size:15px; color:{DIM}; margin-bottom:20px;'>주간 리포트 — {dt.datetime.now():%Y년 %m월} 기준</div>",
         unsafe_allow_html=True
     )
 
-    # ?? 二쇨컙 ?쒖옣 ?붿빟 ??
-    card("?뱤 二쇨컙 ?쒖옣 ?붿빟", "肄붿뒪??肄붿뒪???섏뒪??二쇨컙 ?깅씫")
+    # ── 주간 시장 요약 ──
+    card("📊 주간 시장 요약", "코스피/코스닥/나스닥 주간 등락")
 
     @st.cache_data(ttl=3600)
     def get_weekly_market():
-        indices = {"肄붿뒪??: "^KS11", "肄붿뒪??: "^KQ11", "?섏뒪??: "^IXIC", "S&P500": "^GSPC"}
+        indices = {"코스피": "^KS11", "코스닥": "^KQ11", "나스닥": "^IXIC", "S&P500": "^GSPC"}
         result = []
         for name, ticker in indices.items():
             try:
@@ -327,7 +326,7 @@ def render_weekly_report():
                     curr = hist["Close"].iloc[-1]
                     week_ago = hist["Close"].iloc[-6]
                     chg_pct = (curr - week_ago) / week_ago * 100
-                    result.append({"吏??: name, "?꾩옱媛": f"{curr:,.2f}", "二쇨컙 ?깅씫": f"{chg_pct:+.2f}%", "_pct": chg_pct})
+                    result.append({"지수": name, "현재가": f"{curr:,.2f}", "주간 등락": f"{chg_pct:+.2f}%", "_pct": chg_pct})
             except:
                 pass
         return result
@@ -338,20 +337,20 @@ def render_weekly_report():
         for i, d in enumerate(weekly_data):
             with cols[i]:
                 color = CANDLE_UP if d["_pct"] >= 0 else CANDLE_DOWN
-                arrow = "?? if d["_pct"] >= 0 else "??
+                arrow = "▲" if d["_pct"] >= 0 else "▼"
                 st.markdown(f"""
                 <div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:12px; padding:14px 16px; margin-bottom:12px; box-shadow:0 4px 24px rgba(0,0,0,0.4);'>
-                    <div style='font-size:11px; color:#9ca3af; margin-bottom:4px;'>{d["吏??]}</div>
-                    <div style='font-family:JetBrains Mono; font-size:17px; font-weight:600;'>{d["?꾩옱媛"]}</div>
-                    <div style='font-family:JetBrains Mono; font-size:12px; color:{color}; margin-top:2px;'>{arrow} {d["二쇨컙 ?깅씫"]}</div>
+                    <div style='font-size:11px; color:#9ca3af; margin-bottom:4px;'>{d["지수"]}</div>
+                    <div style='font-family:JetBrains Mono; font-size:17px; font-weight:600;'>{d["현재가"]}</div>
+                    <div style='font-family:JetBrains Mono; font-size:12px; color:{color}; margin-top:2px;'>{arrow} {d["주간 등락"]}</div>
                 </div>
                 """, unsafe_allow_html=True)
 
     st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
 
-    # ?? 二쇨컙 愿?ъ쥌紐??깃낵 ??
+    # ── 주간 관심종목 성과 ──
     if st.session_state.get("watchlist"):
-        card("?뱢 愿?ъ쥌紐?二쇨컙 ?깃낵", "?대쾲 二??섏씡瑜??쒖쐞")
+        card("📈 관심종목 주간 성과", "이번 주 수익률 순위")
 
         @st.cache_data(ttl=3600)
         def get_weekly_returns(watchlist):
@@ -364,7 +363,7 @@ def render_weekly_report():
                         curr = hist["Close"].iloc[-1]
                         week_ago = hist["Close"].iloc[-6]
                         chg_pct = (curr - week_ago) / week_ago * 100
-                        rows.append({"醫낅ぉ": item, "二쇨컙 ?섏씡瑜?: f"{chg_pct:+.2f}%", "_pct": chg_pct})
+                        rows.append({"종목": item, "주간 수익률": f"{chg_pct:+.2f}%", "_pct": chg_pct})
                 except:
                     pass
             return sorted(rows, key=lambda x: x["_pct"], reverse=True)
@@ -376,7 +375,6 @@ def render_weekly_report():
 
     st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
 
-    # ?? ?ㅼ쓬 二?寃쎌젣 罹섎┛????
-    card("?뱟 ?ㅼ쓬 二?寃쎌젣 罹섎┛??, "二쇱슂 寃쎌젣 吏??諛쒗몴 ?쇱젙")
-    st.info("?뵩 寃쎌젣 罹섎┛?붾뒗 investing.com ?곕룞?쇰줈 怨?異붽??쇱슂!")
-
+    # ── 다음 주 경제 캘린더 ──
+    card("📅 다음 주 경제 캘린더", "주요 경제 지표 발표 일정")
+    st.info("🔧 경제 캘린더는 investing.com 연동으로 곧 추가돼요!")
