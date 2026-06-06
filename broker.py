@@ -121,3 +121,24 @@ def sell_order(ticker, qty, token):
     }
     res = requests.post(url, headers=headers, data=json.dumps(body))
     return res.json()
+
+def get_foreign_institution_trade(token, market="J"):
+    """외국인/기관 매매종목 가집계"""
+    url = f"{BASE_URL}/uapi/domestic-stock/v1/quotations/foreign-institution-total"
+    headers = {
+        "content-type": "application/json",
+        "authorization": f"Bearer {token}",
+        "appkey": APP_KEY,
+        "appsecret": APP_SECRET,
+        "tr_id": "FHPTJ04400000"
+    }
+    params = {
+        "FID_COND_MRKT_DIV_CODE": market,
+        "FID_COND_SCR_DIV_CODE": "16449",
+        "FID_INPUT_ISCD": "0001",
+        "FID_DIV_CLS_CODE": "0",
+        "FID_RANK_SORT_CLS_CODE": "0",
+        "FID_ETC_CLS_CODE": "0"
+    }
+    res = requests.get(url, headers=headers, params=params)
+    return res.json()
