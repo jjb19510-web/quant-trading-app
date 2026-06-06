@@ -299,6 +299,7 @@ def render_daily_report():
             institution_raw = get_foreign_institution_trade(token, div_cls="1")
             individual_raw = get_foreign_institution_trade(token, div_cls="2")
 
+        st.write(foreign_raw)
         foreign_rows = parse_supply(foreign_raw)
         institution_rows = parse_supply(institution_raw)
         individual_rows = parse_supply(individual_raw)
