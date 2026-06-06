@@ -884,6 +884,8 @@ with tab2:
                         ))
                         fig_opt.update_layout(height=300, margin=dict(l=8, r=20, t=8, b=28), paper_bgcolor=SURFACE_1, plot_bgcolor=SURFACE_1, font=dict(color=TEXT, size=11))
                         st.plotly_chart(fig_opt, use_container_width=True, config={"displayModeBar": False})
+                    elif strategy == "MACD 전략 (MACD)":
+                        st.success(f"✅ 최적 MACD: Fast **{int(best['Fast EMA'])}** / Slow **{int(best['Slow EMA'])}** → 수익률 **{best['수익률 (%)']:+.2f}%**")
                     else:
                         st.success(f"✅ 최적값: RSI **{int(best['RSI'])}** / 단기MA **{int(best['단기 MA'])}** / 장기MA **{int(best['장기 MA'])}** → 수익률 **{best['수익률 (%)']:+.2f}%**")
                     st.dataframe(result_df.sort_values("수익률 (%)", ascending=False).head(10).style.map(color_val, subset=["수익률 (%)"]), use_container_width=True, hide_index=True)
