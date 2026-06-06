@@ -105,7 +105,7 @@ def get_kis_token():
     except:
         return None
 
-tab1, tab2, tab3 = st.tabs(["📊 대시보드", "🔍 분석", "💼 포트폴리오"])
+tab1, tab2, tab3, tab4 = st.tabs(["📊 대시보드", "🔍 분석", "💼 포트폴리오", "📋 리포트"])
 
 with tab1:
     render_dashboard()
@@ -1042,3 +1042,6 @@ with tab2:
 
 with tab3:
     render_portfolio(KIS_AVAILABLE, get_kis_token, get_balance if KIS_AVAILABLE else lambda x: {})
+with tab4:
+    from report import render_report
+    render_report()
