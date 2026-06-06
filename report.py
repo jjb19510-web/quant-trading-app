@@ -172,58 +172,6 @@ def render_daily_report():
 
     st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
 
-    # ── 4. 상관관계 붕괴 경보 ──
-    if st.session_state.get("watchlist") and len(st.session_state.watchlist) >= 2:
-        card("🚨 상관관계 붕괴 경보", "보유종목 간 롤링 상관관계 · 1.0에 가까울수록 분산 무력화")
-
-        @st.cache_data(ttl=300)
-        def get_rolling_corr(watchlist):
-            price_data = {}
-            for item in watchlist:
-                ticker = item if item.endswith(".KS") or item.endswith(".KQ") else item + ".KS"
-                try:
-                    hist = yf.Ticker(ticker).history(period="3mo")["Close"]
-                    if len(hist) > 0:
-                        price_data[item] = hist
-                except:
-                    pass
-            if len(price_data) >= 2:
-                df_p = pd.DataFrame(price_data).dropna()
-                return df_p.pct_change().corr()
-            return None
-
-        corr = get_rolling_corr(tuple(st.session_state.watchlist))
-        if corr is not None:
-            mask = ~np.eye(len(corr), dtype=bool)
-            avg_corr = corr.where(mask).stack().mean()
-            if avg_corr > 0.8:
-                st.error(f"⚠️ 평균 상관관계 {avg_corr:.2f} — 분산 효과 거의 없음! 현금 비중 확대 권고")
-            elif avg_corr > 0.6:
-                st.warning(f"🟡 평균 상관관계 {avg_corr:.2f} — 분산 효과 약화 중, 주의 필요")
-            else:
-                st.success(f"🟢 평균 상관관계 {avg_corr:.2f} — 분산 효과 양호")
-
-            fig_corr = go.Figure(go.Heatmap(
-                z=corr.values,
-                x=corr.columns.tolist(),
-                y=corr.index.tolist(),
-                colorscale=[[0, "#3b82f6"], [0.5, "#1a1f2e"], [1, "#ef4444"]],
-                zmin=-1, zmax=1, zmid=0,
-                text=[[f"{v:.2f}" for v in row] for row in corr.values],
-                texttemplate="%{text}",
-                textfont=dict(size=12, color=TEXT),
-                colorbar=dict(thickness=8, tickfont=dict(color=DIM, size=9))
-            ))
-            fig_corr.update_layout(
-                height=350, margin=dict(l=60, r=60, t=8, b=8),
-                paper_bgcolor=BG, plot_bgcolor=BG,
-                font=dict(family="Inter, sans-serif", color=TEXT, size=11),
-                xaxis=dict(type="category"),
-                yaxis=dict(type="category")
-            )
-            st.plotly_chart(fig_corr, use_container_width=True, config={"displayModeBar": False})
-
-    st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
 
     # ── 5. 스마트 머니 인덱스 ──
     card("🧠 스마트 머니 인덱스", "장 시작 30분 vs 마감 30분 등락 스프레드 · 기관·외인 의도 추적")
