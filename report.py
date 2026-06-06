@@ -279,11 +279,11 @@ def render_daily_report():
     card("💰 수급 동향", "외국인 · 기관 · 개인 순매수 상위 종목 (KIS API)")
 
     try:
-        from broker import get_access_token, get_foreign_institution_trade
+        from broker import get_foreign_institution_trade
         token = st.session_state.get("kis_token")
         if not token:
-            token = get_access_token()
-            st.session_state["kis_token"] = token
+            st.info("KIS API 토큰이 없어요. 분석 탭을 먼저 열어주세요.")
+            raise Exception("토큰 없음")
 
         def parse_supply(data):
             rows = []
