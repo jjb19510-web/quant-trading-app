@@ -101,7 +101,9 @@ init_session_state()
 @st.cache_data(ttl=3600)
 def get_kis_token():
     try:
-        return get_access_token()
+        token = get_access_token()
+        st.session_state["kis_token"] = token
+        return token
     except:
         return None
 
