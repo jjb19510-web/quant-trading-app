@@ -294,7 +294,8 @@ def render_daily_report():
                     name = cols[1].text.strip()
                     price = cols[2].text.strip()
                     volume = cols[5].text.strip() if len(cols) > 5 else "-"
-                    if name:
+                    etf_keywords = ["KODEX", "TIGER", "KBSTAR", "ARIRANG", "HANARO", "KOSEF", "PLUS", "ACE", "SOL", "TIMEFOLIO", "ETF", "ETN", "인버스", "레버리지", "선물"]
+                    if name and not any(k in name for k in etf_keywords):
                         result.append({"종목": name, "현재가": price, "거래량": volume})
             return result
         except:
