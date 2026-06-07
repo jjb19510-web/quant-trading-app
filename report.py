@@ -388,15 +388,37 @@ def render_daily_report():
             from reportlab.lib import colors
             from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
             from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+            from reportlab.pdfbase import pdfmetrics
+            from reportlab.pdfbase.ttfonts import TTFont
+            import urllib.request
             import io
+
+            # 한글 폰트 다운로드 및 등록
+            font_path = "/tmp/NanumGothic.ttf"
+            if not os.path.exists(font_path):
+                urllib.request.urlretrieve(
+                    "https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Regular.ttf",
+                    font_path
+                )
+            pdfmetrics.registerFont(TTFont("NanumGothic", font_path))
 
             buffer = io.BytesIO()
             doc = SimpleDocTemplate(buffer, pagesize=A4)
             story = []
 
-            title_style = ParagraphStyle('title', fontSize=20, fontName='Helvetica-Bold', spaceAfter=12)
-            h2_style = ParagraphStyle('h2', fontSize=14, fontName='Helvetica-Bold', spaceAfter=8, spaceBefore=16)
-            normal_style = ParagraphStyle('normal', fontSize=10, fontName='Helvetica', spaceAfter=6)
+            import os, urllib.request
+            from reportlab.pdfbase import pdfmetrics
+            from reportlab.pdfbase.ttfonts import TTFont
+            font_path = "/tmp/NanumGothic.ttf"
+            if not os.path.exists(font_path):
+                urllib.request.urlretrieve(
+                    "https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Regular.ttf",
+                    font_path
+                )
+            pdfmetrics.registerFont(TTFont("NanumGothic", font_path))
+            title_style = ParagraphStyle('title', fontSize=20, fontName='NanumGothic', spaceAfter=12)
+            h2_style = ParagraphStyle('h2', fontSize=14, fontName='NanumGothic', spaceAfter=8, spaceBefore=16)
+            normal_style = ParagraphStyle('normal', fontSize=10, fontName='NanumGothic', spaceAfter=6)
 
             story.append(Paragraph("Quantfolio Daily Report", title_style))
             story.append(Paragraph(f"{dt.datetime.now():%Y-%m-%d %H:%M} 기준", normal_style))
@@ -412,7 +434,7 @@ def render_daily_report():
                 t.setStyle(TableStyle([
                     ('BACKGROUND', (0,0), (-1,0), colors.grey),
                     ('TEXTCOLOR', (0,0), (-1,0), colors.white),
-                    ('FONTNAME', (0,0), (-1,-1), 'Helvetica'),
+                    ('FONTNAME', (0,0), (-1,-1), 'NanumGothic'),
                     ('FONTSIZE', (0,0), (-1,-1), 10),
                     ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
                     ('ALIGN', (0,0), (-1,-1), 'CENTER'),
