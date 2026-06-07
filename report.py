@@ -231,8 +231,12 @@ def render_daily_report():
         from broker import get_foreign_institution_trade, get_access_token
         token = st.session_state.get("kis_token")
         if not token:
-            token = get_access_token()
-            st.session_state["kis_token"] = token
+            try:
+                token = get_access_token()
+                st.session_state["kis_token"] = token
+            except Exception as e:
+                st.info(f"KIS 토큰 발급 실패: {e}")
+                raise Exception("토큰 발급 실패")
 
         def parse_supply(data):
             rows = []
