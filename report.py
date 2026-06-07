@@ -5,6 +5,7 @@ import numpy as np
 import plotly.graph_objects as go
 import datetime as dt
 import requests
+import os
 from ui_components import (
     card, CANDLE_UP, CANDLE_DOWN, DIM, TEXT, SURFACE_1, SURFACE_2, LINE, BG, ACCENT
 )
