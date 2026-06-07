@@ -25,7 +25,10 @@ def get_access_token():
         "appsecret": APP_SECRET
     }
     res = requests.post(url, headers=headers, data=json.dumps(body))
-    return res.json()["access_token"]
+    data = res.json()
+    if "access_token" not in data:
+        raise Exception(str(data))
+    return data["access_token"]
 
 
 def get_current_price(ticker, token):
