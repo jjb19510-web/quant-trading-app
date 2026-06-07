@@ -383,6 +383,8 @@ def render_daily_report():
                             json={"contents": [{"parts": [{"text": prompt}]}]}
                         )
                         ai_data = ai_res.json()
+                        if "candidates" not in ai_data:
+                            raise Exception(str(ai_data))
                         summary = ai_data["candidates"][0]["content"]["parts"][0]["text"]
                         st.markdown(f"""
                         <div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:10px; padding:16px; margin-top:12px; line-height:1.8;'>
