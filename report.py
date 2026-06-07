@@ -385,7 +385,8 @@ def render_daily_report():
                                 "messages": [{"role": "user", "content": prompt}]
                             }
                         )
-                        summary = ai_res.json()["content"][0]["text"]
+                        ai_data = ai_res.json()
+                        summary = ai_data.get("content", [{}])[0].get("text", str(ai_data))
                         st.markdown(f"""
                         <div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:10px; padding:16px; margin-top:12px; line-height:1.8;'>
                             <div style='font-size:12px; color:#9ca3af; margin-bottom:8px;'>🤖 AI 시장 분석</div>
