@@ -445,7 +445,7 @@ def render_daily_report():
 
             ai_text = ""
             if st.session_state.get("ai_summary"):
-                ai_text = f"{'─'*30}\n\n🤖 AI 시장 분석\n{st.session_state['ai_summary']}\n"
+                ai_text = f"{'─'*30}\n\n🤖 AI 시장 분석\n{st.session_state['ai_summary'][:300]}...\n"
 
             message = (
                 f"📊 Quantfolio 일간 리포트\n"
