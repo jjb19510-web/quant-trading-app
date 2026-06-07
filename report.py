@@ -231,11 +231,17 @@ def render_daily_report():
         from broker import get_foreign_institution_trade, get_access_token
         token = st.session_state.get("kis_token")
         if not token:
+            last_attempt = st.session_state.get("kis_token_last_attempt", 0)
+            now = dt.datetime.now().timestamp()
+            if now - last_attempt < 60:
+                st.info("📊 수급 데이터는 장 중(09:00~15:30)에만 활성화돼요.")
+                raise Exception("토큰 발급 대기 중")
             try:
+                st.session_state["kis_token_last_attempt"] = now
                 token = get_access_token()
                 st.session_state["kis_token"] = token
             except Exception as e:
-                st.info(f"KIS 토큰 발급 실패: {e}")
+                st.info("📊 수급 데이터는 장 중(09:00~15:30)에만 활성화돼요.")
                 raise Exception("토큰 발급 실패")
 
         def parse_supply(data):
