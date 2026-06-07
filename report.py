@@ -334,6 +334,66 @@ def render_daily_report():
                     <div style='font-size:11px; color:{DIM}; margin-top:4px;'>{date}</div>
                 </div>
                 """, unsafe_allow_html=True)
+        # AI 뉴스 요약
+            if st.button("🤖 AI 뉴스 요약", use_container_width=True):
+                with st.spinner("AI가 뉴스를 분석하는 중..."):
+                    try:
+                        # 일반 뉴스 헤드라인
+                        news_text = "\n".join([
+                            item["title"].replace("<b>","").replace("</b>","")
+                            for item in items
+                        ])
+
+                        # 애널리스트 의견 추가 수집
+                        anal_res = requests.get(
+                            "https://openapi.naver.com/v1/search/news.json?query=애널리스트+투자의견+목표주가&display=3&sort=date",
+                            headers={
+                                "X-Naver-Client-Id": naver_id,
+                                "X-Naver-Client-Secret": naver_secret
+                            }, timeout=5
+                        )
+                        anal_items = anal_res.json().get("items", [])
+                        anal_text = "\n".join([
+                            item["title"].replace("<b>","").replace("</b>","")
+                            for item in anal_items
+                        ])
+
+                        prompt = f"""다음 주식 뉴스와 애널리스트 의견을 투자자 관점에서 분석해줘.
+
+[오늘의 주요 뉴스]
+{news_text}
+
+[애널리스트 의견]
+{anal_text}
+
+아래 형식으로 답해줘:
+📈 상승 요인: (1~2줄)
+📉 하락 요인: (1~2줄)
+📌 핵심 이슈:
+- (핵심 1)
+- (핵심 2)
+- (핵심 3)
+💼 애널리스트 주요 의견: (1~2줄)
+🔮 오늘 시장 영향 전망: (1줄)"""
+
+                        ai_res = requests.post(
+                            "https://api.anthropic.com/v1/messages",
+                            headers={"Content-Type": "application/json"},
+                            json={
+                                "model": "claude-sonnet-4-20250514",
+                                "max_tokens": 800,
+                                "messages": [{"role": "user", "content": prompt}]
+                            }
+                        )
+                        summary = ai_res.json()["content"][0]["text"]
+                        st.markdown(f"""
+                        <div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:10px; padding:16px; margin-top:12px; line-height:1.8;'>
+                            <div style='font-size:12px; color:#9ca3af; margin-bottom:8px;'>🤖 AI 시장 분석</div>
+                            <div style='font-size:13px; white-space:pre-line;'>{summary}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    except Exception as e:
+                        st.error(f"AI 요약 실패: {e}")
         else:
             st.info("뉴스를 불러오지 못했어요.")
     except:
