@@ -231,7 +231,7 @@ with tab2:
                     save_watchlist(st.session_state.watchlist)
                     st.rerun()
 
-        if st.session_state.watchlist:
+        if st.session_state.get("watchlist"):
             with st.expander("⭐ 관심종목", expanded=True):
                 name_map = get_krx_name_map()
                 for witem in st.session_state.watchlist:
@@ -373,7 +373,7 @@ with tab2:
 
     # ── SUB 1 : 주가 & 신호 ──
     with sub1:
-        if st.session_state.watchlist:
+        if st.session_state.get("watchlist"):
             @st.cache_data(ttl=300)
             def get_today_signals(watchlist, strategy_name, rsi_thr, ma_s, ma_l, bb_p):
                 buy_list, sell_list = [], []
