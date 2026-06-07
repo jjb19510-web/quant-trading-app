@@ -377,15 +377,15 @@ def render_daily_report():
 {anal_text}
 
 반드시 한국어로만 답해줘. 영어나 다른 언어 절대 사용 금지.
-아래 형식으로 답해줘:
-📈 상승 요인: (1~2줄)
-📉 하락 요인: (1~2줄)
+아래 형식으로 구체적이고 자세하게 답해줘:
+📈 상승 요인: (구체적 수치나 종목명 포함해서 2~3줄)
+📉 하락 요인: (구체적 리스크 요인 포함해서 2~3줄)
 📌 핵심 이슈:
-- (핵심 1)
-- (핵심 2)
-- (핵심 3)
-💼 애널리스트 주요 의견: (1~2줄)
-🔮 오늘 시장 영향 전망: (1줄)"""
+- (핵심 1: 배경과 영향 포함)
+- (핵심 2: 배경과 영향 포함)
+- (핵심 3: 배경과 영향 포함)
+💼 애널리스트 주요 의견: (종목별 목표가, 투자의견 등 구체적으로 2~3줄)
+🔮 오늘 시장 영향 전망: (코스피/코스닥 방향성 포함해서 2줄)"""
 
                         groq_key = st.secrets.get("GROQ_API_KEY", "")
                         ai_res = requests.post(
@@ -401,10 +401,11 @@ def render_daily_report():
                         if "choices" not in ai_data:
                             raise Exception(str(ai_data))
                         summary = ai_data["choices"][0]["message"]["content"]
+                        sections = summary.split("\n\n")
                         st.markdown(f"""
-                        <div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:10px; padding:16px; margin-top:12px; line-height:1.8;'>
-                            <div style='font-size:12px; color:#9ca3af; margin-bottom:8px;'>🤖 AI 시장 분석</div>
-                            <div style='font-size:13px; white-space:pre-line;'>{summary}</div>
+                        <div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:12px; padding:20px; margin-top:12px;'>
+                            <div style='font-size:13px; font-weight:700; color:#9ca3af; margin-bottom:16px; letter-spacing:1px;'>🤖 AI 시장 분석</div>
+                            <div style='font-size:13px; line-height:2.0; white-space:pre-line; color:{TEXT};'>{summary}</div>
                         </div>
                         """, unsafe_allow_html=True)
                     except Exception as e:
