@@ -386,16 +386,20 @@ def render_daily_report():
 💼 애널리스트 주요 의견: (1~2줄)
 🔮 오늘 시장 영향 전망: (1줄)"""
 
-                        gemini_key = st.secrets.get("GEMINI_API_KEY", "")
+                        groq_key = st.secrets.get("GROQ_API_KEY", "")
                         ai_res = requests.post(
-                            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key={gemini_key}",
-                            headers={"Content-Type": "application/json"},
-                            json={"contents": [{"parts": [{"text": prompt}]}]}
+                            "https://api.groq.com/openai/v1/chat/completions",
+                            headers={"Content-Type": "application/json", "Authorization": f"Bearer {groq_key}"},
+                            json={
+                                "model": "llama-3.3-70b-versatile",
+                                "messages": [{"role": "user", "content": prompt}],
+                                "max_tokens": 800
+                            }
                         )
                         ai_data = ai_res.json()
-                        if "candidates" not in ai_data:
+                        if "choices" not in ai_data:
                             raise Exception(str(ai_data))
-                        summary = ai_data["candidates"][0]["content"]["parts"][0]["text"]
+                        summary = ai_data["choices"][0]["message"]["content"]
                         st.markdown(f"""
                         <div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:10px; padding:16px; margin-top:12px; line-height:1.8;'>
                             <div style='font-size:12px; color:#9ca3af; margin-bottom:8px;'>🤖 AI 시장 분석</div>
