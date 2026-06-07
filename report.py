@@ -376,17 +376,14 @@ def render_daily_report():
 💼 애널리스트 주요 의견: (1~2줄)
 🔮 오늘 시장 영향 전망: (1줄)"""
 
+                        gemini_key = st.secrets.get("GEMINI_API_KEY", "")
                         ai_res = requests.post(
-                            "https://api.anthropic.com/v1/messages",
+                            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={gemini_key}",
                             headers={"Content-Type": "application/json"},
-                            json={
-                                "model": "claude-sonnet-4-20250514",
-                                "max_tokens": 800,
-                                "messages": [{"role": "user", "content": prompt}]
-                            }
+                            json={"contents": [{"parts": [{"text": prompt}]}]}
                         )
                         ai_data = ai_res.json()
-                        summary = ai_data.get("content", [{}])[0].get("text", str(ai_data))
+                        summary = ai_data["candidates"][0]["content"]["parts"][0]["text"]
                         st.markdown(f"""
                         <div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:10px; padding:16px; margin-top:12px; line-height:1.8;'>
                             <div style='font-size:12px; color:#9ca3af; margin-bottom:8px;'>🤖 AI 시장 분석</div>
