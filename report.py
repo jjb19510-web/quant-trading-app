@@ -75,6 +75,7 @@ def render_daily_report():
     st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
 
     # ── 2. 관심종목 신호 리포트 ──
+    signal_rows = []
     if st.session_state.get("watchlist"):
         card("🔔 관심종목 신호 리포트", "RSI 기준 매수/매도 신호 · 내일 변동성 돌파 목표가")
 
@@ -172,7 +173,6 @@ def render_daily_report():
         st.info("KIS API가 연결되지 않았어요.")
 
     st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
-
 
     # ── 5. 스마트 머니 인덱스 ──
     card("🧠 스마트 머니 인덱스", "장 시작 30분 vs 마감 30분 등락 스프레드 · 기관·외인 의도 추적")
@@ -324,6 +324,7 @@ def render_daily_report():
 
     # ── 8. 시장 이슈 & 뉴스 ──
     card("📰 시장 이슈 & 뉴스", "오늘의 주요 시장 뉴스")
+    items = []
     try:
         naver_id = st.secrets.get("NAVER_CLIENT_ID", "")
         naver_secret = st.secrets.get("NAVER_CLIENT_SECRET", "")
@@ -344,17 +345,16 @@ def render_daily_report():
                     <div style='font-size:11px; color:{DIM}; margin-top:4px;'>{date}</div>
                 </div>
                 """, unsafe_allow_html=True)
-        # AI 뉴스 요약
+
+            # AI 뉴스 요약
             if st.button("🤖 AI 뉴스 요약", use_container_width=True):
                 with st.spinner("AI가 뉴스를 분석하는 중..."):
                     try:
-                        # 일반 뉴스 헤드라인
                         news_text = "\n".join([
                             item["title"].replace("<b>","").replace("</b>","")
                             for item in items
                         ])
 
-                        # 애널리스트 의견 추가 수집
                         anal_res = requests.get(
                             "https://openapi.naver.com/v1/search/news.json?query=애널리스트+투자의견+목표주가&display=3&sort=date",
                             headers={
@@ -401,7 +401,7 @@ def render_daily_report():
                         if "choices" not in ai_data:
                             raise Exception(str(ai_data))
                         summary = ai_data["choices"][0]["message"]["content"]
-                        sections = summary.split("\n\n")
+                        st.session_state["ai_summary"] = summary
                         st.markdown(f"""
                         <div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:12px; padding:20px; margin-top:12px;'>
                             <div style='font-size:13px; font-weight:700; color:#9ca3af; margin-bottom:16px; letter-spacing:1px;'>🤖 AI 시장 분석</div>
@@ -410,6 +410,15 @@ def render_daily_report():
                         """, unsafe_allow_html=True)
                     except Exception as e:
                         st.error(f"AI 요약 실패: {e}")
+
+            # 이전 AI 요약 표시
+            elif st.session_state.get("ai_summary"):
+                st.markdown(f"""
+                <div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:12px; padding:20px; margin-top:12px;'>
+                    <div style='font-size:13px; font-weight:700; color:#9ca3af; margin-bottom:16px; letter-spacing:1px;'>🤖 AI 시장 분석</div>
+                    <div style='font-size:13px; line-height:2.0; white-space:pre-line; color:{TEXT};'>{st.session_state["ai_summary"]}</div>
+                </div>
+                """, unsafe_allow_html=True)
         else:
             st.info("뉴스를 불러오지 못했어요.")
     except:
@@ -423,18 +432,20 @@ def render_daily_report():
         try:
             from broker import send_kakao_message
 
-            # 시장 현황 요약 텍스트 생성
             market_text = ""
             if market_data:
                 for idx in market_data:
                     arrow = "▲" if idx["change"] >= 0 else "▼"
                     market_text += f"{idx['name']}: {idx['price']:,.2f} {arrow}{idx['pct']:+.2f}%\n"
 
-            # 관심종목 신호 요약
             signal_text = ""
-            if st.session_state.get("watchlist") and 'signal_rows' in dir():
+            if signal_rows:
                 for row in signal_rows:
                     signal_text += f"{row['종목']}: {row['신호']} | RSI {row['RSI']}\n"
+
+            ai_text = ""
+            if st.session_state.get("ai_summary"):
+                ai_text = f"{'─'*30}\n\n🤖 AI 시장 분석\n{st.session_state['ai_summary']}\n"
 
             message = (
                 f"📊 Quantfolio 일간 리포트\n"
@@ -443,6 +454,7 @@ def render_daily_report():
                 f"🌐 시장 현황\n{market_text}\n"
                 f"{'─'*30}\n\n"
                 f"🔔 관심종목 신호\n{signal_text if signal_text else '관심종목 없음'}\n"
+                f"{ai_text}"
                 f"{'─'*30}\n\n"
                 f"🔗 Quantfolio 앱 바로가기\n"
                 f"https://quant-trading-app-gdvn3rpskejdaihwjjjqzf.streamlit.app"
@@ -470,7 +482,6 @@ def render_daily_report():
             import urllib.request
             import io
 
-            # 한글 폰트 다운로드 및 등록
             font_path = "/tmp/NanumGothic.ttf"
             if not os.path.exists(font_path):
                 urllib.request.urlretrieve(
@@ -546,12 +557,13 @@ def render_daily_report():
                 story.append(t3)
                 story.append(Spacer(1, 16))
 
-            # 뉴스 헤드라인
-            if items:
-                story.append(Paragraph("📰 시장 이슈 & 뉴스", h2_style))
-                for item in items:
-                    title = item["title"].replace("<b>", "").replace("</b>", "")
-                    story.append(Paragraph(f"• {title}", normal_style))
+            # AI 요약
+            ai_summary = st.session_state.get("ai_summary", "")
+            if ai_summary:
+                story.append(Paragraph("🤖 AI 시장 분석", h2_style))
+                for line in ai_summary.split("\n"):
+                    if line.strip():
+                        story.append(Paragraph(line.strip(), normal_style))
                 story.append(Spacer(1, 16))
 
             story.append(Spacer(1, 20))
@@ -576,7 +588,6 @@ def render_weekly_report():
         unsafe_allow_html=True
     )
 
-    # ── 주간 시장 요약 ──
     card("📊 주간 시장 요약", "코스피/코스닥/나스닥 주간 등락")
 
     @st.cache_data(ttl=3600)
@@ -612,7 +623,6 @@ def render_weekly_report():
 
     st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
 
-    # ── 주간 관심종목 성과 ──
     if st.session_state.get("watchlist"):
         card("📈 관심종목 주간 성과", "이번 주 수익률 순위")
 
@@ -639,6 +649,5 @@ def render_weekly_report():
 
     st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
 
-    # ── 다음 주 경제 캘린더 ──
     card("📅 다음 주 경제 캘린더", "주요 경제 지표 발표 일정")
     st.info("🔧 경제 캘린더는 investing.com 연동으로 곧 추가돼요!")
