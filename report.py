@@ -407,7 +407,7 @@ def render_daily_report():
             doc = SimpleDocTemplate(buffer, pagesize=A4)
             story = []
 
-            import os, urllib.request
+            import urllib.request
             from reportlab.pdfbase import pdfmetrics
             from reportlab.pdfbase.ttfonts import TTFont
             font_path = "/tmp/NanumGothic.ttf"
