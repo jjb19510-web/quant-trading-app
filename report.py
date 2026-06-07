@@ -339,8 +339,49 @@ def render_daily_report():
         st.info("뉴스를 불러오지 못했어요.")
 
     st.markdown("<div style='margin-top:32px;'></div>", unsafe_allow_html=True)
+
+    # ── 카카오톡 발송 ──
+    st.markdown("<div style='margin-top:8px;'></div>", unsafe_allow_html=True)
+    if st.button("📱 카카오톡으로 리포트 받기", use_container_width=True):
+        try:
+            from broker import send_kakao_message
+
+            # 시장 현황 요약 텍스트 생성
+            market_text = ""
+            if market_data:
+                for idx in market_data:
+                    arrow = "▲" if idx["change"] >= 0 else "▼"
+                    market_text += f"{idx['name']}: {idx['price']:,.2f} {arrow}{idx['pct']:+.2f}%\n"
+
+            # 관심종목 신호 요약
+            signal_text = ""
+            if st.session_state.get("watchlist") and 'signal_rows' in dir():
+                for row in signal_rows:
+                    signal_text += f"{row['종목']}: {row['신호']} | RSI {row['RSI']}\n"
+
+            message = (
+                f"📊 Quantfolio 일간 리포트\n"
+                f"{dt.datetime.now():%Y년 %m월 %d일 %H:%M} 기준\n"
+                f"{'─'*30}\n\n"
+                f"🌐 시장 현황\n{market_text}\n"
+                f"{'─'*30}\n\n"
+                f"🔔 관심종목 신호\n{signal_text if signal_text else '관심종목 없음'}\n"
+                f"{'─'*30}\n\n"
+                f"🔗 Quantfolio 앱 바로가기\n"
+                f"https://quant-trading-app-gdvn3rpskejdaihwjjjqzf.streamlit.app"
+            )
+
+            result = send_kakao_message(message)
+            if result.get("result_code") == 0:
+                st.success("✅ 카카오톡 발송 완료!")
+            else:
+                st.error(f"발송 실패: {result}")
+        except Exception as e:
+            st.error(f"카카오톡 발송 오류: {e}")
+
+    st.markdown("<div style='margin-top:16px;'></div>", unsafe_allow_html=True)
+
     # ── PDF 다운로드 ──
-    st.markdown("<div style='margin-top:32px;'></div>", unsafe_allow_html=True)
     if st.button("📄 PDF 리포트 다운로드", use_container_width=True):
         try:
             from reportlab.lib.pagesizes import A4
