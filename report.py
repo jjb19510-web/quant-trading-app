@@ -378,7 +378,7 @@ def render_daily_report():
 
                         gemini_key = st.secrets.get("GEMINI_API_KEY", "")
                         ai_res = requests.post(
-                            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={gemini_key}",
+                            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key={gemini_key}",
                             headers={"Content-Type": "application/json"},
                             json={"contents": [{"parts": [{"text": prompt}]}]}
                         )
