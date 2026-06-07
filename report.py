@@ -228,11 +228,11 @@ def render_daily_report():
     card("💰 수급 동향", "외국인 · 기관 · 개인 순매수 상위 종목 (KIS API)")
 
     try:
-        from broker import get_foreign_institution_trade
+        from broker import get_foreign_institution_trade, get_access_token
         token = st.session_state.get("kis_token")
         if not token:
-            st.info("KIS API 토큰이 없어요. 분석 탭을 먼저 열어주세요.")
-            raise Exception("토큰 없음")
+            token = get_access_token()
+            st.session_state["kis_token"] = token
 
         def parse_supply(data):
             rows = []
@@ -467,16 +467,6 @@ def render_daily_report():
             doc = SimpleDocTemplate(buffer, pagesize=A4)
             story = []
 
-            import urllib.request
-            from reportlab.pdfbase import pdfmetrics
-            from reportlab.pdfbase.ttfonts import TTFont
-            font_path = "/tmp/NanumGothic.ttf"
-            if not os.path.exists(font_path):
-                urllib.request.urlretrieve(
-                    "https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Regular.ttf",
-                    font_path
-                )
-            pdfmetrics.registerFont(TTFont("NanumGothic", font_path))
             title_style = ParagraphStyle('title', fontSize=20, fontName='NanumGothic', spaceAfter=12)
             h2_style = ParagraphStyle('h2', fontSize=14, fontName='NanumGothic', spaceAfter=8, spaceBefore=16)
             normal_style = ParagraphStyle('normal', fontSize=10, fontName='NanumGothic', spaceAfter=6)
