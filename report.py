@@ -168,9 +168,16 @@ def render_daily_report():
                 } for h in holdings if int(h.get("hldg_qty", 0)) > 0])
                 if not hdf.empty:
                     st.dataframe(hdf, use_container_width=True, hide_index=True)
-    except:
+        else:
+            # ⏰ KIS API가 0이 아닌 다른 오류 응답 코드를 반환했을 때의 정밀 가이드화
+            err_code = balance_data.get("rt_cd", "N/A")
+            err_msg = balance_data.get("msg1", "서비스 운영 시간 외 또는 조회 권한이 없는 모의투자 계좌 상태입니다.")
+            card("💼 포트폴리오 현황", f"KIS API 조회 제한 (코드: {err_code})")
+            st.info(f"📊 한투 계좌 요약을 불러오지 못했습니다. (사유: {err_msg})")
+    except Exception as e:
+        # ⏰ 파이썬 예외가 발생했을 때 상세 원인을 노출하여 핀포인트 조치 지원
         card("💼 포트폴리오 현황", "KIS API 연결 필요")
-        st.info("KIS API가 연결되지 않았어요.")
+        st.info(f"📊 KIS API를 연결할 수 없습니다. (상세 에러 원인: {e})")
 
     st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
 
