@@ -87,6 +87,11 @@ def safe_run_strategy(df, strategy, rsi_threshold, ma_short, ma_long, bb_period,
 try:
     from broker import get_access_token, get_current_price as kis_get_price, get_balance, buy_order, sell_order
     KIS_AVAILABLE = True
+    if "kis_token" not in st.session_state:
+        try:
+            st.session_state["kis_token"] = get_access_token()
+        except:
+            pass
 except:
     KIS_AVAILABLE = False
 
