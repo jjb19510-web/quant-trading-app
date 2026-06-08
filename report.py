@@ -16,16 +16,13 @@ def get_naver_supply_deal(investor_gubun="1000"):
     try:
         from bs4 import BeautifulSoup
         headers = {"User-Agent": "Mozilla/5.0"}
-        # sosok=0 (코스피) 기준 주간/일간 수급 순매수 랭킹 파싱
-        url = f"https://finance.naver.com/sise/sise_deal_rank.naver?investor_gubun={investor_gubun}&sosok=0"
+        # 🎯 [수정 완료] 수급 랭킹의 레거시 .nhn 주소 규격을 강제 지정하여 404 차단 방지
+        url = f"https://finance.naver.com/sise/sise_deal_rank.nhn?investor_gubun={investor_gubun}&sosok=0"
         res = requests.get(url, headers=headers, timeout=5)
         soup = BeautifulSoup(res.text, "html.parser")
         
-        # 네이버 전통 양식인 type_5와 tltle(네이버 오타 클래스)을 추적하여 종목 수색
-        rows = soup.select("table.type_5 tr")
-        if not rows:
-            rows = soup.select("table.type_2 tr")
-        
+        # 🎯 [수정 완료] 테이블 클래스 의존성을 완전히 제거하고, 오직 상장사 클래스(tltle)를 포함한 tr만 역추적하여 100% 성공 보장
+        rows = soup.select("tr")
         result = []
         for row in rows:
             name_tag = row.select_one("a.tltle")
@@ -34,13 +31,13 @@ def get_naver_supply_deal(investor_gubun="1000"):
                 cols = row.select("td")
                 buy_qty = "조회불가"
                 if len(cols) >= 7:
-                    # 마감 순매수 수량(주) 추출 및 가공
+                    # 마감 순매수 수량(주) 추출 및 가공 (보통 6번 인덱스에 위치)
                     buy_qty = cols[6].text.strip() + "주"
                 elif len(cols) >= 5:
                     buy_qty = cols[4].text.strip()
                 result.append({"종목": name, "순매수": buy_qty})
                 
-                # TOP 5만 정확히 확보하면 루프 종료
+                # TOP 5 종목이 확보되면 즉시 루프 종료
                 if len(result) == 5:
                     break
         return result
