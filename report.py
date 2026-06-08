@@ -496,9 +496,9 @@ def render_daily_report():
             doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=36, rightMargin=36, topMargin=40, bottomMargin=40)
             story = []
 
-            # 💎 기관 리포트 규격 전용 스타일셋 정의
-            title_style = ParagraphStyle('title', fontSize=22, fontName='NanumGothic', spaceAfter=6, textColor=colors.HexColor("#0f172a"))
-            meta_style = ParagraphStyle('meta', fontSize=10, fontName='NanumGothic', spaceAfter=14, textColor=colors.HexColor("#64748b"))
+            # 💎 기관 리포트 규격 전용 스타일셋 정의 (글자 겹침 방지 leading 정밀 보정)
+            title_style = ParagraphStyle('title', fontSize=22, fontName='NanumGothic', leading=28, spaceAfter=10, textColor=colors.HexColor("#0f172a"))
+            meta_style = ParagraphStyle('meta', fontSize=10, fontName='NanumGothic', leading=14, spaceAfter=14, textColor=colors.HexColor("#64748b"))
             h2_style = ParagraphStyle('h2', fontSize=13, fontName='NanumGothic', spaceAfter=8, spaceBefore=18, textColor=colors.HexColor("#1e293b"))
             normal_style = ParagraphStyle('normal', fontSize=9, fontName='NanumGothic', spaceAfter=4, leading=15, textColor=colors.HexColor("#334155"))
             bullet_style = ParagraphStyle('bullet', fontSize=9, fontName='NanumGothic', spaceAfter=4, leading=15, leftIndent=12, textColor=colors.HexColor("#334155"))
