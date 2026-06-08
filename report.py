@@ -226,14 +226,14 @@ def render_daily_report():
     st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
 
    # ── 5. 스마트 머니 인덱스 ──
-    card("🧠 스마트 머니 인덱스 (SMI)", "장 시작 30분(개인) vs 마감 30분(기관/외인) 등락 스프레드 역추적")
+    card("🧠 큰손 눈치 게임 (스마트 머니 인덱스)", "주식 시장의 진짜 큰손(기관/외인)들이 지금 주식을 사고 있는지 초보자 관점에서 쉽게 추적합니다.")
     
-    # 💡 직관적인 가이드를 제공하는 디자인 카드 배치
+    # 💡 초보자를 위한 초간단 설명 카드
     st.markdown(f"""
-    <div style='background:{SURFACE_1}; border-left: 4px solid {ACCENT}; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; font-size: 13px; line-height: 1.65; color:{TEXT};'>
-        💡 <b>스마트 머니 인덱스(SMI) 초간단 판독법</b><br/>
-        • <b>수급선 상승 (📈):</b> 아침 투매를 견디고, 장 막판에 자금력이 탄탄한 <b>기관/외인</b>이 주식을 쓸어 담았다는 뜻입니다. (시장 우호적)<br/>
-        • <b>수급선 하락 (📉):</b> 오전 반등에 신나 아침에만 사고, 장 막판에는 큰손들이 돈을 빼며 발을 뺐다는 뜻입니다. (경계 필요)
+    <div style='background:{SURFACE_1}; border-left: 4px solid {ACCENT}; padding: 14px 18px; border-radius: 8px; margin-bottom: 20px; font-size: 13px; line-height: 1.7; color:{TEXT};'>
+        <b>❓ 스마트 머니(SMI)가 무엇인가요?</b><br/>
+        • 아침 9시에는 주식 초보자(개인)들이 주로 거래하고, <b>오후 3시~3시 30분(장 마감 직전)</b>에는 정보가 빠르고 돈이 많은 <b>진짜 큰손(기관/외국인)</b>들이 움직입니다.<br/>
+        • 이 지표는 <b>"큰손들이 오늘 장 막판에 몰래 주식을 샀는지, 팔았는지"</b>를 계산하여 큰손들의 쇼핑 열기를 점수로 나타낸 지수입니다.
     </div>
     """, unsafe_allow_html=True)
 
@@ -294,7 +294,7 @@ def render_daily_report():
             print(f"SMI 연산 오류: {e}")
             return None
 
-    with st.spinner("스마트 머니 인덱스(SMI) 수급 데이터 분석 중..."):
+    with st.spinner("큰손들의 장바구니 구경하는 중..."):
         smi_df = calculate_smi_yfinance()
         
     if smi_df is not None and not smi_df.empty:
@@ -303,104 +303,87 @@ def render_daily_report():
         prev_row = smi_df.iloc[-2] if len(smi_df) > 1 else last_row
         smi_diff = last_row["SMI"] - prev_row["SMI"]
         
-        # 오늘 종가 기준 시장 지배 수급 판별
-        if last_row["오후변동"] > 0:
-            leadership = "🟢 기관/외인 (종가 매수 우위)"
-            lead_color = "#22c55e" # 그린
+        # 1. 초보자용 수급 신호등 상태값 판별
+        if smi_diff > 50:
+            status_text = "🟢 큰손들 폭풍 쇼핑 중 (매우 좋음)"
+            status_color = "#22c55e" # 초록
+            advice_text = "큰손들이 주식을 대량으로 사 모으고 있습니다. 우리도 우량한 주식을 같이 사 모아가기 아주 좋은 타이밍입니다! 👍"
+        elif smi_diff < -50:
+            status_text = "🔴 큰손들 탈출 중 (매매 조심!)"
+            status_color = "#ef4444" # 빨간
+            advice_text = "큰손들이 시장에서 돈을 빼고 도망가고 있습니다. 지금은 무리하게 사기보다 현금을 쥐고 지켜보는 것이 안전합니다! ⚠️"
         else:
-            leadership = "🔴 개인 (종가 관망 우위)"
-            lead_color = "#ef4444" # 레드
+            status_text = "🟡 큰손들 눈치 게임 중 (보통)"
+            status_color = "#f59e0b" # 주황
+            advice_text = "큰손들도 살지 팔지 고민 중입니다. 우리도 무리하지 말고 차분하게 지켜봅시다. ⚖️"
 
-        m1, m2, m3 = st.columns(3)
-        with m1:
+        c1, c2 = st.columns(2)
+        with c1:
             st.markdown(f"""
-            <div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:10px; padding:12px 16px; text-align:center; height:75px;'>
-                <div style='font-size:11px; color:#9ca3af; margin-bottom:6px;'>오늘의 시장 주도권</div>
-                <div style='font-size:13px; font-weight:700; color:{lead_color}; margin-top:4px;'>{leadership}</div>
+            <div style='background:{SURFACE_2}; border:1px solid {LINE}; border-radius:12px; padding:16px; text-align:center;'>
+                <div style='font-size:12px; color:#9ca3af; margin-bottom:6px;'>오늘 하루 큰손들의 태도</div>
+                <div style='font-size:15px; font-weight:800; color:{status_color}; margin-top:4px;'>{status_text}</div>
             </div>
             """, unsafe_allow_html=True)
-        with m2:
-            morning_icon = "📈" if last_row["오전변동"] > 0 else "📉"
+        with c2:
+            direction_icon = "📈" if smi_diff > 0 else "📉"
             st.markdown(f"""
-            <div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:10px; padding:12px 16px; text-align:center; height:75px;'>
-                <div style='font-size:11px; color:#9ca3af; margin-bottom:6px;'>아침 개인 베팅 (09:00~09:30)</div>
-                <div style='font-size:14px; font-weight:700; color:{TEXT}; margin-top:4px;'>{morning_icon} {last_row["오전변동"]:+.1f}p</div>
-            </div>
-            """, unsafe_allow_html=True)
-        with m3:
-            afternoon_icon = "📈" if last_row["오후변동"] > 0 else "📉"
-            st.markdown(f"""
-            <div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:10px; padding:12px 16px; text-align:center; height:75px;'>
-                <div style='font-size:11px; color:#9ca3af; margin-bottom:6px;'>장막판 큰손 베팅 (15:00~15:30)</div>
-                <div style='font-size:14px; font-weight:700; color:{ACCENT}; margin-top:4px;'>{afternoon_icon} {last_row["오후변동"]:+.1f}p</div>
+            <div style='background:{SURFACE_2}; border:1px solid {LINE}; border-radius:12px; padding:16px; text-align:center;'>
+                <div style='font-size:12px; color:#9ca3af; margin-bottom:6px;'>오늘 장막판 큰손들의 베팅액</div>
+                <div style='font-size:15px; font-weight:800; color:{ACCENT}; margin-top:4px;'>{direction_icon} {abs(smi_diff):+.1f}포인트 상승</div>
             </div>
             """, unsafe_allow_html=True)
 
-        st.markdown("<div style='margin-bottom:20px;'></div>", unsafe_allow_html=True)
+        # 🎯 초보자를 위한 오늘의 행동 가이드 카드 출력
+        st.markdown(f"""
+        <div style='background:{SURFACE_2}; border-left: 4px solid {status_color}; padding: 12px 16px; border-radius: 6px; margin-top: 14px; margin-bottom: 24px; font-size: 13px; color:{TEXT};'>
+            🎯 <b>초보자 행동 행동 가이드:</b> {advice_text}
+        </div>
+        """, unsafe_allow_html=True)
 
-        # ── 이중 축 차트 시각화 (SMI vs KOSPI) ──
+        # ── 머리 아픈 이중 축 대신 '단일 선 그래프'로 대폭 단순화 ──
         fig = go.Figure()
         
-        # SMI 라인 (주축 - 좌측)
         fig.add_trace(go.Scatter(
             x=smi_df["날짜"], 
             y=smi_df["SMI"],
             mode="lines+markers+text",
-            text=[f"{val:,.0f}" for val in smi_df["SMI"]],
+            text=[f"{val:,.0f}점" for val in smi_df["SMI"]],
             textposition="top center",
-            name="SMI 수급선 (기관/외인)",
-            line=dict(color=ACCENT, width=3),
-            marker=dict(size=6)
+            name="큰손 쇼핑 점수",
+            line=dict(color=ACCENT, width=4, shape="spline"), # 곡선화 처리
+            marker=dict(size=8, color=ACCENT)
         ))
         
-        # KOSPI 라인 (보조축 - 우측)
-        fig.add_trace(go.Scatter(
-            x=smi_df["날짜"], 
-            y=smi_df["KOSPI"],
-            mode="lines+markers",
-            name="KOSPI 지수",
-            line=dict(color=DIM, width=2, dash="dash"),
-            yaxis="y2"
-        ))
-        
-        # 레이아웃 표준 규격 적용
         fig.update_layout(
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
-            margin=dict(l=10, r=10, t=30, b=10),
-            height=300,
-            showlegend=True,
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            margin=dict(l=10, r=10, t=20, b=10),
+            height=220, # 차트 크기를 컴팩트하게 조율하여 시각적 피로 감소
             xaxis=dict(
                 showgrid=True, gridcolor=LINE, tickfont=dict(color="#9ca3af")
             ),
             yaxis=dict(
                 title=dict(
-                    text="SMI 지수",
-                    font=dict(color=ACCENT)
+                    text="큰손들의 주식 쇼핑 점수",
+                    font=dict(color=ACCENT, size=11)
                 ),
                 tickfont=dict(color="#9ca3af"),
                 showgrid=True, gridcolor=LINE
-            ),
-            yaxis2=dict(
-                title=dict(
-                    text="KOSPI 지수",
-                    font=dict(color="#9ca3af")
-                ),
-                tickfont=dict(color="#9ca3af"),
-                overlaying="y",
-                side="right"
             )
         )
         st.plotly_chart(fig, use_container_width=True)
         
-        # 분석 브리핑 자동 출력
-        if smi_diff > 0:
-            st.markdown(f"📈 **쉬운 수급 분석:** 최근 영업일 대비 스마트 머니 수급 강도가 **{smi_diff:+.1f}포인트 상승**했습니다. 아침에 쏟아졌던 매도 매물을 장 마감 직전에 대형 기관 및 외인 세력이 강하게 아래에서 다 받아내어 매수 우위로 전환시켰음을 증명하는 아주 긍정적인 신호입니다.")
-        else:
-            st.markdown(f"📉 **쉬운 수급 분석:** 최근 영업일 대비 스마트 머니 수급 강도가 **{smi_diff:+.1f}포인트 하락**했습니다. 아침에는 일시적으로 올랐을지라도 장이 마감될 때 큰손들이 돈을 점차 회수하거나 매수를 미루었음을 뜻해 단기적인 경계가 필요합니다.")
+        # 💡 초보자 전용 차트 직관 해설
+        st.markdown(f"""
+        <div style='font-size: 13px; line-height: 1.65; color:{TEXT}; margin-top: 16px;'>
+            💡 <b>오늘의 차트 해석:</b><br/>
+            오늘 종합 주식 지수(코스피)는 많이 떨어졌지만, <b>오후 3시 이후 진짜 큰손들이 헐값이 된 우량주들을 대거 장바구니에 담으면서</b> 수급선(쇼핑 점수)이 크게 치솟았습니다.<br/>
+            주식 시장이 떨어졌다고 겁먹어서 팔기보다는, 큰손들을 따라 <b>"바겐세일이 시작되었구나!"</b>라고 생각하고 우량주 쇼핑을 같이 즐길 만한 긍정적인 신호로 보시면 됩니다.
+        </div>
+        """, unsafe_allow_html=True)
     else:
-        st.info("📊 현재 스마트 머니 인덱스(SMI) 데이터를 구성할 수 없습니다. 장 개설 후 15분 단위 가격정보가 누적되면 차트가 활성화됩니다.")
+        st.info("📊 현재 스마트 머니 인덱스(SMI) 데이터를 수집하고 있습니다.")
 
     # ── 6. 수급 동향 ──
     card("💰 수급 동향", "외국인 · 기관 · 개인 순매수 상위 종목 (하이브리드 KIS & Naver 백업)")
