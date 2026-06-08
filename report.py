@@ -226,14 +226,15 @@ def render_daily_report():
     st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
 
    # ── 5. 스마트 머니 인덱스 ──
-    card("🧠 큰손 눈치 게임 (스마트 머니 인덱스)", "주식 시장의 진짜 큰손(기관/외인)들이 지금 주식을 사고 있는지 초보자 관점에서 쉽게 추적합니다.")
+    card("🧠 스마트 머니 인덱스 (SMI)", "외국인 및 기관 장막판 수급 동향")
     
     # 💡 초보자를 위한 초간단 설명 카드
     st.markdown(f"""
     <div style='background:{SURFACE_1}; border-left: 4px solid {ACCENT}; padding: 14px 18px; border-radius: 8px; margin-bottom: 20px; font-size: 13px; line-height: 1.7; color:{TEXT};'>
-        <b>❓ 스마트 머니(SMI)가 무엇인가요?</b><br/>
-        • 아침 9시에는 주식 초보자(개인)들이 주로 거래하고, <b>오후 3시~3시 30분(장 마감 직전)</b>에는 정보가 빠르고 돈이 많은 <b>진짜 큰손(기관/외국인)</b>들이 움직입니다.<br/>
-        • 이 지표는 <b>"큰손들이 오늘 장 막판에 몰래 주식을 샀는지, 팔았는지"</b>를 계산하여 큰손들의 쇼핑 열기를 점수로 나타낸 지수입니다.
+        <b>❓ 스마트 머니(SMI) 지표란 무엇인가요?</b><br/>
+        • 주식 시장이 열리는 아침 9시 전후에는 주로 불안감이나 기대감에 휩싸인 개인 투자자(리테일 자금)들의 거래가 주를 이룹니다.<br/>
+        • 반면, <b>오후 3시~3시 30분(장 마감 직전)</b>에는 정보력이 대단히 빠르고 자금력이 막강한 <b>해외자본(외국인) 및 국내 대형 기관 투자자</b>들이 최종 주가를 면밀히 판단하고 집중적인 거래를 집행합니다.<br/>
+        • 이 지표는 <b>"외국인과 기관이 오늘 장 막판에 주식을 사들였는지, 팔아치웠는지"</b>를 정밀 계산하여 자금 흐름의 방향성을 점수로 시각화한 수급 레이더입니다.
     </div>
     """, unsafe_allow_html=True)
 
@@ -271,7 +272,7 @@ def render_daily_report():
                 except:
                     morning_change = 0.0
                 
-                # 2. 오후 마지막 30분 (15:00 종가 ~ 15:30 종가) 변동폭 연산 -> "큰손 중심의 종가 결정"
+                # 2. 오후 마지막 30분 (15:00 종가 ~ 15:30 종가) 변동폭 연산 -> "외국인·기관 중심의 종가 결정"
                 try:
                     close_1530 = day_data.iloc[-1]["Close"]
                     cand_1500 = day_data.between_time("14:55", "15:05")
@@ -294,54 +295,54 @@ def render_daily_report():
             print(f"SMI 연산 오류: {e}")
             return None
 
-    with st.spinner("큰손들의 장바구니 구경하는 중..."):
+    with st.spinner("해외자본 및 국내 기관의 장바구니 분석 중..."):
         smi_df = calculate_smi_yfinance()
         
     if smi_df is not None and not smi_df.empty:
-        # ── 상단 3개 요약 상황판 카드 배치 ──
+        # ── 상단 2개 요약 상황판 카드 배치 ──
         last_row = smi_df.iloc[-1]
         prev_row = smi_df.iloc[-2] if len(smi_df) > 1 else last_row
         smi_diff = last_row["SMI"] - prev_row["SMI"]
         
-        # 1. 초보자용 수급 신호등 상태값 판별
-        if smi_diff > 50:
-            status_text = "🟢 큰손들 폭풍 쇼핑 중 (매우 좋음)"
-            status_color = "#22c55e" # 초록
-            advice_text = "큰손들이 주식을 대량으로 사 모으고 있습니다. 우리도 우량한 주식을 같이 사 모아가기 아주 좋은 타이밍입니다! 👍"
-        elif smi_diff < -50:
-            status_text = "🔴 큰손들 탈출 중 (매매 조심!)"
-            status_color = "#ef4444" # 빨간
-            advice_text = "큰손들이 시장에서 돈을 빼고 도망가고 있습니다. 지금은 무리하게 사기보다 현금을 쥐고 지켜보는 것이 안전합니다! ⚠️"
+        # 오늘 종가 기준 시장 지배 수급 세력 판별
+        if last_row["오후변동"] > 0:
+            leadership = "🟢 해외자본·국내기관 매수 우위"
+            lead_color = "#22c55e" # 그린
+            advice_text = "외국인 투자자들과 국내 대형 기관들이 주식을 대량으로 사 모으고 있습니다. 우리도 우량한 주식을 함께 모아가기 매우 좋은 타이밍입니다."
+        elif last_row["오후변동"] < 0:
+            leadership = "🔴 개인 투자자 매수 우위 (기관·외인 관망)"
+            lead_color = "#ef4444" # 레드
+            advice_text = "외국인 투자자들과 대형 기관들이 시장에서 자금을 회수하고 있습니다. 지금은 무리하게 매수하기보다는 현금을 확보하고 한 걸음 물러나 관망하는 편이 안전합니다."
         else:
-            status_text = "🟡 큰손들 눈치 게임 중 (보통)"
-            status_color = "#f59e0b" # 주황
-            advice_text = "큰손들도 살지 팔지 고민 중입니다. 우리도 무리하지 말고 차분하게 지켜봅시다. ⚖️"
+            leadership = "🟡 수급 혼조세 (방향성 탐색 중)"
+            lead_color = "#f59e0b" # 주황
+            advice_text = "시장 주도 세력들도 방향성을 고민하며 관망하는 상태입니다. 무리한 진입을 피하고 차분하게 시장 흐름을 주시할 필요가 있습니다."
 
         c1, c2 = st.columns(2)
         with c1:
             st.markdown(f"""
             <div style='background:{SURFACE_2}; border:1px solid {LINE}; border-radius:12px; padding:16px; text-align:center;'>
-                <div style='font-size:12px; color:#9ca3af; margin-bottom:6px;'>오늘 하루 큰손들의 태도</div>
-                <div style='font-size:15px; font-weight:800; color:{status_color}; margin-top:4px;'>{status_text}</div>
+                <div style='font-size:12px; color:#9ca3af; margin-bottom:6px;'>오늘의 시장 주도 자금 (외국인·기관)</div>
+                <div style='font-size:15px; font-weight:800; color:{lead_color}; margin-top:4px;'>{leadership}</div>
             </div>
             """, unsafe_allow_html=True)
         with c2:
             direction_icon = "📈" if smi_diff > 0 else "📉"
             st.markdown(f"""
             <div style='background:{SURFACE_2}; border:1px solid {LINE}; border-radius:12px; padding:16px; text-align:center;'>
-                <div style='font-size:12px; color:#9ca3af; margin-bottom:6px;'>오늘 장막판 큰손들의 베팅액</div>
+                <div style='font-size:12px; color:#9ca3af; margin-bottom:6px;'>외국인·기관 종가 매수집중도 (전일 대비)</div>
                 <div style='font-size:15px; font-weight:800; color:{ACCENT}; margin-top:4px;'>{direction_icon} {abs(smi_diff):+.1f}포인트 상승</div>
             </div>
             """, unsafe_allow_html=True)
 
         # 🎯 초보자를 위한 오늘의 행동 가이드 카드 출력
         st.markdown(f"""
-        <div style='background:{SURFACE_2}; border-left: 4px solid {status_color}; padding: 12px 16px; border-radius: 6px; margin-top: 14px; margin-bottom: 24px; font-size: 13px; color:{TEXT};'>
-            🎯 <b>초보자 행동 행동 가이드:</b> {advice_text}
+        <div style='background:{SURFACE_2}; border-left: 4px solid {lead_color}; padding: 12px 16px; border-radius: 6px; margin-top: 14px; margin-bottom: 24px; font-size: 13px; color:{TEXT};'>
+            🎯 <b>초보자 수급 가이드:</b> {advice_text}
         </div>
         """, unsafe_allow_html=True)
 
-        # ── 머리 아픈 이중 축 대신 '단일 선 그래프'로 대폭 단순화 ──
+        # ── 머리 아픈 이중 축 대신 '단일 직선형 그래프'로 고화질 시각화 ──
         fig = go.Figure()
         
         fig.add_trace(go.Scatter(
@@ -350,8 +351,8 @@ def render_daily_report():
             mode="lines+markers+text",
             text=[f"{val:,.0f}점" for val in smi_df["SMI"]],
             textposition="top center",
-            name="큰손 쇼핑 점수",
-            line=dict(color=ACCENT, width=4, shape="spline"), # 곡선화 처리
+            name="수급 집중 지수",
+            line=dict(color=ACCENT, width=4, shape="linear"), # 직선 형태로 완벽 복구
             marker=dict(size=8, color=ACCENT)
         ))
         
@@ -359,13 +360,13 @@ def render_daily_report():
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
             margin=dict(l=10, r=10, t=20, b=10),
-            height=220, # 차트 크기를 컴팩트하게 조율하여 시각적 피로 감소
+            height=220, # 슬림한 레이아웃 구성
             xaxis=dict(
                 showgrid=True, gridcolor=LINE, tickfont=dict(color="#9ca3af")
             ),
             yaxis=dict(
                 title=dict(
-                    text="큰손들의 주식 쇼핑 점수",
+                    text="수급 집중 지수 (점수)",
                     font=dict(color=ACCENT, size=11)
                 ),
                 tickfont=dict(color="#9ca3af"),
@@ -374,12 +375,15 @@ def render_daily_report():
         )
         st.plotly_chart(fig, use_container_width=True)
         
-        # 💡 초보자 전용 차트 직관 해설
+        # 💡 정돈된 마켓 분석 (존댓말 마무리 및 불안성 투매 완전 교체 적용)
         st.markdown(f"""
         <div style='font-size: 13px; line-height: 1.65; color:{TEXT}; margin-top: 16px;'>
-            💡 <b>오늘의 차트 해석:</b><br/>
-            오늘 종합 주식 지수(코스피)는 많이 떨어졌지만, <b>오후 3시 이후 진짜 큰손들이 헐값이 된 우량주들을 대거 장바구니에 담으면서</b> 수급선(쇼핑 점수)이 크게 치솟았습니다.<br/>
-            주식 시장이 떨어졌다고 겁먹어서 팔기보다는, 큰손들을 따라 <b>"바겐세일이 시작되었구나!"</b>라고 생각하고 우량주 쇼핑을 같이 즐길 만한 긍정적인 신호로 보시면 됩니다.
+            💡 <b>금일 마켓 뷰 (Market View):</b><br/>
+            오늘 종합지수(KOSPI)는 전반적으로 약세를 보이며 하락 마감했습니다. 
+            하지만 시장 내부의 진짜 수급 흐름을 자세히 들여다보면 대단히 긍정적인 반전 신호가 포착되었습니다.<br/><br/>
+            아침 개장 직후에는 시장 분위기에 크게 동요한 개인 투자자들이 공포감에 주식을 급하게 던지는 **불안성 투매(패닉셀) 물량**이 쏟아져 나오며 지수를 끌어내렸습니다. 
+            그러나 주가가 저렴해진 오후 시간대에 접어들자, <b>해외자본(외국인)과 대형 기관 투자자</b>들이 이 매물들을 아래에서 대량으로 흡수하기 시작했습니다. 결과적으로 큰손들이 개인 투자자들의 투매 물량을 장 마감 직전에 아주 성공적으로 소화해 낸 형태입니다.<br/><br/>
+            따라서 일시적으로 지수가 하락했다고 해서 성급하게 주식을 던지기보다는, 외국인과 대형 기관의 탄탄한 하방 수급 지지력을 바탕으로 가치 있는 핵심 우량주를 분할 매수해 나가는 포트폴리오 전략이 장기적으로 훨씬 유리할 것으로 분석됩니다.
         </div>
         """, unsafe_allow_html=True)
     else:
