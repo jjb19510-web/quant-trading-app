@@ -482,6 +482,7 @@ def render_daily_report():
             import urllib.request
             import io
 
+            # 나눔고딕 폰트 보존 검증 및 자동 주입
             font_path = "/tmp/NanumGothic.ttf"
             if not os.path.exists(font_path):
                 urllib.request.urlretrieve(
@@ -491,92 +492,150 @@ def render_daily_report():
             pdfmetrics.registerFont(TTFont("NanumGothic", font_path))
 
             buffer = io.BytesIO()
-            doc = SimpleDocTemplate(buffer, pagesize=A4)
+            # 용지 마진을 타이트하게 잡아 내용 잘림 예방 (A4 표준)
+            doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=36, rightMargin=36, topMargin=40, bottomMargin=40)
             story = []
 
-            title_style = ParagraphStyle('title', fontSize=20, fontName='NanumGothic', spaceAfter=12)
-            h2_style = ParagraphStyle('h2', fontSize=14, fontName='NanumGothic', spaceAfter=8, spaceBefore=16)
-            normal_style = ParagraphStyle('normal', fontSize=10, fontName='NanumGothic', spaceAfter=6)
+            # 💎 기관 리포트 규격 전용 스타일셋 정의
+            title_style = ParagraphStyle('title', fontSize=22, fontName='NanumGothic', spaceAfter=6, textColor=colors.HexColor("#0f172a"))
+            meta_style = ParagraphStyle('meta', fontSize=10, fontName='NanumGothic', spaceAfter=14, textColor=colors.HexColor("#64748b"))
+            h2_style = ParagraphStyle('h2', fontSize=13, fontName='NanumGothic', spaceAfter=8, spaceBefore=18, textColor=colors.HexColor("#1e293b"))
+            normal_style = ParagraphStyle('normal', fontSize=9, fontName='NanumGothic', spaceAfter=4, leading=15, textColor=colors.HexColor("#334155"))
+            bullet_style = ParagraphStyle('bullet', fontSize=9, fontName='NanumGothic', spaceAfter=4, leading=15, leftIndent=12, textColor=colors.HexColor("#334155"))
 
+            # 헤더 섹션 구성
             story.append(Paragraph("Quantfolio Daily Report", title_style))
-            story.append(Paragraph(f"{dt.datetime.now():%Y-%m-%d %H:%M} 기준", normal_style))
-            story.append(Spacer(1, 20))
+            story.append(Paragraph(f"발행일시: {dt.datetime.now():%Y년 %m월 %d일 %H:%M} | 분석 파트너: Groq Llama-3.3", meta_style))
+            
+            # 장식용 탑 배너 라인
+            banner = Table([[""]], colWidths=[523], rowHeights=[3])
+            banner.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#0f172a"))]))
+            story.append(banner)
+            story.append(Spacer(1, 15))
 
-            # 시장 현황
-            story.append(Paragraph("🌐 시장 현황", h2_style))
+            # 🌐 1. 글로벌 시장 현황
+            story.append(Paragraph("🌐 글로벌 시장 종합 지표", h2_style))
             if market_data:
-                table_data = [["지수", "현재가", "등락"]]
+                table_data = [["지수/원자재명", "현재가", "전일 대비 등락률"]]
                 for idx in market_data:
                     arrow = "▲" if idx["change"] >= 0 else "▼"
-                    table_data.append([idx["name"], f"{idx['price']:,.2f}", f"{arrow} {idx['pct']:+.2f}%"])
-                t = Table(table_data, colWidths=[150, 150, 150])
+                    table_data.append([
+                        idx["name"], 
+                        f"{idx['price']:,.2f}" if "환율" not in idx["name"] else f"{idx['price']:,.1f}원", 
+                        f"{arrow} {idx['change']:+,.2f} ({idx['pct']:+.2f}%)"
+                    ])
+                
+                t = Table(table_data, colWidths=[180, 160, 183])
                 t.setStyle(TableStyle([
-                    ('BACKGROUND', (0,0), (-1,0), colors.grey),
+                    ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#0f172a")), # 딥 네이비 헤더
                     ('TEXTCOLOR', (0,0), (-1,0), colors.white),
                     ('FONTNAME', (0,0), (-1,-1), 'NanumGothic'),
-                    ('FONTSIZE', (0,0), (-1,-1), 10),
-                    ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+                    ('FONTSIZE', (0,0), (-1,-1), 9),
                     ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                    ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                    ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+                    ('TOPPADDING', (0,0), (-1,-1), 6),
+                    ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor("#f8fafc")]), # 교차 행 배경색
+                    ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#e2e8f0")),
                 ]))
                 story.append(t)
-            story.append(Spacer(1, 16))
+            story.append(Spacer(1, 14))
 
-            # 관심종목 신호
+            # 🔔 2. 관심종목 신호 리포트
             if st.session_state.get("watchlist") and signal_rows:
-                story.append(Paragraph("🔔 관심종목 신호", h2_style))
-                sig_data = [["종목", "신호", "RSI", "변동성 목표가"]]
+                story.append(Paragraph("🔔 관심종목 퀀트 목표가 요약", h2_style))
+                sig_data = [["종목코드", "전략 신호", "RSI 지표 상태", "내일 변동성 돌파 목표가"]]
                 for row in signal_rows:
                     sig_data.append([row["종목"], row["신호"], row["RSI"], row["내일 변동성 목표가"]])
-                t2 = Table(sig_data, colWidths=[100, 80, 120, 150])
+                
+                t2 = Table(sig_data, colWidths=[110, 100, 140, 173])
                 t2.setStyle(TableStyle([
-                    ('BACKGROUND', (0,0), (-1,0), colors.grey),
+                    ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#0f172a")),
                     ('TEXTCOLOR', (0,0), (-1,0), colors.white),
                     ('FONTNAME', (0,0), (-1,-1), 'NanumGothic'),
-                    ('FONTSIZE', (0,0), (-1,-1), 10),
-                    ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+                    ('FONTSIZE', (0,0), (-1,-1), 9),
                     ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                    ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                    ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+                    ('TOPPADDING', (0,0), (-1,-1), 6),
+                    ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor("#f8fafc")]),
+                    ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#e2e8f0")),
                 ]))
                 story.append(t2)
-                story.append(Spacer(1, 16))
+                story.append(Spacer(1, 14))
 
-            # 거래대금 TOP 10
+            # 📊 3. 당일 거래대금 TOP 10 (주요 노이즈 ETF 필터링 반영)
             if volume_data:
-                story.append(Paragraph("📊 거래대금 상위 TOP 10", h2_style))
-                vol_data = [["종목", "현재가", "거래량"]]
+                story.append(Paragraph("📊 당일 거래대금 상위 TOP 10 (ETF 제외)", h2_style))
+                vol_data = [["종목명", "현재가", "당일 누적 거래량"]]
                 for row in volume_data:
-                    vol_data.append([row["종목"], row["현재가"], row["거래량"]])
-                t3 = Table(vol_data, colWidths=[150, 150, 150])
+                    vol_data.append([row["종목"], f"{row['현재가']}원" if "원" not in row["현재가"] else row["현재가"], row["거래량"]])
+                
+                t3 = Table(vol_data, colWidths=[180, 160, 183])
                 t3.setStyle(TableStyle([
-                    ('BACKGROUND', (0,0), (-1,0), colors.grey),
+                    ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#0f172a")),
                     ('TEXTCOLOR', (0,0), (-1,0), colors.white),
                     ('FONTNAME', (0,0), (-1,-1), 'NanumGothic'),
-                    ('FONTSIZE', (0,0), (-1,-1), 10),
-                    ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+                    ('FONTSIZE', (0,0), (-1,-1), 9),
                     ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                    ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                    ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+                    ('TOPPADDING', (0,0), (-1,-1), 6),
+                    ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor("#f8fafc")]),
+                    ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#e2e8f0")),
                 ]))
                 story.append(t3)
-                story.append(Spacer(1, 16))
+                story.append(Spacer(1, 14))
 
-            # AI 요약
+            # 🧠 4. AI 시장 분석 및 종합 전망 (블록쿼트형 리포트 카드 적용)
             ai_summary = st.session_state.get("ai_summary", "")
             if ai_summary:
-                story.append(Paragraph("🤖 AI 시장 분석", h2_style))
+                story.append(Paragraph("🧠 AI 시장 종합 브리핑", h2_style))
+                
+                # 가독성과 줄바꿈 유지를 위한 패러그래프 팩
+                ai_paragraphs = []
                 for line in ai_summary.split("\n"):
                     if line.strip():
-                        story.append(Paragraph(line.strip(), normal_style))
-                story.append(Spacer(1, 16))
+                        cleaned_line = line.strip().replace("**", "")
+                        # 글머리 기호가 포함된 경우 들여쓰기 양식 기입
+                        if cleaned_line.startswith("-") or cleaned_line.startswith("•"):
+                            ai_paragraphs.append(Paragraph(cleaned_line, bullet_style))
+                        else:
+                            ai_paragraphs.append(Paragraph(cleaned_line, normal_style))
+                
+                # 1x1 투명 그리드 내부 보드 삽입으로 블록쿼트(blockquote)형 연출
+                quote_table = Table([[ai_paragraphs]], colWidths=[523])
+                quote_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#f8fafc")), # 아주 옅은 회색 배경
+                    ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor("#cbd5e1")), # 연한 경계선
+                    ('LINELEFT', (0,0), (0,-1), 4, colors.HexColor("#0f172a")), # 왼쪽 굵은 시그니처 바
+                    ('TOPPADDING', (0,0), (-1,-1), 12),
+                    ('BOTTOMPADDING', (0,0), (-1,-1), 12),
+                    ('LEFTPADDING', (0,0), (-1,-1), 15),
+                    ('RIGHTPADDING', (0,0), (-1,-1), 15),
+                ]))
+                story.append(quote_table)
+                story.append(Spacer(1, 14))
 
-            story.append(Spacer(1, 20))
-            story.append(Paragraph("Generated by Quantfolio", normal_style))
+            story.append(Spacer(1, 10))
+            
+            # 하단 저작권 푸터선
+            footer_table = Table([[Paragraph("본 보고서는 Quantfolio에 의해 장 마감 후 자동 생성되었으며, 무단 전재를 금합니다.", meta_style)]], colWidths=[523])
+            footer_table.setStyle(TableStyle([
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                ('LINEABOVE', (0,0), (-1,-1), 0.5, colors.HexColor("#cbd5e1"))
+            ]))
+            story.append(footer_table)
 
             doc.build(story)
             buffer.seek(0)
 
             st.download_button(
-                label="⬇️ PDF 저장",
+                label="⬇️ 고화질 PDF 보고서 다운로드",
                 data=buffer,
-                file_name=f"Quantfolio_{dt.datetime.now():%Y%m%d}.pdf",
-                mime="application/pdf"
+                file_name=f"Quantfolio_Daily_Report_{dt.datetime.now():%Y%m%d}.pdf",
+                mime="application/pdf",
+                use_container_width=True
             )
         except Exception as e:
             st.error(f"PDF 생성 오류: {e}")
