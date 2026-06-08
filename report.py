@@ -225,65 +225,131 @@ def render_daily_report():
 
     st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
 
-    # ── 5. 스마트 머니 인덱스 ──
-    card("🧠 스마트 머니 인덱스", "장 시작 30분 vs 마감 30분 등락 스프레드 · 기관·외인 의도 추적")
+   # ── 5. 스마트 머니 인덱스 ──
+    card("🧠 스마트 머니 인덱스 (SMI)", "장 시작 30분(개인) vs 마감 30분(기관/외인) 등락 스프레드 역추적")
     
-    # ⏰ 장후/주말 예외 처리를 최외곽에서 분기하여 들여쓰기 오류 예방
-    timezone_kst = dt.timezone(dt.timedelta(hours=9))
-    now_kst = dt.datetime.now(timezone_kst)
-    is_weekend = now_kst.weekday() >= 5
-    is_after_market = now_kst.time() > dt.time(15, 30) or now_kst.time() < dt.time(9, 0)
-    
-    if is_weekend or is_after_market:
-        st.info("📊 스마트 머니 인덱스는 정규 장 운영 시간(평일 09:00 ~ 15:30) 중에만 실시간 분석 데이터가 활성화됩니다. (현재 장 마감 상태)")
-    else:
+    @st.cache_data(ttl=900)
+    def calculate_smi_yfinance():
         try:
-            from broker import get_access_token
-            token = get_access_token()
-
-            @st.cache_data(ttl=300)
-            def get_smi(token):
-                BASE_URL = "https://openapi.koreainvestment.com:9443"
-                try:
-                    from broker import APP_KEY, APP_SECRET
-                except:
-                    return None
-
-                headers = {
-                    "content-type": "application/json",
-                    "authorization": f"Bearer {token}",
-                    "appkey": APP_KEY,
-                    "appsecret": APP_SECRET,
-                    "tr_id": "FHKST03010200"
-                }
-                today = dt.datetime.now().strftime("%Y%m%d")
-                params = {
-                    "FID_COND_MRKT_DIV_CODE": "J",
-                    "FID_INPUT_ISCD": "0001",
-                    "FID_INPUT_DATE_1": today,
-                    "FID_INPUT_DATE_2": today,
-                    "FID_PW_DATA_INCU_YN": "N"
-                }
-                res = requests.get(
-                    f"{BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-time-itemchartprice",
-                    headers=headers, params=params
-                )
-                data = res.json()
-                if data.get("rt_cd") == "0":
-                    output = data.get("output2", [])
-                    if len(output) >= 2:
-                        return pd.DataFrame(output)
+            # 야후 파이낸스에서 KOSPI 지수(^KS11) 최근 5일간의 15분 단위 인트라데이 데이터 다운로드
+            df = yf.download("^KS11", period="5d", interval="15m", progress=False)
+            if df.empty:
                 return None
+                
+            # 멀티인덱스 칼럼 구조 안전 해제
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = df.columns.get_level_values(0)
+                
+            df = df.copy()
+            df.index = df.index.tz_convert("Asia/Seoul")
+            df["Date"] = df.index.date
+            unique_dates = sorted(df["Date"].unique())
+            
+            smi_value = 10000.0  # 지수 시작 시그니처 포인트
+            smi_history = []
+            
+            for d in unique_dates:
+                day_data = df[df["Date"] == d].sort_index()
+                if len(day_data) < 4:
+                    continue
+                
+                # 1. 오전 첫 30분 (09:00 시가 ~ 09:30 종가) 변동폭 연산
+                try:
+                    open_0900 = day_data.iloc[0]["Open"]
+                    cand_0930 = day_data.between_time("09:15", "09:35")
+                    close_0930 = cand_0930.iloc[-1]["Close"] if not cand_0930.empty else day_data.iloc[2]["Close"]
+                    morning_change = close_0930 - open_0900
+                except:
+                    morning_change = 0.0
+                
+                # 2. 오후 마지막 30분 (15:00 종가 ~ 15:30 종가) 변동폭 연산
+                try:
+                    close_1530 = day_data.iloc[-1]["Close"]
+                    cand_1500 = day_data.between_time("14:55", "15:05")
+                    open_1500 = cand_1500.iloc[0]["Open"] if not cand_1500.empty else day_data.iloc[-3]["Open"]
+                    afternoon_change = close_1530 - open_1500
+                except:
+                    afternoon_change = 0.0
+                
+                # SMI 계산 적용
+                smi_value = smi_value - morning_change + afternoon_change
+                smi_history.append({
+                    "날짜": d.strftime("%m/%d"),
+                    "SMI": round(smi_value, 2),
+                    "KOSPI": round(day_data.iloc[-1]["Close"], 2)
+                })
+            return pd.DataFrame(smi_history)
+        except Exception as e:
+            print(f"SMI 연산 오류: {e}")
+            return None
 
-            smi_data = get_smi(token)
-            if smi_data is not None:
-                st.success("스마트 머니 인덱스 데이터 수집 완료")
-            else:
-                st.info("📊 장 중에만 스마트 머니 인덱스가 활성화돼요. (09:00 ~ 15:30)")
-        except:
-            st.info("📊 KIS API 연결 시 스마트 머니 인덱스가 활성화돼요.")
-
-    st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
+    with st.spinner("최근 5영업일 스마트 머니 인덱스(SMI) 트렌드 분석 중..."):
+        smi_df = calculate_smi_yfinance()
+        
+    if smi_df is not None and not smi_df.empty:
+        # 이중 축 차트 구성 (SMI 주축, KOSPI 보조축)
+        fig = go.Figure()
+        
+        # SMI 라인 (주축 - 좌측)
+        fig.add_trace(go.Scatter(
+            x=smi_df["날짜"], 
+            y=smi_df["SMI"],
+            mode="lines+markers+text",
+            text=[f"{val:,.0f}" for val in smi_df["SMI"]],
+            textposition="top center",
+            name="SMI (기관/외인 주도력)",
+            line=dict(color=ACCENT, width=3),
+            marker=dict(size=6)
+        ))
+        
+        # KOSPI 라인 (보조축 - 우측)
+        fig.add_trace(go.Scatter(
+            x=smi_df["날짜"], 
+            y=smi_df["KOSPI"],
+            mode="lines+markers",
+            name="KOSPI 지수",
+            line=dict(color=DIM, width=2, dash="dash"),
+            yaxis="y2"
+        ))
+        
+        # 레이아웃 고도화 설정
+        fig.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            margin=dict(l=10, r=10, t=30, b=10),
+            height=300,
+            showlegend=True,
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            xaxis=dict(
+                showgrid=True, gridcolor=LINE, tickfont=dict(color="#9ca3af")
+            ),
+            yaxis=dict(
+                title="SMI 지수",
+                titlefont=dict(color=ACCENT),
+                tickfont=dict(color="#9ca3af"),
+                showgrid=True, gridcolor=LINE
+            ),
+            yaxis2=dict(
+                title="KOSPI 지수",
+                titlefont=dict(color="#9ca3af"),
+                tickfont=dict(color="#9ca3af"),
+                overlaying="y",
+                side="right"
+            )
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # 분석 브리핑 자동 출력
+        last_row = smi_df.iloc[-1]
+        prev_row = smi_df.iloc[-2] if len(smi_df) > 1 else last_row
+        smi_diff = last_row["SMI"] - prev_row["SMI"]
+        
+        if smi_diff > 0:
+            st.markdown(f"📈 **수급 해설:** 최근 영업일 대비 스마트 머니 인덱스가 **{smi_diff:+.1f}p 상승**했습니다. 장 막판에 기관 및 외국인 세력이 개인의 아침 매도세를 소화하고 강한 종가 베팅에 나섰음을 보여주는 긍정적인 신호입니다.")
+        else:
+            st.markdown(f"📉 **수급 해설:** 최근 영업일 대비 스마트 머니 인덱스가 **{smi_diff:+.1f}p 하락**했습니다. 아침 개인들의 추격 매수세 이후 장 후반으로 갈수록 메이저 자금(기관/외인)이 차익 실현 혹은 관망세를 보였음을 가리킵니다.")
+    else:
+        st.info("📊 현재 스마트 머니 인덱스(SMI) 데이터를 구성할 수 없습니다. 장 개설 후 15분 단위 가격정보가 누적되면 차트가 활성화됩니다.")
 
     # ── 6. 수급 동향 ──
     card("💰 수급 동향", "외국인 · 기관 · 개인 순매수 상위 종목 (하이브리드 KIS & Naver 백업)")
