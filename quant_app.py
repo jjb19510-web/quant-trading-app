@@ -426,6 +426,8 @@ with tab2:
             card("💹 현재가", "실시간 주가 · KIS API 기준" if KIS_AVAILABLE else "주가 · yfinance 기준")
             price_cols = st.columns(len(tickers))
             kis_token = get_kis_token() if KIS_AVAILABLE else None
+            if kis_token:
+                st.session_state["kis_token"] = kis_token
             name_map = get_krx_name_map()
             for i, ticker in enumerate(tickers):
                 with price_cols[i]:
