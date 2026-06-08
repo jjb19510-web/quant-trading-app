@@ -380,33 +380,49 @@ def render_daily_report():
     def get_top_volume():
         try:
             from bs4 import BeautifulSoup
-            headers = {"User-Agent": "Mozilla/5.0"}
+            # 크롤러 헤더 보강 및 타임아웃 조율
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
+            }
             url = "https://finance.naver.com/sise/sise_quant.naver?sosok=0"
             res = requests.get(url, headers=headers, timeout=5)
             soup = BeautifulSoup(res.text, "html.parser")
             rows = soup.select("table.type_2 tr")
             result = []
             
-            # 🎯 [수정 완료] 수집 범위를 상위 80개로 넓혀 ETF 노이즈를 다 걷어내고 순수 우량 주식 10개만 순서대로 엄선
+            # 수집 범위를 충분히 확보하여 ETF 및 최신 금융 상품 노이즈를 걷어냅니다.
             for row in rows[2:80]:
                 cols = row.select("td")
-                if len(cols) >= 3:
+                if len(cols) >= 6:
                     name = cols[1].text.strip()
                     price = cols[2].text.strip()
-                    volume = cols[5].text.strip() if len(cols) > 5 else "-"
+                    volume = cols[5].text.strip()
                     
                     if not name:
                         continue
-                        
-                    etf_keywords = ["KODEX", "TIGER", "KBSTAR", "ARIRANG", "HANARO", "KOSEF", "PLUS", "ACE", "SOL", "TIMEFOLIO", "ETF", "ETN", "인버스", "레버리지", "선물"]
-                    if not any(k in name for k in etf_keywords):
-                        result.append({"종목": name, "현재가": price, "거래량": volume})
                     
-                    # 알짜 10개 종목이 모두 채워지면 안전하게 조기 종료
+                    # 최신 리브랜딩 브랜드인 'RISE' 및 대형사 ETF 키워드를 추가로 수색하여 완벽 정화
+                    etf_keywords = [
+                        "KODEX", "TIGER", "KBSTAR", "ARIRANG", "HANARO", "KOSEF", "PLUS", "ACE", "SOL", 
+                        "TIMEFOLIO", "ETF", "ETN", "인버스", "레버리지", "선물", "RISE", "WOORI"
+                    ]
+                    if not any(k in name for k in etf_keywords):
+                        # 가격과 수량 뒤에 단위 표시 부착
+                        price_formatted = f"{price}원" if price and not price.endswith("원") else price
+                        volume_formatted = f"{volume}주" if volume and not volume.endswith("주") else volume
+                        
+                        result.append({
+                            "종목": name, 
+                            "현재가": price_formatted, 
+                            "거래량": volume_formatted
+                        })
+                    
+                    # 알짜 우량주 10개 종목이 채워지면 루프 조기 완료
                     if len(result) == 10:
                         break
             return result
-        except:
+        except Exception as e:
+            print(f"거래대금 순위 수집 오류: {e}")
             return []
 
     with st.spinner("거래대금 데이터 불러오는 중..."):
