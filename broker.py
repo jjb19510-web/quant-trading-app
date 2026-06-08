@@ -59,11 +59,12 @@ def get_access_token():
     if not app_key or not app_secret:
         raise Exception(f"대시보드 Secrets 설정에서 APP_KEY 또는 APP_SECRET을 찾을 수 없습니다. (현재 감지된 보안키 목록: {list(st.secrets.keys())})")
         
+# ── [들여쓰기 정밀 보정] headers와 body는 공백 4칸, 하위 키들은 공백 8칸입니다 ──
     headers = {"content-type": "application/json"}
     body = {
         "grant_type": "client_credentials",
         "appkey": app_key,
-        "secretkey": app_secret
+        "appsecret": app_secret
     }
     
     url = "https://openapi.koreainvestment.com:9443/oauth2/tokenP"
