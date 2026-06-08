@@ -1,6 +1,10 @@
 import requests
 import json
 import streamlit as st
+import os
+import json
+import datetime as dt
+import requests
 
 # ── 환경변수에서 인증 정보 읽기 ──
 try:
@@ -17,6 +21,61 @@ BASE_URL = "https://openapi.koreainvestment.com:9443"
 
 
 def get_access_token():
+    token_file = "kis_token_cache.json"
+    
+    # 1. 로컬 캐시 파일이 존재하고 유효한지 먼저 검사
+    if os.path.exists(token_file):
+        try:
+            with open(token_file, "r") as f:
+                cache = json.load(f)
+            # 현재 시간이 토큰 만료 예정 시간보다 이전인지 확인
+            expire_time = dt.datetime.fromisoformat(cache["expire_time"])
+            if dt.datetime.now() < expire_time:
+                return cache["access_token"]
+        except:
+            pass  # 캐시 파일 손상 시 무시하고 신규 발급 진행
+    
+    # 2. 캐시가 없거나 만료된 경우에만 한투 API에 신규 발급 요청
+    # (AppKey/Secret은 기존 broker.py의 내부 변수 혹은 st.secrets 정보를 동적 적용)
+    try:
+        app_key = st.secrets.get("KIS_APP_KEY", "") if "KIS_APP_KEY" in st.secrets else APP_KEY
+        app_secret = st.secrets.get("KIS_APP_SECRET", "") if "KIS_APP_SECRET" in st.secrets else APP_SECRET
+    except NameError:
+        app_key = st.secrets.get("KIS_APP_KEY", "")
+        app_secret = st.secrets.get("KIS_APP_SECRET", "")
+
+    headers = {"content-type": "application/json"}
+    body = {
+        "grant_type": "client_credentials",
+        "appkey": app_key,
+        "secretkey": app_secret
+    }
+    
+    # 한투 실전 계좌 API 주소
+    url = "https://openapi.koreainvestment.com:9443/oauth2/tokenP"
+    res = requests.post(url, headers=headers, json=body)
+    data = res.json()
+    
+    if "access_token" in data:
+        token = data["access_token"]
+        expires_in = int(data.get("expires_in", 86400))
+        
+        # 안전마진을 위해 만료 1시간 전을 실질적 만료 시간으로 설정
+        expire_time = dt.datetime.now() + dt.timedelta(seconds=expires_in - 3600)
+        
+        # 파일에 물리적으로 보존 (Streamlit 재기동 시에도 무제한 보존됨)
+        try:
+            with open(token_file, "w") as f:
+                json.dump({
+                    "access_token": token,
+                    "expire_time": expire_time.isoformat()
+                }, f)
+        except:
+            pass
+        return token
+    else:
+        err_msg = data.get("error_description", "한투 토큰 발급 실패")
+        raise Exception(f"KIS Token Error: {err_msg}")
     url = f"{BASE_URL}/oauth2/tokenP"
     headers = {"content-type": "application/json"}
     body = {
