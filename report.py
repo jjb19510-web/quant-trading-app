@@ -10,7 +10,7 @@ from ui_components import (
     card, CANDLE_UP, CANDLE_DOWN, DIM, TEXT, SURFACE_1, SURFACE_2, LINE, BG, ACCENT
 )
 
-# ── [전역 도우미 함수 1] 네이버 금융 수급동향 억 원대 가공 크롤러 ──
+# ── [전역 함수 1] 네이버 금융 수급동향 억 원대 가공 크롤러 ──
 @st.cache_data(ttl=1800)
 def get_naver_supply_deal(investor_gubun="1000"):
     """네이버 금융 장 마감 확정 수급 데이터 백업 크롤러 (1000:외인, 9000:기관)"""
@@ -65,7 +65,7 @@ def get_naver_supply_deal(investor_gubun="1000"):
         return []
 
 
-# ── [전역 도우미 함수 2] 야후 파이낸스 무동기화 대비 실시간 보정 크롤러 ──
+# ── [전역 함수 2] 야후 파이낸스 무동기화 대비 실시간 보정 크롤러 ──
 def get_naver_market_data():
     """야후 파이낸스 딜레이 방지를 위해 네이버 금융 메인에서 실시간 마감 지수를 크롤링합니다."""
     try:
@@ -144,7 +144,7 @@ def get_naver_market_data():
         return {}
 
 
-# ── [전역 도우미 함수 3] 하이브리드 시장 지표 취득 연동기 ──
+# ── [전역 함수 3] 하이브리드 시장 지표 취득 연동기 ──
 @st.cache_data(ttl=300)
 def get_market_data():
     """네이버 금융 우선 매칭 기조의 하이브리드 시장 분석 데이터 연동기"""
@@ -187,7 +187,66 @@ def get_market_data():
     return result
 
 
-# ── [전역 도우미 함수 4] 거래대금 기준 퀀트 정렬 TOP 10 로직 ──
+# ── [전역 함수 4] 스마트 머니 인덱스(SMI) 연산 엔진 ──
+@st.cache_data(ttl=900)
+def calculate_smi_yfinance():
+    try:
+        # 야후 파이낸스에서 KOSPI 지수(^KS11) 최근 5일간의 15분 단위 인트라데이 데이터 다운로드
+        df = yf.download("^KS11", period="5d", interval="15m", progress=False)
+        if df.empty:
+            return None
+            
+        # 멀티인덱스 칼럼 구조 안전 해제
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+            
+        df = df.copy()
+        df.index = df.index.tz_convert("Asia/Seoul")
+        df["Date"] = df.index.date
+        unique_dates = sorted(df["Date"].unique())
+        
+        smi_value = 10000.0  # 지수 시작 시그니처 포인트
+        smi_history = []
+        
+        for d in unique_dates:
+            day_data = df[df["Date"] == d].sort_index()
+            if len(day_data) < 4:
+                continue
+            
+            # 1. 오전 첫 30분 (09:00 시가 ~ 09:30 종가) 변동폭 연산
+            try:
+                open_0900 = day_data.iloc[0]["Open"]
+                cand_0930 = day_data.between_time("09:15", "09:35")
+                close_0930 = cand_0930.iloc[-1]["Close"] if not cand_0930.empty else day_data.iloc[2]["Close"]
+                morning_change = close_0930 - open_0900
+            except:
+                morning_change = 0.0
+            
+            # 2. 오후 마지막 30분 (15:00 종가 ~ 15:30 종가) 변동폭 연산
+            try:
+                close_1530 = day_data.iloc[-1]["Close"]
+                cand_1500 = day_data.between_time("14:55", "15:05")
+                open_1500 = cand_1500.iloc[0]["Open"] if not cand_1500.empty else day_data.iloc[-3]["Open"]
+                afternoon_change = close_1530 - open_1500
+            except:
+                afternoon_change = 0.0
+            
+            # SMI 계산 적용
+            smi_value = smi_value - morning_change + afternoon_change
+            smi_history.append({
+                "날짜": d.strftime("%m/%d"),
+                "SMI": round(smi_value, 2),
+                "KOSPI": round(day_data.iloc[-1]["Close"], 2),
+                "오전변동": round(morning_change, 2),
+                "오후변동": round(afternoon_change, 2)
+            })
+        return pd.DataFrame(smi_history)
+    except Exception as e:
+        print(f"SMI 연산 오류: {e}")
+        return None
+
+
+# ── [전역 함수 5] 거래대금 기준 퀀트 정렬 TOP 10 로직 ──
 @st.cache_data(ttl=300)
 def get_top_volume():
     try:
@@ -195,7 +254,7 @@ def get_top_volume():
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
         }
-        # 🎯 404 차단 우려가 전혀 없는 100개 거래량 페이지를 기본 로드합니다.
+        # 🎯 [우회 성공] 404 차단 우려가 전혀 없는 100개 거래량 페이지를 기본 로드합니다.
         url = "https://finance.naver.com/sise/sise_quant.naver?sosok=0"
         res = requests.get(url, headers=headers, timeout=5)
         soup = BeautifulSoup(res.text, "html.parser")
@@ -237,7 +296,7 @@ def get_top_volume():
                             "raw_amount": raw_amount
                         })
         
-        # 🎯 [자체 퀀트 소팅] 백바다에서 수집한 주식 리스트를 진짜 '거래대금(amount_val)' 기준 내림차순으로 정렬합니다.
+        # 🎯 [자체 퀀트 소팅] 진짜 '거래대금(amount_val)' 기준 내림차순 정렬
         sorted_result = sorted(unsorted_result, key=lambda x: x["amount_val"], reverse=True)
         
         final_top_10 = []
@@ -266,7 +325,7 @@ def get_top_volume():
         return []
 
 
-# ── [전역 함수 5] 메인 대시보드 오케스트레이터 및 하위 화면 제어 ──
+# ── [메인 오케스트레이터] 상단 탭 제어 ──
 def render_report():
     timezone_kst = dt.timezone(dt.timedelta(hours=9))
     now_kst = dt.datetime.now(timezone_kst)
@@ -788,7 +847,7 @@ def render_daily_report():
                         headers={"Content-Type": "application/json", "Authorization": f"Bearer {groq_key}"},
                         json={
                             "model": "llama-3.3-70b-versatile",
-                            "messages": [{"role": "user", "content": prompt}],
+                            "messages": [{"role": "user", "content": rec_prompt}],
                             "max_tokens": 700
                         }
                     )
