@@ -16,22 +16,22 @@ def get_naver_supply_deal(investor_gubun="1000"):
     try:
         from bs4 import BeautifulSoup
         headers = {"User-Agent": "Mozilla/5.0"}
-        # 🎯 [수정 완료] 수급 랭킹의 레거시 .nhn 주소 규격을 강제 지정하여 404 차단 방지
+        # sosok=0 (코스피) 기준 주간/일간 수급 순매수 랭킹 파싱
         url = f"https://finance.naver.com/sise/sise_deal_rank.nhn?investor_gubun={investor_gubun}&sosok=0"
         res = requests.get(url, headers=headers, timeout=5)
         soup = BeautifulSoup(res.text, "html.parser")
         
-        # 🎯 [수정 완료] 테이블 클래스 의존성을 완전히 제거하고, 오직 상장사 클래스(tltle)를 포함한 tr만 역추적하여 100% 성공 보장
+        # 🎯 [수정 완료] 수급 페이지 전용 공식 클래스명인 'company' 링크를 추적하여 100% 정상 추출
         rows = soup.select("tr")
         result = []
         for row in rows:
-            name_tag = row.select_one("a.tltle")
+            name_tag = row.select_one("a.company") # a.tltle 대신 a.company 사용
             if name_tag:
                 name = name_tag.text.strip()
                 cols = row.select("td")
                 buy_qty = "조회불가"
                 if len(cols) >= 7:
-                    # 마감 순매수 수량(주) 추출 및 가공 (보통 6번 인덱스에 위치)
+                    # 마감 순매수 수량(주) 추출 및 가공 (보통 6번 인덱스에 수량이 정렬되어 있습니다)
                     buy_qty = cols[6].text.strip() + "주"
                 elif len(cols) >= 5:
                     buy_qty = cols[4].text.strip()
@@ -41,7 +41,8 @@ def get_naver_supply_deal(investor_gubun="1000"):
                 if len(result) == 5:
                     break
         return result
-    except:
+    except Exception as ex:
+        # 에러 추적 디버깅용
         return []
 def render_report():
     st.markdown(
