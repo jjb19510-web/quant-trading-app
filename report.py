@@ -424,6 +424,75 @@ def render_daily_report():
     except:
         st.info("뉴스를 불러오지 못했어요.")
 
+    st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
+
+    # ── [신규 추가] 9. 3대 증권사 주간 추천주 AI 교차 검증 및 컨센서스 선별 모듈 ──
+    card("🏦 증권사 컨센서스(공통) 추천주", "하나, KB, 미래에셋증권의 주간 공식 추천 목록을 대조 분석하여, 교차 추천되었거나 가장 설득력 있는 핵심 5~8개 종목을 엄선합니다.")
+    try:
+        naver_id = st.secrets.get("NAVER_CLIENT_ID", "")
+        naver_secret = st.secrets.get("NAVER_CLIENT_SECRET", "")
+        
+        # 🎯 타겟 증권사 목록 정의 (나중에 언제든지 한글 이름 추가/제거 가능)
+        target_brokers = ["하나증권", "KB증권", "미래에셋증권"]
+        
+        # 검색 쿼리 자동 조립: (하나증권 OR KB증권 OR 미래에셋증권) "주간 추천종목"
+        query_str = f"({' OR '.join(target_brokers)}) \"주간 추천종목\""
+        
+        # 검색 결과 5개 한정 및 안전한 URL 파라미터 매핑 (속도 향상 및 토큰 소모 최소화)
+        rec_url = "https://openapi.naver.com/v1/search/news.json"
+        params = {
+            "query": query_str,
+            "display": 5,
+            "sort": "date"
+        }
+        rec_res = requests.get(rec_url, headers={
+            "X-Naver-Client-Id": naver_id,
+            "X-Naver-Client-Secret": naver_secret
+        }, params=params, timeout=5)
+        rec_items = rec_res.json().get("items", [])
+        
+        if rec_items:
+            rec_titles = [item["title"].replace("<b>", "").replace("</b>", "") for item in rec_items]
+            
+            if st.button("🤖 증권사 공통 추천종목 교차 분석 시작", use_container_width=True):
+                with st.spinner("하나, KB, 미래에셋의 추천 종목들을 교차 분석 중..."):
+                    rec_prompt = f"""너는 정교한 퀀트 금융 애널리스트야.
+아래 리스트는 타겟 3대 증권사(하나증권, KB증권, 미래에셋증권)의 최신 추천종목 관련 뉴스 제목들입니다.
+이 제목들을 서로 면밀히 대조 분석하여, 2개 이상의 증권사에서 공통(중복)으로 추천한 '컨센서스 종목'을 찾아서 표로 요약해줘.
+
+만약 완벽하게 중복되는 종목이 부족하다면, 해당 3개 증권사의 기사에서 가장 강력하게 언급된 고확신(High-Conviction) 추천 종목들 위주로 채워서 총 5~8개의 핵심 추천 종목 리스트를 만들어줘.
+
+결과는 다른 설명이나 인사말 없이 깔끔한 마크다운 테이블(Table) 형태로 즉시 출력해 주어야 해.
+컬럼명 규격:
+| 공통 추천 종목명 | 추천한 증권사들(쉼표로 구분) | 종합 추천 사유 및 특징 |
+
+[증권사 추천 뉴스 헤드라인 리스트]
+{"\n".join(rec_titles)}
+
+반드시 한국어로만 명확하게 답해줘."""
+
+                    groq_key = st.secrets.get("GROQ_API_KEY", "")
+                    ai_res = requests.post(
+                        "https://api.groq.com/openai/v1/chat/completions",
+                        headers={"Content-Type": "application/json", "Authorization": f"Bearer {groq_key}"},
+                        json={
+                            "model": "llama-3.3-70b-versatile",
+                            "messages": [{"role": "user", "content": rec_prompt}],
+                            "max_tokens": 650
+                        }
+                    )
+                    ai_data = ai_res.json()
+                    extracted_table = ai_data["choices"][0]["message"]["content"]
+                    st.session_state["broker_consensus_table"] = extracted_table
+                    st.markdown(extracted_table)
+            
+            elif st.session_state.get("broker_consensus_table"):
+                st.markdown(st.session_state["broker_consensus_table"])
+        else:
+            st.info("증권사 추천 뉴스를 불러오지 못했습니다.")
+    except Exception as e:
+        st.info(f"컨센서스 종목 분석 실패: {e}")
+
     st.markdown("<div style='margin-top:32px;'></div>", unsafe_allow_html=True)
 
     # ── 카카오톡 발송 ──
