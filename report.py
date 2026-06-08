@@ -16,33 +16,35 @@ def get_naver_supply_deal(investor_gubun="1000"):
     try:
         from bs4 import BeautifulSoup
         headers = {"User-Agent": "Mozilla/5.0"}
-        # sosok=0 (코스피) 기준 주간/일간 수급 순매수 랭킹 파싱
+        # 수급 랭킹의 레거시 .nhn 주소 규격 강제 지정
         url = f"https://finance.naver.com/sise/sise_deal_rank.nhn?investor_gubun={investor_gubun}&sosok=0"
         res = requests.get(url, headers=headers, timeout=5)
-        soup = BeautifulSoup(res.text, "html.parser")
         
-        # 🎯 [수정 완료] 수급 페이지 전용 공식 클래스명인 'company' 링크를 추적하여 100% 정상 추출
+        # 🎯 [인코딩 보정 완료] 네이버 금융 레거시 전용 한글 폰트 인코딩 cp949 강제 적용
+        res.encoding = 'cp949'
+        
+        soup = BeautifulSoup(res.text, "html.parser")
         rows = soup.select("tr")
         result = []
         for row in rows:
-            name_tag = row.select_one("a.company") # a.tltle 대신 a.company 사용
+            # 🎯 [클래스 보정 완료] sise_deal_rank 전용 핵심 상장사 클래스명인 'company' 필터링
+            name_tag = row.select_one("a.company")
             if name_tag:
                 name = name_tag.text.strip()
                 cols = row.select("td")
                 buy_qty = "조회불가"
                 if len(cols) >= 7:
-                    # 마감 순매수 수량(주) 추출 및 가공 (보통 6번 인덱스에 수량이 정렬되어 있습니다)
+                    # 마감 순매수 수량(주) 추출 및 가공 (6번 인덱스 위치)
                     buy_qty = cols[6].text.strip() + "주"
                 elif len(cols) >= 5:
                     buy_qty = cols[4].text.strip()
                 result.append({"종목": name, "순매수": buy_qty})
                 
-                # TOP 5 종목이 확보되면 즉시 루프 종료
+                # TOP 5 종목이 확보되면 루프 종료
                 if len(result) == 5:
                     break
         return result
-    except Exception as ex:
-        # 에러 추적 디버깅용
+    except:
         return []
 def render_report():
     st.markdown(
