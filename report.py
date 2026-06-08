@@ -432,17 +432,11 @@ def render_daily_report():
         naver_id = st.secrets.get("NAVER_CLIENT_ID", "")
         naver_secret = st.secrets.get("NAVER_CLIENT_SECRET", "")
         
-        # 🎯 타겟 증권사 목록 정의 (나중에 언제든지 한글 이름 추가/제거 가능)
-        target_brokers = ["하나증권", "KB증권", "미래에셋증권"]
-        
-        # 검색 쿼리 자동 조립: (하나증권 OR KB증권 OR 미래에셋증권) "주간 추천종목"
-        query_str = f"({' OR '.join(target_brokers)}) \"주간 추천종목\""
-        
-        # 검색 결과 5개 한정 및 안전한 URL 파라미터 매핑 (속도 향상 및 토큰 소모 최소화)
+        # 🎯 네이버 연산자 에러 회피를 위해 '가장 단순하고 안전한' 단어로 15개 넉넉히 수집
         rec_url = "https://openapi.naver.com/v1/search/news.json"
         params = {
-            "query": query_str,
-            "display": 5,
+            "query": "주간추천종목",
+            "display": 15,
             "sort": "date"
         }
         rec_res = requests.get(rec_url, headers={
@@ -455,12 +449,16 @@ def render_daily_report():
             rec_titles = [item["title"].replace("<b>", "").replace("</b>", "") for item in rec_items]
             
             if st.button("🤖 증권사 공통 추천종목 교차 분석 시작", use_container_width=True):
-                with st.spinner("하나, KB, 미래에셋의 추천 종목들을 교차 분석 중..."):
+                with st.spinner("하나, KB, 미래에셋의 주간 추천 목록을 AI 교차 분석 중..."):
+                    # 프롬프트를 통해 하나, KB, 미래에셋 3대 증권사 데이터만 철저히 골라내도록 지시
                     rec_prompt = f"""너는 정교한 퀀트 금융 애널리스트야.
-아래 리스트는 타겟 3대 증권사(하나증권, KB증권, 미래에셋증권)의 최신 추천종목 관련 뉴스 제목들입니다.
-이 제목들을 서로 면밀히 대조 분석하여, 2개 이상의 증권사에서 공통(중복)으로 추천한 '컨센서스 종목'을 찾아서 표로 요약해줘.
+아래 리스트는 최근 발행된 국내 주요 증권사들의 주간 추천 종목 뉴스 제목들입니다.
+이 제목들을 면밀히 읽고 대조 분석하여, 오직 **[하나증권], [KB증권], [미래에셋증권]** 3대 메이저 증권사에서 추천한 종목들만 철저히 선별해줘.
 
-만약 완벽하게 중복되는 종목이 부족하다면, 해당 3개 증권사의 기사에서 가장 강력하게 언급된 고확신(High-Conviction) 추천 종목들 위주로 채워서 총 5~8개의 핵심 추천 종목 리스트를 만들어줘.
+1. 수집된 기사 중 위 3대 증권사(하나, KB, 미래에셋)가 직접 언급된 기사를 식별합니다.
+2. 각 증권사가 추천한 종목명들을 추출합니다.
+3. 2개 이상의 증권사에서 공통(중복)으로 추천한 '컨센서스 종목'을 최우선적으로 선별합니다.
+4. 만약 완벽하게 중복되는 종목이 부족하다면, 해당 3대 증권사 기사에서 가장 강력하게 언급된 고확신 핵심 추천 종목들로 채워서 최종 5~8개의 추천 종목 리스트를 완성해줘.
 
 결과는 다른 설명이나 인사말 없이 깔끔한 마크다운 테이블(Table) 형태로 즉시 출력해 주어야 해.
 컬럼명 규격:
@@ -478,7 +476,7 @@ def render_daily_report():
                         json={
                             "model": "llama-3.3-70b-versatile",
                             "messages": [{"role": "user", "content": rec_prompt}],
-                            "max_tokens": 650
+                            "max_tokens": 700
                         }
                     )
                     ai_data = ai_res.json()
