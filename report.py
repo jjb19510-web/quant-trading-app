@@ -228,6 +228,15 @@ def render_daily_report():
    # ── 5. 스마트 머니 인덱스 ──
     card("🧠 스마트 머니 인덱스 (SMI)", "장 시작 30분(개인) vs 마감 30분(기관/외인) 등락 스프레드 역추적")
     
+    # 💡 직관적인 가이드를 제공하는 디자인 카드 배치
+    st.markdown(f"""
+    <div style='background:{SURFACE_1}; border-left: 4px solid {ACCENT}; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; font-size: 13px; line-height: 1.65; color:{TEXT};'>
+        💡 <b>스마트 머니 인덱스(SMI) 초간단 판독법</b><br/>
+        • <b>수급선 상승 (📈):</b> 아침 투매를 견디고, 장 막판에 자금력이 탄탄한 <b>기관/외인</b>이 주식을 쓸어 담았다는 뜻입니다. (시장 우호적)<br/>
+        • <b>수급선 하락 (📉):</b> 오전 반등에 신나 아침에만 사고, 장 막판에는 큰손들이 돈을 빼며 발을 뺐다는 뜻입니다. (경계 필요)
+    </div>
+    """, unsafe_allow_html=True)
+
     @st.cache_data(ttl=900)
     def calculate_smi_yfinance():
         try:
@@ -253,7 +262,7 @@ def render_daily_report():
                 if len(day_data) < 4:
                     continue
                 
-                # 1. 오전 첫 30분 (09:00 시가 ~ 09:30 종가) 변동폭 연산
+                # 1. 오전 첫 30분 (09:00 시가 ~ 09:30 종가) 변동폭 연산 -> "개인 중심의 장초반 분위기"
                 try:
                     open_0900 = day_data.iloc[0]["Open"]
                     cand_0930 = day_data.between_time("09:15", "09:35")
@@ -262,7 +271,7 @@ def render_daily_report():
                 except:
                     morning_change = 0.0
                 
-                # 2. 오후 마지막 30분 (15:00 종가 ~ 15:30 종가) 변동폭 연산
+                # 2. 오후 마지막 30분 (15:00 종가 ~ 15:30 종가) 변동폭 연산 -> "큰손 중심의 종가 결정"
                 try:
                     close_1530 = day_data.iloc[-1]["Close"]
                     cand_1500 = day_data.between_time("14:55", "15:05")
@@ -276,18 +285,60 @@ def render_daily_report():
                 smi_history.append({
                     "날짜": d.strftime("%m/%d"),
                     "SMI": round(smi_value, 2),
-                    "KOSPI": round(day_data.iloc[-1]["Close"], 2)
+                    "KOSPI": round(day_data.iloc[-1]["Close"], 2),
+                    "오전변동": round(morning_change, 2),
+                    "오후변동": round(afternoon_change, 2)
                 })
             return pd.DataFrame(smi_history)
         except Exception as e:
             print(f"SMI 연산 오류: {e}")
             return None
 
-    with st.spinner("최근 5영업일 스마트 머니 인덱스(SMI) 트렌드 분석 중..."):
+    with st.spinner("스마트 머니 인덱스(SMI) 수급 데이터 분석 중..."):
         smi_df = calculate_smi_yfinance()
         
     if smi_df is not None and not smi_df.empty:
-        # 이중 축 차트 구성 (SMI 주축, KOSPI 보조축)
+        # ── 상단 3개 요약 상황판 카드 배치 ──
+        last_row = smi_df.iloc[-1]
+        prev_row = smi_df.iloc[-2] if len(smi_df) > 1 else last_row
+        smi_diff = last_row["SMI"] - prev_row["SMI"]
+        
+        # 오늘 종가 기준 시장 지배 수급 판별
+        if last_row["오후변동"] > 0:
+            leadership = "🟢 기관/외인 (종가 매수 우위)"
+            lead_color = "#22c55e" # 그린
+        else:
+            leadership = "🔴 개인 (종가 관망 우위)"
+            lead_color = "#ef4444" # 레드
+
+        m1, m2, m3 = st.columns(3)
+        with m1:
+            st.markdown(f"""
+            <div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:10px; padding:12px 16px; text-align:center; height:75px;'>
+                <div style='font-size:11px; color:#9ca3af; margin-bottom:6px;'>오늘의 시장 주도권</div>
+                <div style='font-size:13px; font-weight:700; color:{lead_color}; margin-top:4px;'>{leadership}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with m2:
+            morning_icon = "📈" if last_row["오전변동"] > 0 else "📉"
+            st.markdown(f"""
+            <div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:10px; padding:12px 16px; text-align:center; height:75px;'>
+                <div style='font-size:11px; color:#9ca3af; margin-bottom:6px;'>아침 개인 베팅 (09:00~09:30)</div>
+                <div style='font-size:14px; font-weight:700; color:{TEXT}; margin-top:4px;'>{morning_icon} {last_row["오전변동"]:+.1f}p</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with m3:
+            afternoon_icon = "📈" if last_row["오후변동"] > 0 else "📉"
+            st.markdown(f"""
+            <div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:10px; padding:12px 16px; text-align:center; height:75px;'>
+                <div style='font-size:11px; color:#9ca3af; margin-bottom:6px;'>장막판 큰손 베팅 (15:00~15:30)</div>
+                <div style='font-size:14px; font-weight:700; color:{ACCENT}; margin-top:4px;'>{afternoon_icon} {last_row["오후변동"]:+.1f}p</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown("<div style='margin-bottom:20px;'></div>", unsafe_allow_html=True)
+
+        # ── 이중 축 차트 시각화 (SMI vs KOSPI) ──
         fig = go.Figure()
         
         # SMI 라인 (주축 - 좌측)
@@ -297,7 +348,7 @@ def render_daily_report():
             mode="lines+markers+text",
             text=[f"{val:,.0f}" for val in smi_df["SMI"]],
             textposition="top center",
-            name="SMI (기관/외인 주도력)",
+            name="SMI 수급선 (기관/외인)",
             line=dict(color=ACCENT, width=3),
             marker=dict(size=6)
         ))
@@ -312,7 +363,7 @@ def render_daily_report():
             yaxis="y2"
         ))
         
-        # 레이아웃 고도화 설정
+        # 레이아웃 표준 규격 적용
         fig.update_layout(
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
@@ -344,14 +395,10 @@ def render_daily_report():
         st.plotly_chart(fig, use_container_width=True)
         
         # 분석 브리핑 자동 출력
-        last_row = smi_df.iloc[-1]
-        prev_row = smi_df.iloc[-2] if len(smi_df) > 1 else last_row
-        smi_diff = last_row["SMI"] - prev_row["SMI"]
-        
         if smi_diff > 0:
-            st.markdown(f"📈 **수급 해설:** 최근 영업일 대비 스마트 머니 인덱스가 **{smi_diff:+.1f}p 상승**했습니다. 장 막판에 기관 및 외국인 세력이 개인의 아침 매도세를 소화하고 강한 종가 베팅에 나섰음을 보여주는 긍정적인 신호입니다.")
+            st.markdown(f"📈 **쉬운 수급 분석:** 최근 영업일 대비 스마트 머니 수급 강도가 **{smi_diff:+.1f}포인트 상승**했습니다. 아침에 쏟아졌던 매도 매물을 장 마감 직전에 대형 기관 및 외인 세력이 강하게 아래에서 다 받아내어 매수 우위로 전환시켰음을 증명하는 아주 긍정적인 신호입니다.")
         else:
-            st.markdown(f"📉 **수급 해설:** 최근 영업일 대비 스마트 머니 인덱스가 **{smi_diff:+.1f}p 하락**했습니다. 아침 개인들의 추격 매수세 이후 장 후반으로 갈수록 메이저 자금(기관/외인)이 차익 실현 혹은 관망세를 보였음을 가리킵니다.")
+            st.markdown(f"📉 **쉬운 수급 분석:** 최근 영업일 대비 스마트 머니 수급 강도가 **{smi_diff:+.1f}포인트 하락**했습니다. 아침에는 일시적으로 올랐을지라도 장이 마감될 때 큰손들이 돈을 점차 회수하거나 매수를 미루었음을 뜻해 단기적인 경계가 필요합니다.")
     else:
         st.info("📊 현재 스마트 머니 인덱스(SMI) 데이터를 구성할 수 없습니다. 장 개설 후 15분 단위 가격정보가 누적되면 차트가 활성화됩니다.")
 
