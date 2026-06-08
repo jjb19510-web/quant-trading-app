@@ -28,22 +28,37 @@ def get_access_token():
         try:
             with open(token_file, "r") as f:
                 cache = json.load(f)
-            # 현재 시간이 토큰 만료 예정 시간보다 이전인지 확인
             expire_time = dt.datetime.fromisoformat(cache["expire_time"])
             if dt.datetime.now() < expire_time:
                 return cache["access_token"]
         except:
             pass  # 캐시 파일 손상 시 무시하고 신규 발급 진행
     
-    # 2. 캐시가 없거나 만료된 경우에만 한투 API에 신규 발급 요청
-    # (AppKey/Secret은 기존 broker.py의 내부 변수 혹은 st.secrets 정보를 동적 적용)
-    try:
-        app_key = st.secrets.get("KIS_APP_KEY", "") if "KIS_APP_KEY" in st.secrets else APP_KEY
-        app_secret = st.secrets.get("KIS_APP_SECRET", "") if "KIS_APP_SECRET" in st.secrets else APP_SECRET
-    except NameError:
-        app_key = st.secrets.get("KIS_APP_KEY", "")
-        app_secret = st.secrets.get("KIS_APP_SECRET", "")
-
+    # 2. [지능형 자가 치유 엔진] 대소문자 및 접두사 구분 없이 등록된 모든 한투 키를 자동 역추적
+    app_key = ""
+    app_secret = ""
+    
+    for k in st.secrets.keys():
+        k_upper = k.upper()
+        if "KEY" in k_upper and "APP" in k_upper:
+            app_key = st.secrets[k]
+        if "SECRET" in k_upper and "APP" in k_upper:
+            app_secret = st.secrets[k]
+            
+    # 3. KIS_ 접두사가 없는 비표준 변수명 대응 백업 수색
+    if not app_key:
+        for k in st.secrets.keys():
+            if "KEY" in k.upper():
+                app_key = st.secrets[k]
+    if not app_secret:
+        for k in st.secrets.keys():
+            if "SECRET" in k.upper():
+                app_secret = st.secrets[k]
+                
+    # 4. 키값 최종 존재 여부 정밀 진단
+    if not app_key or not app_secret:
+        raise Exception(f"대시보드 Secrets 설정에서 APP_KEY 또는 APP_SECRET을 찾을 수 없습니다. (현재 감지된 보안키 목록: {list(st.secrets.keys())})")
+        
     headers = {"content-type": "application/json"}
     body = {
         "grant_type": "client_credentials",
@@ -51,7 +66,6 @@ def get_access_token():
         "secretkey": app_secret
     }
     
-    # 한투 실전 계좌 API 주소
     url = "https://openapi.koreainvestment.com:9443/oauth2/tokenP"
     res = requests.post(url, headers=headers, json=body)
     data = res.json()
@@ -59,11 +73,8 @@ def get_access_token():
     if "access_token" in data:
         token = data["access_token"]
         expires_in = int(data.get("expires_in", 86400))
-        
-        # 안전마진을 위해 만료 1시간 전을 실질적 만료 시간으로 설정
         expire_time = dt.datetime.now() + dt.timedelta(seconds=expires_in - 3600)
         
-        # 파일에 물리적으로 보존 (Streamlit 재기동 시에도 무제한 보존됨)
         try:
             with open(token_file, "w") as f:
                 json.dump({
