@@ -1016,9 +1016,10 @@ def render_daily_report():
             # 📊 3. 당일 거래대금 TOP 10 (주요 노이즈 ETF 필터링 반영)
             if volume_data:
                 story.append(Paragraph("📊 당일 거래대금 상위 TOP 10 (ETF 제외)", h2_style))
-                vol_data = [["종목명", "현재가", "당일 누적 거래량"]]
+                # 🎯 헤더 컬럼명을 거래대금으로 변경하고 호출 키값을 row["거래대금"]으로 정정하여 버그 해결
+                vol_data = [["종목명", "현재가", "당일 누적 거래대금"]]
                 for row in volume_data:
-                    vol_data.append([row["종목"], f"{row['현재가']}원" if "원" not in row["현재가"] else row["현재가"], row["거래량"]])
+                    vol_data.append([row["종목"], f"{row['현재가']}원" if "원" not in row["현재가"] else row["현재가"], row["거래대금"]])
                 
                 t3 = Table(vol_data, colWidths=[180, 160, 183])
                 t3.setStyle(TableStyle([
