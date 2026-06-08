@@ -176,113 +176,130 @@ def render_daily_report():
 
     # ── 5. 스마트 머니 인덱스 ──
     card("🧠 스마트 머니 인덱스", "장 시작 30분 vs 마감 30분 등락 스프레드 · 기관·외인 의도 추적")
-    try:
-        from broker import get_access_token
-        token = get_access_token()
+    
+    # ⏰ 장후/주말 예외 처리를 최외곽에서 분기하여 들여쓰기 오류 예방
+    now_kst = dt.datetime.now()
+    is_weekend = now_kst.weekday() >= 5
+    is_after_market = now_kst.time() > dt.time(15, 30) or now_kst.time() < dt.time(9, 0)
+    
+    if is_weekend or is_after_market:
+        st.info("📊 스마트 머니 인덱스는 정규 장 운영 시간(평일 09:00 ~ 15:30) 중에만 실시간 분석 데이터가 활성화됩니다. (현재 장 마감 상태)")
+    else:
+        try:
+            from broker import get_access_token
+            token = get_access_token()
 
-        @st.cache_data(ttl=300)
-        def get_smi(token):
-            BASE_URL = "https://openapi.koreainvestment.com:9443"
-            try:
-                from broker import APP_KEY, APP_SECRET
-            except:
+            @st.cache_data(ttl=300)
+            def get_smi(token):
+                BASE_URL = "https://openapi.koreainvestment.com:9443"
+                try:
+                    from broker import APP_KEY, APP_SECRET
+                except:
+                    return None
+
+                headers = {
+                    "content-type": "application/json",
+                    "authorization": f"Bearer {token}",
+                    "appkey": APP_KEY,
+                    "appsecret": APP_SECRET,
+                    "tr_id": "FHKST03010200"
+                }
+                today = dt.datetime.now().strftime("%Y%m%d")
+                params = {
+                    "FID_COND_MRKT_DIV_CODE": "J",
+                    "FID_INPUT_ISCD": "0001",
+                    "FID_INPUT_DATE_1": today,
+                    "FID_INPUT_DATE_2": today,
+                    "FID_PW_DATA_INCU_YN": "N"
+                }
+                res = requests.get(
+                    f"{BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-time-itemchartprice",
+                    headers=headers, params=params
+                )
+                data = res.json()
+                if data.get("rt_cd") == "0":
+                    output = data.get("output2", [])
+                    if len(output) >= 2:
+                        return pd.DataFrame(output)
                 return None
 
-            headers = {
-                "content-type": "application/json",
-                "authorization": f"Bearer {token}",
-                "appkey": APP_KEY,
-                "appsecret": APP_SECRET,
-                "tr_id": "FHKST03010200"
-            }
-            today = dt.datetime.now().strftime("%Y%m%d")
-            params = {
-                "FID_COND_MRKT_DIV_CODE": "J",
-                "FID_INPUT_ISCD": "0001",
-                "FID_INPUT_DATE_1": today,
-                "FID_INPUT_DATE_2": today,
-                "FID_PW_DATA_INCU_YN": "N"
-            }
-            res = requests.get(
-                f"{BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-time-itemchartprice",
-                headers=headers, params=params
-            )
-            data = res.json()
-            if data.get("rt_cd") == "0":
-                output = data.get("output2", [])
-                if len(output) >= 2:
-                    return pd.DataFrame(output)
-            return None
-
-        smi_data = get_smi(token)
-        if smi_data is not None:
-            st.success("스마트 머니 인덱스 데이터 수집 완료")
-        else:
-            st.info("📊 장 중에만 스마트 머니 인덱스가 활성화돼요. (09:00 ~ 15:30)")
-    except:
-        st.info("📊 KIS API 연결 시 스마트 머니 인덱스가 활성화돼요.")
+            smi_data = get_smi(token)
+            if smi_data is not None:
+                st.success("스마트 머니 인덱스 데이터 수집 완료")
+            else:
+                st.info("📊 장 중에만 스마트 머니 인덱스가 활성화돼요. (09:00 ~ 15:30)")
+        except:
+            st.info("📊 KIS API 연결 시 스마트 머니 인덱스가 활성화돼요.")
 
     st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
 
     # ── 6. 수급 동향 ──
     card("💰 수급 동향", "외국인 · 기관 · 개인 순매수 상위 종목 (KIS API)")
 
-    try:
-        from broker import get_foreign_institution_trade, get_access_token
-        token = st.session_state.get("kis_token")
-        if not token:
-            last_attempt = st.session_state.get("kis_token_last_attempt", 0)
-            now = dt.datetime.now().timestamp()
-            if now - last_attempt < 60:
-                st.info("📊 수급 데이터는 장 중(09:00~15:30)에만 활성화돼요.")
-                raise Exception("토큰 발급 대기 중")
-            try:
-                st.session_state["kis_token_last_attempt"] = now
-                token = get_access_token()
-                st.session_state["kis_token"] = token
-            except Exception as e:
-                st.info("📊 수급 데이터는 장 중(09:00~15:30)에만 활성화돼요.")
-                raise Exception("토큰 발급 실패")
+    # ⏰ 장후/주말 예외 처리를 최외곽에서 분기하여 들여쓰기 오류 예방
+    now_kst = dt.datetime.now()
+    is_weekend = now_kst.weekday() >= 5
+    is_after_market = now_kst.time() > dt.time(15, 30) or now_kst.time() < dt.time(9, 0)
+    
+    if is_weekend or is_after_market:
+        st.info("📊 수급 동향 데이터는 정규 장 운영 시간(평일 09:00 ~ 15:30) 중에만 실시간 조회가 활성화됩니다. (현재 장 마감 상태)")
+    else:
+        try:
+            from broker import get_foreign_institution_trade, get_access_token
+            token = st.session_state.get("kis_token")
+            if not token:
+                last_attempt = st.session_state.get("kis_token_last_attempt", 0)
+                now = dt.datetime.now().timestamp()
+                if now - last_attempt < 60:
+                    st.info("📊 수급 데이터는 장 중(09:00~15:30)에만 활성화돼요.")
+                    raise Exception("토큰 발급 대기 중")
+                try:
+                    st.session_state["kis_token_last_attempt"] = now
+                    token = get_access_token()
+                    st.session_state["kis_token"] = token
+                except Exception as e:
+                    st.info("📊 수급 데이터는 장 중(09:00~15:30)에만 활성화돼요.")
+                    raise Exception("토큰 발급 실패")
 
-        def parse_supply(data):
-            rows = []
-            for item in data.get("output", [])[:5]:
-                name = item.get("hts_kor_isnm", "")
-                buy = item.get("frgn_ntby_qty", "0")
-                if name:
-                    rows.append({"종목": name, "순매수(주)": buy})
-            return rows
+            def parse_supply(data):
+                rows = []
+                for item in data.get("output", [])[:5]:
+                    name = item.get("hts_kor_isnm", "")
+                    buy = item.get("frgn_ntby_qty", "0")
+                    if name:
+                        rows.append({"종목": name, "순매수(주)": buy})
+                return rows
 
-        with st.spinner("수급 데이터 불러오는 중..."):
-            foreign_raw = get_foreign_institution_trade(token, div_cls="0")
-            institution_raw = get_foreign_institution_trade(token, div_cls="1")
-            individual_raw = get_foreign_institution_trade(token, div_cls="2")
+            with st.spinner("수급 데이터 불러오는 중..."):
+                foreign_raw = get_foreign_institution_trade(token, div_cls="0")
+                institution_raw = get_foreign_institution_trade(token, div_cls="1")
+                individual_raw = get_foreign_institution_trade(token, div_cls="2")
 
-        foreign_rows = parse_supply(foreign_raw)
-        institution_rows = parse_supply(institution_raw)
-        individual_rows = parse_supply(individual_raw)
+            foreign_rows = parse_supply(foreign_raw)
+            institution_rows = parse_supply(institution_raw)
+            individual_rows = parse_supply(individual_raw)
 
-        col_f, col_i, col_p = st.columns(3)
-        with col_f:
-            st.markdown("<div style='font-size:13px; font-weight:600; color:#9ca3af; margin-bottom:8px;'>🌍 외국인 순매수 TOP 5</div>", unsafe_allow_html=True)
-            if foreign_rows:
-                st.dataframe(pd.DataFrame(foreign_rows), use_container_width=True, hide_index=True)
-            else:
-                st.info("데이터 없음")
-        with col_i:
-            st.markdown("<div style='font-size:13px; font-weight:600; color:#9ca3af; margin-bottom:8px;'>🏦 기관 순매수 TOP 5</div>", unsafe_allow_html=True)
-            if institution_rows:
-                st.dataframe(pd.DataFrame(institution_rows), use_container_width=True, hide_index=True)
-            else:
-                st.info("데이터 없음")
-        with col_p:
-            st.markdown("<div style='font-size:13px; font-weight:600; color:#9ca3af; margin-bottom:8px;'>👤 개인 순매수 TOP 5</div>", unsafe_allow_html=True)
-            if individual_rows:
-                st.dataframe(pd.DataFrame(individual_rows), use_container_width=True, hide_index=True)
-            else:
-                st.info("데이터 없음")
-    except Exception as e:
-        st.info(f"수급 데이터를 불러오지 못했어요. ({e})")
+            col_f, col_i, col_p = st.columns(3)
+            with col_f:
+                st.markdown("<div style='font-size:13px; font-weight:600; color:#9ca3af; margin-bottom:8px;'>🌍 외국인 순매수 TOP 5</div>", unsafe_allow_html=True)
+                if foreign_rows:
+                    st.dataframe(pd.DataFrame(foreign_rows), use_container_width=True, hide_index=True)
+                else:
+                    st.info("데이터 없음")
+            with col_i:
+                st.markdown("<div style='font-size:13px; font-weight:600; color:#9ca3af; margin-bottom:8px;'>🏦 기관 순매수 TOP 5</div>", unsafe_allow_html=True)
+                if institution_rows:
+                    st.dataframe(pd.DataFrame(institution_rows), use_container_width=True, hide_index=True)
+                else:
+                    st.info("데이터 없음")
+            with col_p:
+                st.markdown("<div style='font-size:13px; font-weight:600; color:#9ca3af; margin-bottom:8px;'>👤 개인 순매수 TOP 5</div>", unsafe_allow_html=True)
+                if individual_rows:
+                    st.dataframe(pd.DataFrame(individual_rows), use_container_width=True, hide_index=True)
+                else:
+                    st.info("데이터 없음")
+        except Exception as e:
+            st.info(f"수급 데이터를 불러오지 못했어요. ({e})")
 
     st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
 
@@ -299,15 +316,25 @@ def render_daily_report():
             soup = BeautifulSoup(res.text, "html.parser")
             rows = soup.select("table.type_2 tr")
             result = []
-            for row in rows[2:12]:
+            
+            # 🎯 [수정 완료] 수집 범위를 상위 80개로 넓혀 ETF 노이즈를 다 걷어내고 순수 우량 주식 10개만 순서대로 엄선
+            for row in rows[2:80]:
                 cols = row.select("td")
                 if len(cols) >= 3:
                     name = cols[1].text.strip()
                     price = cols[2].text.strip()
                     volume = cols[5].text.strip() if len(cols) > 5 else "-"
+                    
+                    if not name:
+                        continue
+                        
                     etf_keywords = ["KODEX", "TIGER", "KBSTAR", "ARIRANG", "HANARO", "KOSEF", "PLUS", "ACE", "SOL", "TIMEFOLIO", "ETF", "ETN", "인버스", "레버리지", "선물"]
-                    if name and not any(k in name for k in etf_keywords):
+                    if not any(k in name for k in etf_keywords):
                         result.append({"종목": name, "현재가": price, "거래량": volume})
+                    
+                    # 알짜 10개 종목이 모두 채워지면 안전하게 조기 종료
+                    if len(result) == 10:
+                        break
             return result
         except:
             return []
