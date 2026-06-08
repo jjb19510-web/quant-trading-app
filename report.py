@@ -10,6 +10,42 @@ from ui_components import (
     card, CANDLE_UP, CANDLE_DOWN, DIM, TEXT, SURFACE_1, SURFACE_2, LINE, BG, ACCENT
 )
 
+@st.cache_data(ttl=1800)
+def get_naver_supply_deal(investor_gubun="1000"):
+    """네이버 금융 장 마감 확정 수급 데이터 백업 크롤러 (1000:외인, 1500:기관, 9000:개인)"""
+    try:
+        from bs4 import BeautifulSoup
+        headers = {"User-Agent": "Mozilla/5.0"}
+        # sosok=0 (코스피) 기준 주간/일간 수급 순매수 랭킹 파싱
+        url = f"https://finance.naver.com/sise/sise_deal_rank.naver?investor_gubun={investor_gubun}&sosok=0"
+        res = requests.get(url, headers=headers, timeout=5)
+        soup = BeautifulSoup(res.text, "html.parser")
+        
+        # 네이버 전통 양식인 type_5와 tltle(네이버 오타 클래스)을 추적하여 종목 수색
+        rows = soup.select("table.type_5 tr")
+        if not rows:
+            rows = soup.select("table.type_2 tr")
+        
+        result = []
+        for row in rows:
+            name_tag = row.select_one("a.tltle")
+            if name_tag:
+                name = name_tag.text.strip()
+                cols = row.select("td")
+                buy_qty = "조회불가"
+                if len(cols) >= 7:
+                    # 마감 순매수 수량(주) 추출 및 가공
+                    buy_qty = cols[6].text.strip() + "주"
+                elif len(cols) >= 5:
+                    buy_qty = cols[4].text.strip()
+                result.append({"종목": name, "순매수": buy_qty})
+                
+                # TOP 5만 정확히 확보하면 루프 종료
+                if len(result) == 5:
+                    break
+        return result
+    except:
+        return []
 def render_report():
     st.markdown(
         "<div style='font-size:22px; font-weight:700; margin-bottom:4px;'>📋 Daily Quantfolio Report</div>"
@@ -241,15 +277,40 @@ def render_daily_report():
     st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
 
     # ── 6. 수급 동향 ──
-    card("💰 수급 동향", "외국인 · 기관 · 개인 순매수 상위 종목 (KIS API)")
+    card("💰 수급 동향", "외국인 · 기관 · 개인 순매수 상위 종목 (하이브리드 KIS & Naver 백업)")
 
-    # ⏰ 장후/주말 예외 처리를 최외곽에서 분기하여 들여쓰기 오류 예방
+    # ⏰ 장후/주말 예외 처리를 감지하여, 장 마감 시에는 네이버 금융 마감 확정치로 백업 자동 전환
     now_kst = dt.datetime.now()
     is_weekend = now_kst.weekday() >= 5
     is_after_market = now_kst.time() > dt.time(15, 30) or now_kst.time() < dt.time(9, 0)
     
     if is_weekend or is_after_market:
-        st.info("📊 수급 동향 데이터는 정규 장 운영 시간(평일 09:00 ~ 15:30) 중에만 실시간 조회가 활성화됩니다. (현재 장 마감 상태)")
+        st.warning("📊 현재는 장 마감 상태(15:30~익일 09:00)입니다. 실시간 KIS API 대신 [네이버 금융 당일 장 마감 가집계 확정치] 데이터를 백업 로드합니다.")
+        
+        with st.spinner("네이버 금융 장 마감 확정 수급 데이터를 수집 중..."):
+            foreign_rows = get_naver_supply_deal("1000") # 외인
+            institution_rows = get_naver_supply_deal("1500") # 기관
+            individual_rows = get_naver_supply_deal("9000") # 개인
+            
+        col_f, col_i, col_p = st.columns(3)
+        with col_f:
+            st.markdown("<div style='font-size:13px; font-weight:600; color:#9ca3af; margin-bottom:8px;'>🌍 외국인 순매수 TOP 5</div>", unsafe_allow_html=True)
+            if foreign_rows:
+                st.dataframe(pd.DataFrame(foreign_rows), use_container_width=True, hide_index=True)
+            else:
+                st.info("데이터 없음")
+        with col_i:
+            st.markdown("<div style='font-size:13px; font-weight:600; color:#9ca3af; margin-bottom:8px;'>🏦 기관 순매수 TOP 5</div>", unsafe_allow_html=True)
+            if institution_rows:
+                st.dataframe(pd.DataFrame(institution_rows), use_container_width=True, hide_index=True)
+            else:
+                st.info("데이터 없음")
+        with col_p:
+            st.markdown("<div style='font-size:13px; font-weight:600; color:#9ca3af; margin-bottom:8px;'>👤 개인 순매수 TOP 5</div>", unsafe_allow_html=True)
+            if individual_rows:
+                st.dataframe(pd.DataFrame(individual_rows), use_container_width=True, hide_index=True)
+            else:
+                st.info("데이터 없음")
     else:
         try:
             from broker import get_foreign_institution_trade, get_access_token
