@@ -340,7 +340,6 @@ def render_daily_report():
         """, unsafe_allow_html=True)
 
         # ── 3초 판독용 플롯리 반원형 게이지 차트(SMI Gauge) 구성 ──
-        # 차트 범위는 한국 증시 하루 변동폭의 최대 강도를 고려해 -500 ~ +500 점수로 한정합니다.
         fig = go.Figure(go.Indicator(
             mode="gauge+number",
             value=smi_diff,
@@ -353,14 +352,14 @@ def render_daily_report():
                     'tickvals': [-500, -250, 0, 250, 500],
                     'ticktext': ["위험 (-500)", "주의", "관망 (0)", "우호", "매수 집중 (+500)"]
                 },
-                'bar': {'color': ACCENT, 'thickness': 0.25}, # 수급 온도 바늘 색상
+                'bar': {'color': ACCENT, 'thickness': 0.25}, 
                 'bgcolor': "rgba(0,0,0,0)",
                 'borderwidth': 1.5,
                 'bordercolor': LINE,
                 'steps': [
-                    {'range': [-500, -100], 'color': "rgba(239, 68, 68, 0.12)"},  # 소프트 레드 (개인 투매 영역) [1]
-                    {'range': [-100, 100], 'color': "rgba(245, 158, 11, 0.12)"},   # 소프트 오렌지 (보통/관망) [1]
-                    {'range': [100, 500], 'color': "rgba(34, 197, 94, 0.12)"}     # 소프트 그린 (외국인·기관 주도) [1]
+                    {'range': [-500, -100], 'color': "rgba(239, 68, 68, 0.12)"},  
+                    {'range': [-100, 100], 'color': "rgba(245, 158, 11, 0.12)"},   
+                    {'range': [100, 500], 'color': "rgba(34, 197, 94, 0.12)"}     
                 ],
                 'threshold': {
                     'line': {'color': lead_color, 'width': 5},
@@ -370,21 +369,24 @@ def render_daily_report():
             }
         ))
         
-        # 다크 블루 금융 테마에 맞춤형 투명 배경 및 폰트 연동
+        # 🎯 차트 마진을 축소하고 텍스트 레이어를 밖으로 뺍니다.
         fig.update_layout(
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
             font={'color': TEXT, 'family': "NanumGothic"},
-            margin=dict(l=30, r=30, t=40, b=10),
-            height=200,
-            annotations=[dict(
-                text=f"현재 수급 온도: {gauge_status}",
-                x=0.5, y=-0.15,
-                showarrow=False,
-                font=dict(size=14, color=TEXT, weight="bold")
-            )]
+            margin=dict(l=30, r=30, t=10, b=0), # 아래 마진을 극도로 축소하여 여백을 확보합니다.
+            height=180 # 슬림하게 조절하여 잘림 현상을 완전 방지합니다.
         )
         st.plotly_chart(fig, use_container_width=True)
+
+        # 🎯 [신규 적용] 차트 캔버스 영역 밖에서 네이티브 HTML 배지로 정중앙 표시하여 잘림을 100% 원천 차단합니다.
+        st.markdown(f"""
+        <div style='text-align: center; margin-top: -15px; margin-bottom: 25px;'>
+            <span style='background: {SURFACE_2}; border: 0.5px solid {LINE}; border-radius: 20px; padding: 6px 18px; font-size: 13px; font-weight: bold; color: {TEXT}; box-shadow: 0 4px 12px rgba(0,0,0,0.2);'>
+                🔥 현재 수급 온도: <span style='color: {lead_color};'>{gauge_status}</span>
+            </span>
+        </div>
+        """, unsafe_allow_html=True)
         
         # 💡 정돈된 마켓 분석 (존댓말 마무리 및 불안성 투매 완전 교체 적용)
         st.markdown(f"""
@@ -461,32 +463,23 @@ def render_daily_report():
             st.warning("📊 KIS API 연결 상태가 원활하지 않아 [네이버 금융 실시간 가집계] 백업 데이터를 로드합니다.")
         
         with st.spinner("네이버 금융 수급 데이터를 수집 중..."):
-            foreign_rows = get_naver_supply_deal("1000") # 외인
-            institution_rows = get_naver_supply_deal("1500") # 기관
-            individual_rows = get_naver_supply_deal("9000") # 개인
-
-    # 3. 획득된 데이터 테이블을 각 칼럼에 맞추어 통합 렌더링합니다.
-    col_f, col_i, col_p = st.columns(3)
-    with col_f:
-        st.markdown("<div style='font-size:13px; font-weight:600; color:#9ca3af; margin-bottom:8px;'>🌍 외국인 순매수 TOP 5</div>", unsafe_allow_html=True)
-        if foreign_rows:
-            st.dataframe(pd.DataFrame(foreign_rows), use_container_width=True, hide_index=True)
-        else:
-            st.info("데이터 없음")
-    with col_i:
-        st.markdown("<div style='font-size:13px; font-weight:600; color:#9ca3af; margin-bottom:8px;'>🏦 기관 순매수 TOP 5</div>", unsafe_allow_html=True)
-        if institution_rows:
-            st.dataframe(pd.DataFrame(institution_rows), use_container_width=True, hide_index=True)
-        else:
-            st.info("데이터 없음")
-    with col_p:
-        st.markdown("<div style='font-size:13px; font-weight:600; color:#9ca3af; margin-bottom:8px;'>👤 개인 순매수 TOP 5</div>", unsafe_allow_html=True)
-        if individual_rows:
-            st.dataframe(pd.DataFrame(individual_rows), use_container_width=True, hide_index=True)
-        else:
-            st.info("데이터 없음")
-
-    st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
+            foreign_rows = get_naver_supply_deal("1000") # 외인 수집
+            institution_rows = get_naver_supply_deal("9000") # 🎯 [코드 교체] 기존 잘못된 코드 1500에서 진짜 기관 수급 코드인 9000으로 교정
+            
+        # 🎯 [2열 대칭 개편] 애초에 존재하지 않는 개인 탭을 제외하고, 외국인과 기관 2개 컬럼으로 꽉 채워 배치합니다.
+        col_f, col_i = st.columns(2)
+        with col_f:
+            st.markdown("<div style='font-size:13px; font-weight:600; color:#9ca3af; margin-bottom:8px;'>🌍 외국인 순매수 TOP 5</div>", unsafe_allow_html=True)
+            if foreign_rows:
+                st.dataframe(pd.DataFrame(foreign_rows), use_container_width=True, hide_index=True)
+            else:
+                st.info("데이터 없음")
+        with col_i:
+            st.markdown("<div style='font-size:13px; font-weight:600; color:#9ca3af; margin-bottom:8px;'>🏦 기관 순매수 TOP 5</div>", unsafe_allow_html=True)
+            if institution_rows:
+                st.dataframe(pd.DataFrame(institution_rows), use_container_width=True, hide_index=True)
+            else:
+                st.info("데이터 없음")
 
     # ── 7. 거래대금 상위 ──
     card("📊 거래대금 상위 TOP 10", "오늘 가장 많이 거래된 종목")
@@ -498,7 +491,8 @@ def render_daily_report():
             headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
             }
-            url = "https://finance.naver.com/sise/sise_quant.naver?sosok=0"
+            # 🎯 [긴급 정정] 거래량 기준 sise_quant가 아닌, 진짜 거래대금 랭킹인 sise_toppr 호출로 교체
+            url = "https://finance.naver.com/sise/sise_toppr.naver?sosok=0"
             res = requests.get(url, headers=headers, timeout=5)
             soup = BeautifulSoup(res.text, "html.parser")
             rows = soup.select("table.type_2 tr")
@@ -506,7 +500,6 @@ def render_daily_report():
             
             for row in rows[2:80]:
                 cols = row.select("td")
-                # 주식 개수가 아닌, Naver 거래대금 컬럼인 cols[6]을 명확히 타겟팅합니다.
                 if len(cols) >= 7:
                     name = cols[1].text.strip()
                     price = cols[2].text.strip()
@@ -522,12 +515,11 @@ def render_daily_report():
                     if not any(k in name for k in etf_keywords):
                         price_formatted = f"{price}원" if price and not price.endswith("원") else price
                         
-                        # 억 원 및 조 원 단위 정밀 변환 연산
                         try:
                             amount_val = int(raw_amount.replace(",", ""))
                             amount_in_hundred_million = amount_val / 100 # 100백만 원 = 1억 원
                             
-                            if amount_in_hundred_million >= 10000: # 1조 원을 넘어서는 대자금 유입 종목 처리
+                            if amount_in_hundred_million >= 10000:
                                 trillion = int(amount_in_hundred_million // 10000)
                                 billion = int(amount_in_hundred_million % 10000)
                                 if billion > 0:
@@ -542,7 +534,7 @@ def render_daily_report():
                         result.append({
                             "종목": name, 
                             "현재가": price_formatted, 
-                            "거래대금": amount_formatted # 거래량 주식 수량에서 금액 표기로 완전 전환
+                            "거래대금": amount_formatted
                         })
                     
                     if len(result) == 10:
