@@ -324,14 +324,18 @@ def render_daily_report():
                 showgrid=True, gridcolor=LINE, tickfont=dict(color="#9ca3af")
             ),
             yaxis=dict(
-                title="SMI 지수",
-                titlefont=dict(color=ACCENT),
+                title=dict(
+                    text="SMI 지수",
+                    font=dict(color=ACCENT)
+                ),
                 tickfont=dict(color="#9ca3af"),
                 showgrid=True, gridcolor=LINE
             ),
             yaxis2=dict(
-                title="KOSPI 지수",
-                titlefont=dict(color="#9ca3af"),
+                title=dict(
+                    text="KOSPI 지수",
+                    font=dict(color="#9ca3af")
+                ),
                 tickfont=dict(color="#9ca3af"),
                 overlaying="y",
                 side="right"
