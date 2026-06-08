@@ -16,36 +16,39 @@ def get_naver_supply_deal(investor_gubun="1000"):
     try:
         from bs4 import BeautifulSoup
         headers = {"User-Agent": "Mozilla/5.0"}
-        # 수급 랭킹의 레거시 .nhn 주소 규격 강제 지정
+        # 수급 랭킹의 레거시 .nhn 주소 규격 강제 지정으로 404 차단 방지
         url = f"https://finance.naver.com/sise/sise_deal_rank.nhn?investor_gubun={investor_gubun}&sosok=0"
         res = requests.get(url, headers=headers, timeout=5)
         
-        # 🎯 [인코딩 보정 완료] 네이버 금융 레거시 전용 한글 폰트 인코딩 cp949 강제 적용
+        # 네이버 금융 레거시 전용 한글 폰트 인코딩 cp949 강제 적용으로 한글 깨짐 방지
         res.encoding = 'cp949'
         
         soup = BeautifulSoup(res.text, "html.parser")
+        
+        # 수급 페이지 전용 공식 클래스명인 'company' 링크를 추적하여 100% 정상 추출
         rows = soup.select("tr")
         result = []
         for row in rows:
-            # 🎯 [클래스 보정 완료] sise_deal_rank 전용 핵심 상장사 클래스명인 'company' 필터링
             name_tag = row.select_one("a.company")
             if name_tag:
                 name = name_tag.text.strip()
                 cols = row.select("td")
                 buy_qty = "조회불가"
                 if len(cols) >= 7:
-                    # 마감 순매수 수량(주) 추출 및 가공 (6번 인덱스 위치)
+                    # 마감 순매수 수량(주) 추출 및 가공 (보통 6번 인덱스에 위치)
                     buy_qty = cols[6].text.strip() + "주"
                 elif len(cols) >= 5:
                     buy_qty = cols[4].text.strip()
                 result.append({"종목": name, "순매수": buy_qty})
                 
-                # TOP 5 종목이 확보되면 루프 종료
+                # TOP 5 종목이 확보되면 즉시 루프 종료
                 if len(result) == 5:
                     break
         return result
-    except:
+    except Exception as ex:
         return []
+
+
 def render_report():
     st.markdown(
         "<div style='font-size:22px; font-weight:700; margin-bottom:4px;'>📋 Daily Quantfolio Report</div>"
@@ -113,7 +116,7 @@ def render_daily_report():
     # ── 2. 관심종목 신호 리포트 ──
     signal_rows = []
     if st.session_state.get("watchlist"):
-        card("🔔 관심종목 신호 리포트", "RSI 기준 매수/매도 신호 · 내일 변동성 돌파 목표가")
+        card("🔔 관심종목 신호 리포트", "RSI 기준 매수/매도 신호 · 내일 변성 돌파 목표가")
 
         @st.cache_data(ttl=300)
         def get_signal_report(watchlist):
@@ -205,13 +208,11 @@ def render_daily_report():
                 if not hdf.empty:
                     st.dataframe(hdf, use_container_width=True, hide_index=True)
         else:
-            # ⏰ KIS API가 0이 아닌 다른 오류 응답 코드를 반환했을 때의 정밀 가이드화
             err_code = balance_data.get("rt_cd", "N/A")
             err_msg = balance_data.get("msg1", "서비스 운영 시간 외 또는 조회 권한이 없는 모의투자 계좌 상태입니다.")
             card("💼 포트폴리오 현황", f"KIS API 조회 제한 (코드: {err_code})")
             st.info(f"📊 한투 계좌 요약을 불러오지 못했습니다. (사유: {err_msg})")
     except Exception as e:
-        # ⏰ 파이썬 예외가 발생했을 때 상세 원인을 노출하여 핀포인트 조치 지원
         card("💼 포트폴리오 현황", "KIS API 연결 필요")
         st.info(f"📊 KIS API를 연결할 수 없습니다. (상세 에러 원인: {e})")
 
@@ -545,7 +546,7 @@ def render_daily_report():
             
             if st.button("🤖 증권사 공통 추천종목 교차 분석 시작", use_container_width=True):
                 with st.spinner("하나, KB, 미래에셋의 주간 추천 목록을 AI 교차 분석 중..."):
-                    # 💎 아이티센글로벌의 공식 상장 사명을 수호하고 요약 퀄리티를 극대화하는 보정 프롬프트
+                    # 프롬프트를 통해 하나, KB, 미래에셋 3대 증권사 데이터만 철저히 골라내도록 지시
                     rec_prompt = f"""너는 정교한 퀀트 금융 리서치 애널리스트야.
 아래 리스트는 타겟 3대 증권사(하나증권, KB증권, 미래에셋증권)의 최신 추천종목 뉴스 제목들입니다.
 이 정보들을 바탕으로 다음의 [엄격한 품질 필터]를 적용하여 5~8개의 핵심 추천 종목 요약 표를 생성해줘.
