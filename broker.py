@@ -2,17 +2,37 @@ import requests
 import json
 import streamlit as st
 import os
-import json
 import datetime as dt
-import requests
 
-# ── 환경변수에서 인증 정보 읽기 ──
+# ── [전역 보안키 자동 정화 엔진] 대소문자 및 접두사 구분 없이 보안키 자동 수색 및 유니코드 공백 원천 박멸 ──
 try:
-    APP_KEY = st.secrets["APP_KEY"]
-    APP_SECRET = st.secrets["APP_SECRET"]
-    ACCOUNT_NO = st.secrets["ACCOUNT_NO"]
-except:
-    # 로컬 테스트용
+    raw_key = ""
+    raw_secret = ""
+    
+    # 1. secrets 전체에서 APP KEY와 SECRET 관련 키를 대소문자 구분 없이 자동 역추적
+    for k in st.secrets.keys():
+        k_upper = k.upper()
+        if "KEY" in k_upper and "APP" in k_upper:
+            raw_key = st.secrets[k]
+        if "SECRET" in k_upper and "APP" in k_upper:
+            raw_secret = st.secrets[k]
+            
+    # 2. 검출되지 않았을 경우 백업 명칭으로 조회
+    if not raw_key:
+        raw_key = st.secrets.get("KIS_APP_KEY") or st.secrets.get("APP_KEY", "")
+    if not raw_secret:
+        raw_secret = st.secrets.get("KIS_APP_SECRET") or st.secrets.get("APP_SECRET", "")
+        
+    # 3. [중요] 비ASCII 특수문자 및 한글 더미 데이터 정화 (latin-1 에러 차단)
+    # 영문, 숫자, 키보드 기호(ASCII 128 미만)만 필터링하고 공백을 제거합니다.
+    APP_KEY = "".join(c for c in str(raw_key) if ord(c) < 128).strip()
+    APP_SECRET = "".join(c for c in str(raw_secret) if ord(c) < 128).strip()
+    
+    # 4. 계좌번호 로드
+    ACCOUNT_NO = st.secrets.get("ACCOUNT_NO") or st.secrets.get("KIS_ACCOUNT_NO", "44521662")
+    
+except Exception as e:
+    # 로컬 수동 테스트용 디폴트 백업
     APP_KEY = "여기에_APP_KEY"
     APP_SECRET = "여기에_APP_SECRET"
     ACCOUNT_NO = "44521662"
@@ -34,10 +54,9 @@ def get_access_token():
         except:
             pass  # 캐시 파일 손상 시 무시하고 신규 발급 진행
     
-    # 2. [지능형 자가 치유 엔진] 대소문자 및 접두사 구분 없이 등록된 모든 한투 키를 자동 역추적
+    # 2. 자가 치유 엔진 가동 (대소문자/접두사 무관 역추적)
     app_key = ""
     app_secret = ""
-    
     for k in st.secrets.keys():
         k_upper = k.upper()
         if "KEY" in k_upper and "APP" in k_upper:
@@ -45,21 +64,18 @@ def get_access_token():
         if "SECRET" in k_upper and "APP" in k_upper:
             app_secret = st.secrets[k]
             
-    # 3. KIS_ 접두사가 없는 비표준 변수명 대응 백업 수색
     if not app_key:
-        for k in st.secrets.keys():
-            if "KEY" in k.upper():
-                app_key = st.secrets[k]
+        app_key = st.secrets.get("KIS_APP_KEY") or st.secrets.get("APP_KEY", "")
     if not app_secret:
-        for k in st.secrets.keys():
-            if "SECRET" in k.upper():
-                app_secret = st.secrets[k]
+        app_secret = st.secrets.get("KIS_APP_SECRET") or st.secrets.get("APP_SECRET", "")
+        
+    # 3. 유니코드 투명 공백 및 한글 더미 차단을 위한 2차 살균 정화
+    app_key = "".join(c for c in str(app_key) if ord(c) < 128).strip()
+    app_secret = "".join(c for c in str(app_secret) if ord(c) < 128).strip()
                 
-    # 4. 키값 최종 존재 여부 정밀 진단
     if not app_key or not app_secret:
         raise Exception(f"대시보드 Secrets 설정에서 APP_KEY 또는 APP_SECRET을 찾을 수 없습니다. (현재 감지된 보안키 목록: {list(st.secrets.keys())})")
         
-# ── [들여쓰기 정밀 보정] headers와 body는 공백 4칸, 하위 키들은 공백 8칸입니다 ──
     headers = {"content-type": "application/json"}
     body = {
         "grant_type": "client_credentials",
@@ -67,7 +83,7 @@ def get_access_token():
         "appsecret": app_secret
     }
     
-    url = "https://openapi.koreainvestment.com:9443/oauth2/tokenP"
+    url = f"{BASE_URL}/oauth2/tokenP"
     res = requests.post(url, headers=headers, json=body)
     data = res.json()
     
@@ -88,18 +104,6 @@ def get_access_token():
     else:
         err_msg = data.get("error_description", "한투 토큰 발급 실패")
         raise Exception(f"KIS Token Error: {err_msg}")
-    url = f"{BASE_URL}/oauth2/tokenP"
-    headers = {"content-type": "application/json"}
-    body = {
-        "grant_type": "client_credentials",
-        "appkey": APP_KEY,
-        "appsecret": APP_SECRET
-    }
-    res = requests.post(url, headers=headers, data=json.dumps(body))
-    data = res.json()
-    if "access_token" not in data:
-        raise Exception(str(data))
-    return data["access_token"]
 
 
 def get_current_price(ticker, token):
