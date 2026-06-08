@@ -10,6 +10,7 @@ from ui_components import (
     card, CANDLE_UP, CANDLE_DOWN, DIM, TEXT, SURFACE_1, SURFACE_2, LINE, BG, ACCENT
 )
 
+# ── [전역 도우미 함수 1] 네이버 금융 수급동향 억 원대 가공 크롤러 ──
 @st.cache_data(ttl=1800)
 def get_naver_supply_deal(investor_gubun="1000"):
     """네이버 금융 장 마감 확정 수급 데이터 백업 크롤러 (1000:외인, 9000:기관)"""
@@ -24,34 +25,37 @@ def get_naver_supply_deal(investor_gubun="1000"):
         res.encoding = 'cp949'
         
         soup = BeautifulSoup(res.text, "html.parser")
-        # 🎯 [버그 해결] ', tr'을 제거하여 인기검색어 사이드바 tr을 피하고 진짜 메인 수급 표(table.type_2)의 행만 정밀 타겟팅
-        rows = soup.select("table.type_2 tr")
+        # 🎯 [클래스 면역] 테이블 클래스명(type_r1 등) 변화에 상시 대응하기 위해 모든 'tr'을 대상으로 안전 수색
+        rows = soup.select("tr")
         result = []
         for row in rows:
             name_tag = row.select_one("a.company")
             if name_tag:
                 name = name_tag.text.strip()
+                cols = row.select("td")
                 
-                num_tds = row.select("td.number")
-                buy_val_str = "조회불가"
-                if num_tds:
-                    # 메인 수급 표의 가장 마지막 열(index -1)은 가격이 아니라 진짜 '순매수대금(백만 원)'입니다.
-                    raw_amount = num_tds[-1].text.strip()
+                # 안전한 순매수량 및 현재가 데이터 확보
+                if len(cols) >= 7:
+                    price = cols[2].text.strip() # 현재가 (예: 279,000)
+                    raw_amount = cols[6].text.strip() # 순매수량 (예: 279,000)
                     
                     try:
-                        # 백만 원 단위의 문자를 억 원 단위로 기입 연산 (100백만 원 = 1억 원)
-                        amount_val = int(raw_amount.replace(",", "").replace("-", ""))
-                        amount_in_hundred_million = amount_val / 100
+                        # 🎯 [수식 정밀 이식] 주식 수량(주)과 현재가를 곱하여 실제 순매수대금(억 원)을 역산출합니다.
+                        price_val = int(price.replace(",", ""))
+                        qty_val = int(raw_amount.replace(",", "").replace("-", ""))
                         
-                        # 음수(-) 부호 복원
+                        amount_won = qty_val * price_val
+                        amount_in_hundred_million = amount_won / 100000000 # 1억 원 = 100,000,000원
+                        
                         is_negative = "-" in raw_amount
                         sign = "-" if is_negative else ""
                         
                         buy_val_str = f"{sign}{amount_in_hundred_million:,.0f}억 원"
                     except:
-                        buy_val_str = f"{raw_amount}백만 원"
-                
-                result.append({"종목": name, "순매수": buy_val_str})
+                        # 연산 실패 시 안전한 기존 주식 수량으로 백업
+                        buy_val_str = f"{raw_amount}주"
+                    
+                    result.append({"종목": name, "순매수": buy_val_str})
                 
                 if len(result) == 5:
                     break
@@ -61,8 +65,209 @@ def get_naver_supply_deal(investor_gubun="1000"):
         return []
 
 
+# ── [전역 도우미 함수 2] 야후 파이낸스 무동기화 대비 실시간 보정 크롤러 ──
+def get_naver_market_data():
+    """야후 파이낸스 딜레이 방지를 위해 네이버 금융 메인에서 실시간 마감 지수를 크롤링합니다."""
+    try:
+        from bs4 import BeautifulSoup
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
+        }
+        url = "https://finance.naver.com/"
+        res = requests.get(url, headers=headers, timeout=5)
+        res.encoding = 'cp949'
+        soup = BeautifulSoup(res.text, "html.parser")
+        
+        result = {}
+        
+        # 1. 코스피 수집
+        kospi_area = soup.select_one(".kospi_area")
+        if kospi_area:
+            try:
+                price_str = kospi_area.select_one(".num").text.strip().replace(",", "")
+                change_str = kospi_area.select_one(".num2").text.strip().replace(",", "")
+                pct_str = kospi_area.select_one(".num3").text.strip().replace("%", "").replace("+", "").replace("-", "")
+                is_down = "down" in str(kospi_area) or "하락" in str(kospi_area) or "-" in kospi_area.select_one(".num3").text
+                sign = -1 if is_down else 1
+                result["코스피"] = {
+                    "price": float(price_str),
+                    "change": float(change_str) * sign,
+                    "pct": float(pct_str) * sign
+                }
+            except Exception as e:
+                print(f"KOSPI parse error: {e}")
+                
+        # 2. 코스닥 수집
+        kosdaq_area = soup.select_one(".kosdaq_area")
+        if kosdaq_area:
+            try:
+                price_str = kosdaq_area.select_one(".num").text.strip().replace(",", "")
+                change_str = kosdaq_area.select_one(".num2").text.strip().replace(",", "")
+                pct_str = kosdaq_area.select_one(".num3").text.strip().replace("%", "").replace("+", "").replace("-", "")
+                is_down = "down" in str(kosdaq_area) or "하락" in str(kosdaq_area) or "-" in kosdaq_area.select_one(".num3").text
+                sign = -1 if is_down else 1
+                result["코스닥"] = {
+                    "price": float(price_str),
+                    "change": float(change_str) * sign,
+                    "pct": float(pct_str) * sign
+                }
+            except Exception as e:
+                print(f"KOSDAQ parse error: {e}")
+                
+        # 3. 원/달러 환율 수집
+        try:
+            exchange_area = soup.select_one(".aside_area #exchangeList, #exchangeList")
+            if exchange_area:
+                usd_item = exchange_area.select_one("li")
+                if usd_item:
+                    usd_val_str = usd_item.select_one(".value").text.strip().replace(",", "")
+                    usd_change_str = usd_item.select_one(".change").text.strip().replace(",", "")
+                    is_down = "down" in str(usd_item) or "하락" in str(usd_item)
+                    sign = -1 if is_down else 1
+                    
+                    price_val = float(usd_val_str)
+                    change_val = float(usd_change_str) * sign
+                    prev_val = price_val - change_val
+                    pct_val = (change_val / prev_val) * 100 if prev_val != 0 else 0
+                    
+                    result["원/달러"] = {
+                        "price": price_val,
+                        "change": change_val,
+                        "pct": pct_val
+                    }
+        except Exception as e:
+            print(f"Exchange rate parse error: {e}")
+            
+        return result
+    except Exception as e:
+        print(f"네이버 금융 지수 크롤링 실패: {e}")
+        return {}
+
+
+# ── [전역 도우미 함수 3] 하이브리드 시장 지표 취득 연동기 ──
+@st.cache_data(ttl=300)
+def get_market_data():
+    """네이버 금융 우선 매칭 기조의 하이브리드 시장 분석 데이터 연동기"""
+    indices = {
+        "코스피": "^KS11",
+        "코스닥": "^KQ11",
+        "나스닥": "^IXIC",
+        "원/달러": "USDKRW=X",
+        "WTI유": "CL=F",
+        "금": "GC=F",
+        "미국10년채": "^TNX"
+    }
+    
+    # 네이버에서 최신 실시간 지수를 수집합니다.
+    naver_data = get_naver_market_data()
+    result = []
+    
+    for name, ticker in indices.items():
+        # 국내 핵심 정보(코스피, 코스닥, 원달러)는 네이버의 당일 마감 종결값을 최우선적으로 채택하여 야후 딜레이를 방지합니다.
+        if name in naver_data:
+            result.append({
+                "name": name,
+                "price": naver_data[name]["price"],
+                "change": naver_data[name]["change"],
+                "pct": naver_data[name]["pct"]
+            })
+            continue
+            
+        # 해외 거시 지표는 야후 파이낸스를 통해 로드합니다.
+        try:
+            hist = yf.Ticker(ticker).history(period="5d").dropna(subset=["Close"])
+            if len(hist) >= 2:
+                curr = hist["Close"].iloc[-1]
+                prev = hist["Close"].iloc[-2]
+                chg = curr - prev
+                chg_pct = (chg / prev) * 100
+                result.append({"name": name, "price": curr, "change": chg, "pct": chg_pct})
+        except:
+            pass
+    return result
+
+
+# ── [전역 도우미 함수 4] 거래대금 기준 퀀트 정렬 TOP 10 로직 ──
+@st.cache_data(ttl=300)
+def get_top_volume():
+    try:
+        from bs4 import BeautifulSoup
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
+        }
+        # 🎯 404 차단 우려가 전혀 없는 100개 거래량 페이지를 기본 로드합니다.
+        url = "https://finance.naver.com/sise/sise_quant.naver?sosok=0"
+        res = requests.get(url, headers=headers, timeout=5)
+        soup = BeautifulSoup(res.text, "html.parser")
+        
+        # 🎯 [클래스 면역] 모든 tr을 수색 타겟팅하여 수집 신뢰성을 확보합니다.
+        rows = soup.select("tr")
+        
+        unsorted_result = []
+        
+        for row in rows:
+            cols = row.select("td")
+            if len(cols) >= 7:
+                name_tag = cols[1].select_one("a")
+                if name_tag:
+                    name = name_tag.text.strip()
+                    price = cols[2].text.strip()
+                    raw_amount = cols[6].text.strip() # 백만 원 단위 거래대금 취득
+                    
+                    if not name:
+                        continue
+                    
+                    etf_keywords = [
+                        "KODEX", "TIGER", "KBSTAR", "ARIRANG", "HANARO", "KOSEF", "PLUS", "ACE", "SOL", 
+                        "TIMEFOLIO", "ETF", "ETN", "인버스", "레버리지", "선물", "RISE", "WOORI"
+                    ]
+                    if not any(k in name for k in etf_keywords):
+                        try:
+                            # 콤마 제거 후 연산 정렬용 정수값 저장
+                            amount_val = int(raw_amount.replace(",", ""))
+                        except:
+                            amount_val = 0
+                            
+                        price_formatted = f"{price}원" if price and not price.endswith("원") else price
+                        
+                        unsorted_result.append({
+                            "종목": name, 
+                            "현재가": price_formatted, 
+                            "amount_val": amount_val, # 정렬 지표 키 등록
+                            "raw_amount": raw_amount
+                        })
+        
+        # 🎯 [자체 퀀트 소팅] 백바다에서 수집한 주식 리스트를 진짜 '거래대금(amount_val)' 기준 내림차순으로 정렬합니다.
+        sorted_result = sorted(unsorted_result, key=lambda x: x["amount_val"], reverse=True)
+        
+        final_top_10 = []
+        for item in sorted_result[:10]:
+            amount_val = item["amount_val"]
+            amount_in_hundred_million = amount_val / 100 # 100백만 원 = 1억 원
+            
+            if amount_in_hundred_million >= 10000:
+                trillion = int(amount_in_hundred_million // 10000)
+                billion = int(amount_in_hundred_million % 10000)
+                if billion > 0:
+                    amount_formatted = f"{trillion}조 {billion:,}억 원"
+                else:
+                    amount_formatted = f"{trillion}조 원"
+            else:
+                amount_formatted = f"{amount_in_hundred_million:,.0f}억 원"
+            
+            final_top_10.append({
+                "종목": item["종목"],
+                "현재가": item["현재가"],
+                "거래대금": amount_formatted
+            })
+        return final_top_10
+    except Exception as e:
+        print(f"거래대금 순위 수집 오류: {e}")
+        return []
+
+
+# ── [전역 함수 5] 메인 대시보드 오케스트레이터 및 하위 화면 제어 ──
 def render_report():
-    # 🎯 서버 가동 서버가 해외(UTC)여도 항상 정확한 서울 KST 시간 기준으로 시계 가동
     timezone_kst = dt.timezone(dt.timedelta(hours=9))
     now_kst = dt.datetime.now(timezone_kst)
     st.markdown(
@@ -83,31 +288,6 @@ def render_daily_report():
 
     # ── 1. 시장 현황 ──
     card("🌐 시장 현황", "주요 지수 · 환율 · 원자재 실시간")
-
-    @st.cache_data(ttl=300)
-    def get_market_data():
-        indices = {
-            "코스피": "^KS11",
-            "코스닥": "^KQ11",
-            "나스닥": "^IXIC",
-            "원/달러": "USDKRW=X",
-            "WTI유": "CL=F",
-            "금": "GC=F",
-            "미국10년채": "^TNX"
-        }
-        result = []
-        for name, ticker in indices.items():
-            try:
-                hist = yf.Ticker(ticker).history(period="5d").dropna(subset=["Close"])
-                if len(hist) >= 2:
-                    curr = hist["Close"].iloc[-1]
-                    prev = hist["Close"].iloc[-2]
-                    chg = curr - prev
-                    chg_pct = (chg / prev) * 100
-                    result.append({"name": name, "price": curr, "change": chg, "pct": chg_pct})
-            except:
-                pass
-        return result
 
     with st.spinner("시장 데이터 불러오는 중..."):
         market_data = get_market_data()
@@ -131,7 +311,7 @@ def render_daily_report():
     # ── 2. 관심종목 신호 리포트 ──
     signal_rows = []
     if st.session_state.get("watchlist"):
-        card("🔔 관심종목 신호 리포트", "RSI 기준 매수/매도 신호 · 내일 변성 돌파 목표가")
+        card("🔔 관심종목 신호 리포트", "RSI 기준 매수/매도 신호 · 내일 변동성 돌파 목표가")
 
         @st.cache_data(ttl=300)
         def get_signal_report(watchlist):
@@ -246,58 +426,6 @@ def render_daily_report():
     </div>
     """, unsafe_allow_html=True)
 
-    @st.cache_data(ttl=900)
-    def calculate_smi_yfinance():
-        try:
-            df = yf.download("^KS11", period="5d", interval="15m", progress=False)
-            if df.empty:
-                return None
-                
-            if isinstance(df.columns, pd.MultiIndex):
-                df.columns = df.columns.get_level_values(0)
-                
-            df = df.copy()
-            df.index = df.index.tz_convert("Asia/Seoul")
-            df["Date"] = df.index.date
-            unique_dates = sorted(df["Date"].unique())
-            
-            smi_value = 10000.0  # 지수 시작 시그니처 포인트
-            smi_history = []
-            
-            for d in unique_dates:
-                day_data = df[df["Date"] == d].sort_index()
-                if len(day_data) < 4:
-                    continue
-                
-                try:
-                    open_0900 = day_data.iloc[0]["Open"]
-                    cand_0930 = day_data.between_time("09:15", "09:35")
-                    close_0930 = cand_0930.iloc[-1]["Close"] if not cand_0930.empty else day_data.iloc[2]["Close"]
-                    morning_change = close_0930 - open_0900
-                except:
-                    morning_change = 0.0
-                
-                try:
-                    close_1530 = day_data.iloc[-1]["Close"]
-                    cand_1500 = day_data.between_time("14:55", "15:05")
-                    open_1500 = cand_1500.iloc[0]["Open"] if not cand_1500.empty else day_data.iloc[-3]["Open"]
-                    afternoon_change = close_1530 - open_1500
-                except:
-                    afternoon_change = 0.0
-                
-                smi_value = smi_value - morning_change + afternoon_change
-                smi_history.append({
-                    "날짜": d.strftime("%m/%d"),
-                    "SMI": round(smi_value, 2),
-                    "KOSPI": round(day_data.iloc[-1]["Close"], 2),
-                    "오전변동": round(morning_change, 2),
-                    "오후변동": round(afternoon_change, 2)
-                })
-            return pd.DataFrame(smi_history)
-        except Exception as e:
-            print(f"SMI 연산 오류: {e}")
-            return None
-
     with st.spinner("해외자본 및 국내 기관의 장바구니 분석 중..."):
         smi_df = calculate_smi_yfinance()
         
@@ -383,8 +511,8 @@ def render_daily_report():
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
             font={'color': TEXT, 'family': "NanumGothic"},
-            margin=dict(l=30, r=30, t=10, b=10), # 아래 마진에 10px의 패딩을 주어 짤림 현상을 원천 방지합니다.
-            height=220 # 가상 높이를 220으로 확대하여 틱 라벨 전체를 부드럽게 감쌉니다.
+            margin=dict(l=30, r=30, t=10, b=30), # 하단 마진을 30px로 넉넉하게 주어 잘림 현상을 원천 방지합니다.
+            height=250 # 가상 높이를 250으로 확대하여 틱 라벨 전체를 부드럽게 감쌉니다.
         )
         st.plotly_chart(fig, use_container_width=True)
 
@@ -492,80 +620,6 @@ def render_daily_report():
 
     # ── 7. 거래대금 상위 ──
     card("📊 거래대금 상위 TOP 10", "오늘 가장 많이 거래된 종목")
-
-    @st.cache_data(ttl=300)
-    def get_top_volume():
-        try:
-            from bs4 import BeautifulSoup
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
-            }
-            # 🎯 [우회 성공] 404 차단 우려가 전혀 없는 100개 거래량 페이지를 기본 로드합니다.
-            url = "https://finance.naver.com/sise/sise_quant.naver?sosok=0"
-            res = requests.get(url, headers=headers, timeout=5)
-            soup = BeautifulSoup(res.text, "html.parser")
-            rows = soup.select("table.type_2 tr")
-
-            unsorted_result = []
-
-            for row in rows:
-                cols = row.select("td")
-                if len(cols) >= 7:
-                    name = cols[1].text.strip()
-                    price = cols[2].text.strip()
-                    raw_amount = cols[6].text.strip() # 백만 원 단위 거래대금 취득
-
-                    if not name:
-                        continue
-
-                    etf_keywords = [
-                        "KODEX", "TIGER", "KBSTAR", "ARIRANG", "HANARO", "KOSEF", "PLUS", "ACE", "SOL",
-                        "TIMEFOLIO", "ETF", "ETN", "인버스", "레버리지", "선물", "RISE", "WOORI"
-                    ]
-                    if not any(k in name for k in etf_keywords):
-                        try:
-                            # 콤마 제거 후 연산 정렬용 정수값 저장
-                            amount_val = int(raw_amount.replace(",", ""))
-                        except:
-                            amount_val = 0
-
-                        price_formatted = f"{price}원" if price and not price.endswith("원") else price
-
-                        unsorted_result.append({
-                            "종목": name,
-                            "현재가": price_formatted,
-                            "amount_val": amount_val, # 정렬 지표 키 등록
-                            "raw_amount": raw_amount
-                        })
-
-            # 🎯 [자체 퀀트 소팅] 백바다에서 수집한 80개 주식 리스트를 진짜 '거래대금(amount_val)' 기준 내림차순으로 강력 정렬!
-            sorted_result = sorted(unsorted_result, key=lambda x: x["amount_val"], reverse=True)
-
-            final_top_10 = []
-            # 가장 대금이 큰 최상위 10개만 슬라이싱하여 최종 가공 출력
-            for item in sorted_result[:10]:
-                amount_val = item["amount_val"]
-                amount_in_hundred_million = amount_val / 100 # 100백만 원 = 1억 원
-
-                if amount_in_hundred_million >= 10000:
-                    trillion = int(amount_in_hundred_million // 10000)
-                    billion = int(amount_in_hundred_million % 10000)
-                    if billion > 0:
-                        amount_formatted = f"{trillion}조 {billion:,}억 원"
-                    else:
-                        amount_formatted = f"{trillion}조 원"
-                else:
-                    amount_formatted = f"{amount_in_hundred_million:,.0f}억 원"
-
-                final_top_10.append({
-                    "종목": item["종목"],
-                    "현재가": item["현재가"],
-                    "거래대금": amount_formatted
-                })
-            return final_top_10
-        except Exception as e:
-            print(f"거래대금 순위 수집 오류: {e}")
-            return []
 
     with st.spinner("거래대금 데이터 불러오는 중..."):
         volume_data = get_top_volume()
@@ -734,7 +788,7 @@ def render_daily_report():
                         headers={"Content-Type": "application/json", "Authorization": f"Bearer {groq_key}"},
                         json={
                             "model": "llama-3.3-70b-versatile",
-                            "messages": [{"role": "user", "content": rec_prompt}],
+                            "messages": [{"role": "user", "content": prompt}],
                             "max_tokens": 700
                         }
                     )
