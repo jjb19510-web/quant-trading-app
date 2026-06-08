@@ -241,12 +241,10 @@ def render_daily_report():
     @st.cache_data(ttl=900)
     def calculate_smi_yfinance():
         try:
-            # 야후 파이낸스에서 KOSPI 지수(^KS11) 최근 5일간의 15분 단위 인트라데이 데이터 다운로드
             df = yf.download("^KS11", period="5d", interval="15m", progress=False)
             if df.empty:
                 return None
                 
-            # 멀티인덱스 칼럼 구조 안전 해제
             if isinstance(df.columns, pd.MultiIndex):
                 df.columns = df.columns.get_level_values(0)
                 
@@ -263,7 +261,6 @@ def render_daily_report():
                 if len(day_data) < 4:
                     continue
                 
-                # 1. 오전 첫 30분 (09:00 시가 ~ 09:30 종가) 변동폭 연산 -> "개인 중심의 장초반 분위기"
                 try:
                     open_0900 = day_data.iloc[0]["Open"]
                     cand_0930 = day_data.between_time("09:15", "09:35")
@@ -272,7 +269,6 @@ def render_daily_report():
                 except:
                     morning_change = 0.0
                 
-                # 2. 오후 마지막 30분 (15:00 종가 ~ 15:30 종가) 변동폭 연산 -> "외국인·기관 중심의 종가 결정"
                 try:
                     close_1530 = day_data.iloc[-1]["Close"]
                     cand_1500 = day_data.between_time("14:55", "15:05")
@@ -281,7 +277,6 @@ def render_daily_report():
                 except:
                     afternoon_change = 0.0
                 
-                # SMI 계산 적용
                 smi_value = smi_value - morning_change + afternoon_change
                 smi_history.append({
                     "날짜": d.strftime("%m/%d"),
@@ -299,24 +294,26 @@ def render_daily_report():
         smi_df = calculate_smi_yfinance()
         
     if smi_df is not None and not smi_df.empty:
-        # ── 상단 2개 요약 상황판 카드 배치 ──
         last_row = smi_df.iloc[-1]
         prev_row = smi_df.iloc[-2] if len(smi_df) > 1 else last_row
         smi_diff = last_row["SMI"] - prev_row["SMI"]
         
-        # 오늘 종가 기준 시장 지배 수급 세력 판별
-        if last_row["오후변동"] > 0:
+        # 오늘 종가 기준 시장 지배 수급 세력 판별 및 행동 가이드
+        if smi_diff > 80:
             leadership = "🟢 해외자본·국내기관 매수 우위"
             lead_color = "#22c55e" # 그린
             advice_text = "외국인 투자자들과 국내 대형 기관들이 주식을 대량으로 사 모으고 있습니다. 우리도 우량한 주식을 함께 모아가기 매우 좋은 타이밍입니다."
-        elif last_row["오후변동"] < 0:
+            gauge_status = "강력 매수 신호 🔥"
+        elif smi_diff < -80:
             leadership = "🔴 개인 투자자 매수 우위 (기관·외인 관망)"
             lead_color = "#ef4444" # 레드
             advice_text = "외국인 투자자들과 대형 기관들이 시장에서 자금을 회수하고 있습니다. 지금은 무리하게 매수하기보다는 현금을 확보하고 한 걸음 물러나 관망하는 편이 안전합니다."
+            gauge_status = "리스크 관리 권고 ⚠️"
         else:
             leadership = "🟡 수급 혼조세 (방향성 탐색 중)"
             lead_color = "#f59e0b" # 주황
             advice_text = "시장 주도 세력들도 방향성을 고민하며 관망하는 상태입니다. 무리한 진입을 피하고 차분하게 시장 흐름을 주시할 필요가 있습니다."
+            gauge_status = "관망 및 숨고르기 ⚖️"
 
         c1, c2 = st.columns(2)
         with c1:
@@ -342,36 +339,50 @@ def render_daily_report():
         </div>
         """, unsafe_allow_html=True)
 
-        # ── 머리 아픈 이중 축 대신 '단일 직선형 그래프'로 고화질 시각화 ──
-        fig = go.Figure()
-        
-        fig.add_trace(go.Scatter(
-            x=smi_df["날짜"], 
-            y=smi_df["SMI"],
-            mode="lines+markers+text",
-            text=[f"{val:,.0f}점" for val in smi_df["SMI"]],
-            textposition="top center",
-            name="수급 집중 지수",
-            line=dict(color=ACCENT, width=4, shape="linear"), # 직선 형태로 완벽 복구
-            marker=dict(size=8, color=ACCENT)
+        # ── 3초 판독용 플롯리 반원형 게이지 차트(SMI Gauge) 구성 ──
+        # 차트 범위는 한국 증시 하루 변동폭의 최대 강도를 고려해 -500 ~ +500 점수로 한정합니다.
+        fig = go.Figure(go.Indicator(
+            mode="gauge+number",
+            value=smi_diff,
+            domain={'x': [0, 1], 'y': [0, 1]},
+            gauge={
+                'axis': {
+                    'range': [-500, 500], 
+                    'tickwidth': 1, 
+                    'tickcolor': "#9ca3af",
+                    'tickvals': [-500, -250, 0, 250, 500],
+                    'ticktext': ["위험 (-500)", "주의", "관망 (0)", "우호", "매수 집중 (+500)"]
+                },
+                'bar': {'color': ACCENT, 'thickness': 0.25}, # 수급 온도 바늘 색상
+                'bgcolor': "rgba(0,0,0,0)",
+                'borderwidth': 1.5,
+                'bordercolor': LINE,
+                'steps': [
+                    {'range': [-500, -100], 'color': "rgba(239, 68, 68, 0.12)"},  # 소프트 레드 (개인 투매 영역) [1]
+                    {'range': [-100, 100], 'color': "rgba(245, 158, 11, 0.12)"},   # 소프트 오렌지 (보통/관망) [1]
+                    {'range': [100, 500], 'color': "rgba(34, 197, 94, 0.12)"}     # 소프트 그린 (외국인·기관 주도) [1]
+                ],
+                'threshold': {
+                    'line': {'color': lead_color, 'width': 5},
+                    'thickness': 0.8,
+                    'value': smi_diff
+                }
+            }
         ))
         
+        # 다크 블루 금융 테마에 맞춤형 투명 배경 및 폰트 연동
         fig.update_layout(
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
-            margin=dict(l=10, r=10, t=20, b=10),
-            height=220, # 슬림한 레이아웃 구성
-            xaxis=dict(
-                showgrid=True, gridcolor=LINE, tickfont=dict(color="#9ca3af")
-            ),
-            yaxis=dict(
-                title=dict(
-                    text="수급 집중 지수 (점수)",
-                    font=dict(color=ACCENT, size=11)
-                ),
-                tickfont=dict(color="#9ca3af"),
-                showgrid=True, gridcolor=LINE
-            )
+            font={'color': TEXT, 'family': "NanumGothic"},
+            margin=dict(l=30, r=30, t=40, b=10),
+            height=200,
+            annotations=[dict(
+                text=f"현재 수급 온도: {gauge_status}",
+                x=0.5, y=-0.15,
+                showarrow=False,
+                font=dict(size=14, color=TEXT, weight="bold")
+            )]
         )
         st.plotly_chart(fig, use_container_width=True)
         
@@ -379,10 +390,10 @@ def render_daily_report():
         st.markdown(f"""
         <div style='font-size: 13px; line-height: 1.65; color:{TEXT}; margin-top: 16px;'>
             💡 <b>금일 마켓 뷰 (Market View):</b><br/>
-            오늘 종합지수(KOSPI)는 전반적으로 약세를 보이며 하락 마감했습니다. 
-            하지만 시장 내부의 진짜 수급 흐름을 자세히 들여다보면 대단히 긍정적인 반전 신호가 포착되었습니다.<br/><br/>
-            아침 개장 직후에는 시장 분위기에 크게 동요한 개인 투자자들이 공포감에 주식을 급하게 던지는 **불안성 투매(패닉셀) 물량**이 쏟아져 나오며 지수를 끌어내렸습니다. 
-            그러나 주가가 저렴해진 오후 시간대에 접어들자, <b>해외자본(외국인)과 대형 기관 투자자</b>들이 이 매물들을 아래에서 대량으로 흡수하기 시작했습니다. 결과적으로 큰손들이 개인 투자자들의 투매 물량을 장 마감 직전에 아주 성공적으로 소화해 낸 형태입니다.<br/><br/>
+            오늘 전체 주식 지수(KOSPI)는 전반적으로 약세를 보이며 지수 하강 압력을 이겨내지 못했습니다. 
+            하지만 시장 내부의 진짜 수급 흐름을 자세히 들여다보면 대단히 유의미한 수급 반전 신호가 포착되었습니다.<br/><br/>
+            아침 개장 직후에는 시장 분위기에 크게 동요한 개인 투자자들이 공포감에 주식을 급하게 던지는 **불안성 투매(패닉셀)** 물량이 쏟아져 나오며 주가를 끌어내렸습니다. 
+            그러나 주가가 저렴해진 오후 시간대에 접어들자, <b>해외자본(외국인)과 대형 기관 투자자</b>들이 이 매물들을 아래에서 대량으로 흡수하기 시작했습니다. 결과적으로 외국인과 기관이 개인 투자자들의 투매 물량을 장 마감 직전에 아주 성공적으로 소화해 낸 형태입니다.<br/><br/>
             따라서 일시적으로 지수가 하락했다고 해서 성급하게 주식을 던지기보다는, 외국인과 대형 기관의 탄탄한 하방 수급 지지력을 바탕으로 가치 있는 핵심 우량주를 분할 매수해 나가는 포트폴리오 전략이 장기적으로 훨씬 유리할 것으로 분석됩니다.
         </div>
         """, unsafe_allow_html=True)
@@ -484,7 +495,6 @@ def render_daily_report():
     def get_top_volume():
         try:
             from bs4 import BeautifulSoup
-            # 크롤러 헤더 보강 및 타임아웃 조율
             headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
             }
@@ -494,34 +504,47 @@ def render_daily_report():
             rows = soup.select("table.type_2 tr")
             result = []
             
-            # 수집 범위를 충분히 확보하여 ETF 및 최신 금융 상품 노이즈를 걷어냅니다.
             for row in rows[2:80]:
                 cols = row.select("td")
-                if len(cols) >= 6:
+                # 주식 개수가 아닌, Naver 거래대금 컬럼인 cols[6]을 명확히 타겟팅합니다.
+                if len(cols) >= 7:
                     name = cols[1].text.strip()
                     price = cols[2].text.strip()
-                    volume = cols[5].text.strip()
+                    raw_amount = cols[6].text.strip() # 백만 원 단위 거래대금 취득
                     
                     if not name:
                         continue
                     
-                    # 최신 리브랜딩 브랜드인 'RISE' 및 대형사 ETF 키워드를 추가로 수색하여 완벽 정화
                     etf_keywords = [
                         "KODEX", "TIGER", "KBSTAR", "ARIRANG", "HANARO", "KOSEF", "PLUS", "ACE", "SOL", 
                         "TIMEFOLIO", "ETF", "ETN", "인버스", "레버리지", "선물", "RISE", "WOORI"
                     ]
                     if not any(k in name for k in etf_keywords):
-                        # 가격과 수량 뒤에 단위 표시 부착
                         price_formatted = f"{price}원" if price and not price.endswith("원") else price
-                        volume_formatted = f"{volume}주" if volume and not volume.endswith("주") else volume
+                        
+                        # 억 원 및 조 원 단위 정밀 변환 연산
+                        try:
+                            amount_val = int(raw_amount.replace(",", ""))
+                            amount_in_hundred_million = amount_val / 100 # 100백만 원 = 1억 원
+                            
+                            if amount_in_hundred_million >= 10000: # 1조 원을 넘어서는 대자금 유입 종목 처리
+                                trillion = int(amount_in_hundred_million // 10000)
+                                billion = int(amount_in_hundred_million % 10000)
+                                if billion > 0:
+                                    amount_formatted = f"{trillion}조 {billion:,}억 원"
+                                else:
+                                    amount_formatted = f"{trillion}조 원"
+                            else:
+                                amount_formatted = f"{amount_in_hundred_million:,.0f}억 원"
+                        except:
+                            amount_formatted = f"{raw_amount}백만 원"
                         
                         result.append({
                             "종목": name, 
                             "현재가": price_formatted, 
-                            "거래량": volume_formatted
+                            "거래대금": amount_formatted # 거래량 주식 수량에서 금액 표기로 완전 전환
                         })
                     
-                    # 알짜 우량주 10개 종목이 채워지면 루프 조기 완료
                     if len(result) == 10:
                         break
             return result
