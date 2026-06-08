@@ -658,7 +658,58 @@ def render_daily_report():
                 story.append(t3)
                 story.append(Spacer(1, 14))
 
-            # 🧠 4. AI 시장 분석 및 종합 전망 (블록쿼트형 리포트 카드 적용)
+            # 🏦 [신규 통합] 4. 증권사 컨센서스(공통) 추천주 (네이티브 마크다운 표 자동 파싱 인쇄)
+            consensus_markdown = st.session_state.get("broker_consensus_table", "")
+            if consensus_markdown:
+                story.append(Paragraph("🏦 증권사 컨센서스(공통) 추천주", h2_style))
+                
+                # 마크다운 문자열 표 -> 리스크 없는 리스트 파싱 전처리
+                lines = consensus_markdown.strip().split("\n")
+                parsed_table_data = []
+                for line in lines:
+                    if not line.strip():
+                        continue
+                    if "---" in line or ":::" in line:
+                        continue
+                    parts = [cell.strip() for cell in line.split("|")]
+                    if parts and parts[0] == "":
+                        parts = parts[1:]
+                    if parts and parts[-1] == "":
+                        parts = parts[:-1]
+                    if parts:
+                        parsed_table_data.append(parts)
+                
+                if len(parsed_table_data) >= 2:
+                    # 표의 텍스트가 경계선을 넘지 않도록 Paragraph 스타일 감싸기 (자동 줄바꿈 지원)
+                    final_table_data = []
+                    # 헤더 스타일
+                    final_table_data.append([Paragraph(cell, ParagraphStyle('h_cell', fontName='NanumGothic', fontSize=9, textColor=colors.white, alignment=1)) for cell in parsed_table_data[0]])
+                    
+                    # 바디 스타일 (추천사유 컬럼만 좌측 정렬, 나머지는 중앙 정렬)
+                    cell_style_center = ParagraphStyle('c_cell', fontName='NanumGothic', fontSize=8, leading=11, alignment=1)
+                    cell_style_left = ParagraphStyle('l_cell', fontName='NanumGothic', fontSize=8, leading=11, alignment=0)
+                    
+                    for r_idx, row in enumerate(parsed_table_data[1:]):
+                        row_cells = []
+                        for c_idx, cell in enumerate(row):
+                            style = cell_style_left if c_idx == 2 else cell_style_center
+                            row_cells.append(Paragraph(cell, style))
+                        final_table_data.append(row_cells)
+                    
+                    # 용지 가로 규격(523pt)에 맞춰 분배
+                    t4 = Table(final_table_data, colWidths=[120, 110, 293])
+                    t4.setStyle(TableStyle([
+                        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#0f172a")),
+                        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                        ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+                        ('TOPPADDING', (0,0), (-1,-1), 6),
+                        ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor("#f8fafc")]),
+                        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#e2e8f0")),
+                    ]))
+                    story.append(t4)
+                    story.append(Spacer(1, 14))
+
+            # 🧠 5. AI 시장 분석 및 종합 전망 (블록쿼트형 리포트 카드 적용)
             ai_summary = st.session_state.get("ai_summary", "")
             if ai_summary:
                 story.append(Paragraph("🧠 AI 시장 종합 브리핑", h2_style))
