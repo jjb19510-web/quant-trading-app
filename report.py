@@ -12,38 +12,46 @@ from ui_components import (
 
 @st.cache_data(ttl=1800)
 def get_naver_supply_deal(investor_gubun="1000"):
-    """네이버 금융 장 마감 확정 수급 데이터 백업 크롤러 (1000:외인, 1500:기관, 9000:개인)"""
+    """네이버 금융 장 마감 확정 수급 데이터 백업 크롤러 (1000:외인, 9000:기관)"""
     try:
         from bs4 import BeautifulSoup
-        # 봇 감지 차단 방지를 위한 완전한 Chrome 브라우저 User-Agent 탑재
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
         }
-        # .nhn 대신 최신 .naver 주소를 다이렉트로 지목하여 리다이렉트 누수 방지
         url = f"https://finance.naver.com/sise/sise_deal_rank.naver?investor_gubun={investor_gubun}&sosok=0"
         res = requests.get(url, headers=headers, timeout=10)
         
         res.encoding = 'cp949'
         
         soup = BeautifulSoup(res.text, "html.parser")
-        # 수급 데이터 tr 행 선택 정밀화
-        rows = soup.select("table.type_2 tr, tr")
+        # 🎯 [버그 해결] ', tr'을 제거하여 인기검색어 사이드바 tr을 피하고 진짜 메인 수급 표(table.type_2)의 행만 정밀 타겟팅
+        rows = soup.select("table.type_2 tr")
         result = []
         for row in rows:
             name_tag = row.select_one("a.company")
             if name_tag:
                 name = name_tag.text.strip()
                 
-                # 열 순서가 변경되어도 안전하도록 수식 셀(td.number)의 마지막 값을 유연하게 취득
                 num_tds = row.select("td.number")
-                buy_qty = "조회불가"
+                buy_val_str = "조회불가"
                 if num_tds:
-                    buy_qty = num_tds[-1].text.strip()
-                    # 금액 형태가 아닌 순수 숫자인 경우 주(株) 단위를 세련되게 주입
-                    if not buy_qty.endswith("주") and not buy_qty.endswith("억") and buy_qty.replace(",", "").replace("-", "").isdigit():
-                        buy_qty = buy_qty + "주"
+                    # 메인 수급 표의 가장 마지막 열(index -1)은 가격이 아니라 진짜 '순매수대금(백만 원)'입니다.
+                    raw_amount = num_tds[-1].text.strip()
+                    
+                    try:
+                        # 백만 원 단위의 문자를 억 원 단위로 기입 연산 (100백만 원 = 1억 원)
+                        amount_val = int(raw_amount.replace(",", "").replace("-", ""))
+                        amount_in_hundred_million = amount_val / 100
+                        
+                        # 음수(-) 부호 복원
+                        is_negative = "-" in raw_amount
+                        sign = "-" if is_negative else ""
+                        
+                        buy_val_str = f"{sign}{amount_in_hundred_million:,.0f}억 원"
+                    except:
+                        buy_val_str = f"{raw_amount}백만 원"
                 
-                result.append({"종목": name, "순매수": buy_qty})
+                result.append({"종목": name, "순매수": buy_val_str})
                 
                 if len(result) == 5:
                     break
@@ -225,7 +233,7 @@ def render_daily_report():
 
     st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
 
-   # ── 5. 스마트 머니 인덱스 ──
+    # ── 5. 스마트 머니 인덱스 ──
     card("🧠 스마트 머니 인덱스 (SMI)", "외국인 및 기관 장막판 수급 동향")
     
     # 💡 초보자를 위한 초간단 설명 카드
@@ -370,12 +378,13 @@ def render_daily_report():
         ))
         
         # 🎯 차트 마진을 축소하고 텍스트 레이어를 밖으로 뺍니다.
+        # 다크 블루 금융 테마에 맞춤형 투명 배경 및 폰트 연동
         fig.update_layout(
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
             font={'color': TEXT, 'family': "NanumGothic"},
-            margin=dict(l=30, r=30, t=10, b=0), # 아래 마진을 극도로 축소하여 여백을 확보합니다.
-            height=180 # 슬림하게 조절하여 잘림 현상을 완전 방지합니다.
+            margin=dict(l=30, r=30, t=10, b=10), # 아래 마진에 10px의 패딩을 주어 짤림 현상을 원천 방지합니다.
+            height=220 # 가상 높이를 220으로 확대하여 틱 라벨 전체를 부드럽게 감쌉니다.
         )
         st.plotly_chart(fig, use_container_width=True)
 
@@ -491,55 +500,69 @@ def render_daily_report():
             headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
             }
-            # 🎯 [긴급 정정] 거래량 기준 sise_quant가 아닌, 진짜 거래대금 랭킹인 sise_toppr 호출로 교체
-            url = "https://finance.naver.com/sise/sise_toppr.naver?sosok=0"
+            # 🎯 [우회 성공] 404 차단 우려가 전혀 없는 100개 거래량 페이지를 기본 로드합니다.
+            url = "https://finance.naver.com/sise/sise_quant.naver?sosok=0"
             res = requests.get(url, headers=headers, timeout=5)
             soup = BeautifulSoup(res.text, "html.parser")
             rows = soup.select("table.type_2 tr")
-            result = []
-            
-            for row in rows[2:80]:
+
+            unsorted_result = []
+
+            for row in rows:
                 cols = row.select("td")
                 if len(cols) >= 7:
                     name = cols[1].text.strip()
                     price = cols[2].text.strip()
                     raw_amount = cols[6].text.strip() # 백만 원 단위 거래대금 취득
-                    
+
                     if not name:
                         continue
-                    
+
                     etf_keywords = [
-                        "KODEX", "TIGER", "KBSTAR", "ARIRANG", "HANARO", "KOSEF", "PLUS", "ACE", "SOL", 
+                        "KODEX", "TIGER", "KBSTAR", "ARIRANG", "HANARO", "KOSEF", "PLUS", "ACE", "SOL",
                         "TIMEFOLIO", "ETF", "ETN", "인버스", "레버리지", "선물", "RISE", "WOORI"
                     ]
                     if not any(k in name for k in etf_keywords):
-                        price_formatted = f"{price}원" if price and not price.endswith("원") else price
-                        
                         try:
+                            # 콤마 제거 후 연산 정렬용 정수값 저장
                             amount_val = int(raw_amount.replace(",", ""))
-                            amount_in_hundred_million = amount_val / 100 # 100백만 원 = 1억 원
-                            
-                            if amount_in_hundred_million >= 10000:
-                                trillion = int(amount_in_hundred_million // 10000)
-                                billion = int(amount_in_hundred_million % 10000)
-                                if billion > 0:
-                                    amount_formatted = f"{trillion}조 {billion:,}억 원"
-                                else:
-                                    amount_formatted = f"{trillion}조 원"
-                            else:
-                                amount_formatted = f"{amount_in_hundred_million:,.0f}억 원"
                         except:
-                            amount_formatted = f"{raw_amount}백만 원"
-                        
-                        result.append({
-                            "종목": name, 
-                            "현재가": price_formatted, 
-                            "거래대금": amount_formatted
+                            amount_val = 0
+
+                        price_formatted = f"{price}원" if price and not price.endswith("원") else price
+
+                        unsorted_result.append({
+                            "종목": name,
+                            "현재가": price_formatted,
+                            "amount_val": amount_val, # 정렬 지표 키 등록
+                            "raw_amount": raw_amount
                         })
-                    
-                    if len(result) == 10:
-                        break
-            return result
+
+            # 🎯 [자체 퀀트 소팅] 백바다에서 수집한 80개 주식 리스트를 진짜 '거래대금(amount_val)' 기준 내림차순으로 강력 정렬!
+            sorted_result = sorted(unsorted_result, key=lambda x: x["amount_val"], reverse=True)
+
+            final_top_10 = []
+            # 가장 대금이 큰 최상위 10개만 슬라이싱하여 최종 가공 출력
+            for item in sorted_result[:10]:
+                amount_val = item["amount_val"]
+                amount_in_hundred_million = amount_val / 100 # 100백만 원 = 1억 원
+
+                if amount_in_hundred_million >= 10000:
+                    trillion = int(amount_in_hundred_million // 10000)
+                    billion = int(amount_in_hundred_million % 10000)
+                    if billion > 0:
+                        amount_formatted = f"{trillion}조 {billion:,}억 원"
+                    else:
+                        amount_formatted = f"{trillion}조 원"
+                else:
+                    amount_formatted = f"{amount_in_hundred_million:,.0f}억 원"
+
+                final_top_10.append({
+                    "종목": item["종목"],
+                    "현재가": item["현재가"],
+                    "거래대금": amount_formatted
+                })
+            return final_top_10
         except Exception as e:
             print(f"거래대금 순위 수집 오류: {e}")
             return []
