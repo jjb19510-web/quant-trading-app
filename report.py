@@ -748,6 +748,7 @@ def render_daily_report():
 [애널리스트 의견]
 {anal_text}
 
+[CRITICAL SYSTEM RULE] You MUST respond in Korean (한국어) ONLY. Any non-Korean characters including English, Chinese, Japanese, or Arabic are STRICTLY FORBIDDEN. Violation of this rule is not acceptable.
 반드시 한국어로만 답하고, 다음 지침을 엄격하게 준수해줘:
 1. **시장 중심 분석 (상승/하락 요인)**:
    - 상승/하락 요인을 분석할 때 특정 마이너 종목이나 지엽적인 테마에 몰두하지 마십시오. 환율, 거시경제(매크로), 연준 금리, 지정학적 우려, 업종별 거시 수급 등 **국내 시장 전체의 흐름을 지배하는 거시적 요인** 위주로 분석해야 합니다.
