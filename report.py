@@ -1098,7 +1098,7 @@ def render_daily_report():
                         final_table_data.append(row_cells)
                     
                     # 용지 가로 규격(523pt)에 맞춰 분배
-                    t4 = Table(final_table_data, colWidths=[120, 110, 293])
+                    t4 = Table(final_table_data, colWidths=[100, 100, 323])
                     t4.setStyle(TableStyle([
                         ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#0f172a")),
                         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
@@ -1113,25 +1113,31 @@ def render_daily_report():
             # 수급 동향
             if foreign_rows or institution_rows:
                 story.append(Paragraph("💰 수급 동향", h2_style))
-                supply_data = [["구분", "종목", "순매수"]]
-                for row in foreign_rows[:5]:
-                    supply_data.append(["외국인", row["종목"], row["순매수"]])
-                for row in institution_rows[:5]:
-                    supply_data.append(["기관", row["종목"], row["순매수"]])
-                t_supply = Table(supply_data, colWidths=[80, 220, 223])
-                t_supply.setStyle(TableStyle([
-                    ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#0f172a")),
-                    ('TEXTCOLOR', (0,0), (-1,0), colors.white),
-                    ('FONTNAME', (0,0), (-1,-1), 'NanumGothic'),
-                    ('FONTSIZE', (0,0), (-1,-1), 9),
-                    ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-                    ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                    ('BOTTOMPADDING', (0,0), (-1,-1), 6),
-                    ('TOPPADDING', (0,0), (-1,-1), 6),
-                    ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor("#f8fafc")]),
-                    ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#e2e8f0")),
-                ]))
-                story.append(t_supply)
+                
+                def make_supply_table(rows, label):
+                    data = [[f"🌍 {label} 순매수 TOP 5", "순매수"]]
+                    for row in rows[:5]:
+                        data.append([row["종목"], row["순매수"]])
+                    t = Table(data, colWidths=[261, 261])
+                    t.setStyle(TableStyle([
+                        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#0f172a")),
+                        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+                        ('FONTNAME', (0,0), (-1,-1), 'NanumGothic'),
+                        ('FONTSIZE', (0,0), (-1,-1), 9),
+                        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                        ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+                        ('TOPPADDING', (0,0), (-1,-1), 6),
+                        ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor("#f8fafc")]),
+                        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#e2e8f0")),
+                    ]))
+                    return t
+
+                if foreign_rows:
+                    story.append(make_supply_table(foreign_rows, "외국인"))
+                    story.append(Spacer(1, 8))
+                if institution_rows:
+                    story.append(make_supply_table(institution_rows, "기관"))
                 story.append(Spacer(1, 14))
 
             # 스마트 머니 인덱스
