@@ -25,7 +25,7 @@ def get_naver_supply_deal(investor_gubun="1000"):
         res.encoding = 'cp949'
         
         soup = BeautifulSoup(res.text, "html.parser")
-        # 🎯 [클래스 완전 면역] 네이버 동적 클래스명(type_r1 등)에 영향받지 않도록 모든 행 tr을 안전 탐색
+        # [클래스 완전 면역] 모든 tr 행을 대상으로 안전 탐색
         rows = soup.select("tr")
         result = []
         for row in rows:
@@ -34,13 +34,13 @@ def get_naver_supply_deal(investor_gubun="1000"):
                 name = name_tag.text.strip()
                 cols = row.select("td")
                 
-                # 안전한 열 개수(7개 이상) 검증 후 대금 역산 연산 집행
-                if len(cols) >= 7:
-                    price = cols[2].text.strip()     # 현재가 (예: 279,000)
-                    raw_amount = cols[6].text.strip() # 순매수량 (예: 279,000)
+                # 🎯 [버그 교정] 수급 표의 실제 컬럼 수인 6개 규격에 맞게 검증 한계를 6으로 정정
+                if len(cols) >= 6:
+                    price = cols[2].text.strip()      # 현재가 (3번째 열)
+                    raw_amount = cols[-1].text.strip() # 순매수 주식 수량 (마지막 열)
                     
                     try:
-                        # 🎯 [수급대금 실시간 역산] 주식 수량(주)과 현재가를 곱하여 실제 순매수대금(억 원)을 역산출합니다.
+                        # [수급대금 실시간 역산] 주식 수량(주)과 현재가를 곱하여 실제 순매수대금(억 원)을 역산출합니다.
                         price_val = int(price.replace(",", ""))
                         qty_val = int(raw_amount.replace(",", "").replace("-", ""))
                         
@@ -760,7 +760,7 @@ def render_daily_report():
                             "https://api.groq.com/openai/v1/chat/completions",
                             headers={"Content-Type": "application/json", "Authorization": f"Bearer {groq_key}"},
                             json={
-                                "model": "gemma2-9b-it",
+                                "model": "llama-3.1-8b-instant",
                                 "messages": [{"role": "user", "content": prompt}],
                                 "max_tokens": 800
                             }
@@ -846,7 +846,7 @@ def render_daily_report():
                         "https://api.groq.com/openai/v1/chat/completions",
                         headers={"Content-Type": "application/json", "Authorization": f"Bearer {groq_key}"},
                         json={
-                            "model": "gemma2-9b-it",
+                            "model": "llama-3.1-8b-instant",
                             "messages": [{"role": "user", "content": rec_prompt}],
                             "max_tokens": 700
                         }
