@@ -421,7 +421,10 @@ def render_daily_report():
     # ── 3. 포트폴리오 현황 ──
     try:
         from broker import get_access_token, get_balance
-        token = get_access_token()
+        token = st.session_state.get("kis_token")
+        if not token:
+            token = get_access_token()
+            st.session_state["kis_token"] = token
         balance_data = get_balance(token)
         if balance_data.get("rt_cd") == "0":
             card("💼 포트폴리오 현황", "KIS API 실시간 기준")
