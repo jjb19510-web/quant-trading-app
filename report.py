@@ -12,7 +12,6 @@ from ui_components import (
 
 # ── [전역 함수 1] 네이버 금융 수급동향 억 원대 가공 크롤러 ──
 @st.cache_data(ttl=1800)
-@st.cache_data(ttl=1800)
 def get_naver_supply_deal(investor_gubun="1000"):
     """네이버 금융 장 마감 확정 수급 데이터 백업 크롤러 (1000:외인, 9000:기관)"""
     try:
