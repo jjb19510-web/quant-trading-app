@@ -832,7 +832,7 @@ def render_daily_report():
         rec_url = "https://openapi.naver.com/v1/search/news.json"
         params = {
             "query": "주간추천종목",
-            "display": 15,
+            "display": 30,
             "sort": "date"
         }
         rec_res = requests.get(rec_url, headers={
@@ -842,7 +842,10 @@ def render_daily_report():
         rec_items = rec_res.json().get("items", [])
         
         if rec_items:
-            rec_titles = [item["title"].replace("<b>", "").replace("</b>", "") for item in rec_items]
+            rec_titles = [
+                f"[{item['pubDate'][:16]}] {item['title'].replace('<b>', '').replace('</b>', '')}"
+                for item in rec_items
+            ]
             
             if st.button("🤖 증권사 추천종목 AI 분석 시작", use_container_width=True):
                 with st.spinner("하나, KB, 미래에셋의 주간 추천 목록을 AI 교차 분석 중..."):
@@ -862,7 +865,8 @@ def render_daily_report():
 결과는 설명 없이 마크다운 테이블로만 출력:
 | 추천 종목명 | 추천 증권사 | 핵심 투자 포인트 | 매수 근거 (뉴스 기반) |
 
-[증권사 추천 뉴스 헤드라인]
+[오늘 날짜: {dt.datetime.now(dt.timezone(dt.timedelta(hours=9))):%Y년 %m월 %d일}]
+[증권사 추천 뉴스 헤드라인 (날짜 포함)]
 {"\n".join(rec_titles)}"""
 
                     openai_key = st.secrets.get("OPENAI_API_KEY", "")
