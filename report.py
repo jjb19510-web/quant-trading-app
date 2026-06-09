@@ -842,6 +842,10 @@ def render_daily_report():
         rec_items = rec_res.json().get("items", [])
         
         if rec_items:
+            from datetime import datetime, timezone, timedelta
+            kst = timezone(timedelta(hours=9))
+            today_str = datetime.now(kst).strftime("%Y년 %m월 %d일")
+            
             rec_titles = [
                 f"[{item['pubDate'][:16]}] {item['title'].replace('<b>', '').replace('</b>', '')}"
                 for item in rec_items
@@ -865,7 +869,8 @@ def render_daily_report():
 결과는 설명 없이 마크다운 테이블로만 출력:
 | 추천 종목명 | 추천 증권사 | 핵심 투자 포인트 | 매수 근거 (뉴스 기반) |
 
-[오늘 날짜: {dt.datetime.now(dt.timezone(dt.timedelta(hours=9))):%Y년 %m월 %d일}]
+[오늘 날짜: {today_str}]
+[주의: 반드시 오늘 날짜({today_str}) 기사만 사용하고 오래된 기사는 완전히 무시하세요]
 [증권사 추천 뉴스 헤드라인 (날짜 포함)]
 {"\n".join(rec_titles)}"""
 
