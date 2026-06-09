@@ -33,11 +33,17 @@ def get_naver_supply_deal(investor_gubun="1000"):
                 name_tag = row.select_one('a.company')
                 if name_tag:
                     name = name_tag.text.strip()
+                    etf_keywords = ["KODEX", "TIGER", "KBSTAR", "ARIRANG", "HANARO", "KOSEF", "PLUS", "ACE", "SOL", "TIMEFOLIO", "ETF", "ETN", "인버스", "레버리지", "선물", "RISE"]
+                    if any(k in name for k in etf_keywords):
+                        continue
                     try:
-                        qty = cols[1].text.strip().replace(',', '')
                         amount = cols[2].text.strip().replace(',', '')
                         amount_val = int(amount)
-                        amount_str = f"{amount_val:,}백만원"
+                        amount_100m = amount_val / 100
+                        if amount_100m >= 10000:
+                            amount_str = f"{int(amount_100m // 10000)}조 {int(amount_100m % 10000):,}억원"
+                        else:
+                            amount_str = f"{amount_100m:,.0f}억원"
                     except:
                         amount_str = "-"
                     result.append({"종목": name, "순매수": amount_str})
