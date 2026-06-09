@@ -1101,6 +1101,38 @@ def render_daily_report():
                     story.append(t4)
                     story.append(Spacer(1, 14))
 
+            # 수급 동향
+            if foreign_rows or institution_rows:
+                story.append(Paragraph("💰 수급 동향", h2_style))
+                supply_data = [["구분", "종목", "순매수"]]
+                for row in foreign_rows[:5]:
+                    supply_data.append(["외국인", row["종목"], row["순매수"]])
+                for row in institution_rows[:5]:
+                    supply_data.append(["기관", row["종목"], row["순매수"]])
+                t_supply = Table(supply_data, colWidths=[80, 220, 223])
+                t_supply.setStyle(TableStyle([
+                    ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#0f172a")),
+                    ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+                    ('FONTNAME', (0,0), (-1,-1), 'NanumGothic'),
+                    ('FONTSIZE', (0,0), (-1,-1), 9),
+                    ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                    ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                    ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+                    ('TOPPADDING', (0,0), (-1,-1), 6),
+                    ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor("#f8fafc")]),
+                    ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#e2e8f0")),
+                ]))
+                story.append(t_supply)
+                story.append(Spacer(1, 14))
+
+            # 스마트 머니 인덱스
+            if smi_df is not None and not smi_df.empty:
+                story.append(Paragraph("🧠 스마트 머니 인덱스 (SMI)", h2_style))
+                story.append(Paragraph(f"수급 온도: {smi_diff:+.1f}pt → {smi_label}", normal_style))
+                story.append(Paragraph(f"해석: {market_view}", normal_style))
+                story.append(Paragraph(f"💡 초보자 가이드: {advice_text}", bullet_style))
+                story.append(Spacer(1, 14))
+
             # 🧠 5. AI 시장 분석 및 종합 전망 (블록쿼트형 리포트 카드 적용)
             ai_summary = st.session_state.get("ai_summary", "")
             if ai_summary:
