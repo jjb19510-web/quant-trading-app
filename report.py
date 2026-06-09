@@ -552,7 +552,11 @@ def render_daily_report():
         fig = go.Figure(go.Indicator(
             mode="gauge+number",
             value=smi_diff,
-            number={'suffix': f"pt  ({smi_label})"},
+            number={
+                'suffix': "pt",
+                'font': {'size': 48}
+            },
+            title={'text': f"<b>{smi_label}</b>", 'font': {'size': 16, 'color': TEXT}},
             domain={'x': [0, 1], 'y': [0, 1]},
             gauge={
                 'axis': {
