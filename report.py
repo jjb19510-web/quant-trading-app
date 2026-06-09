@@ -13,55 +13,39 @@ from ui_components import (
 # ── [전역 함수 1] 네이버 금융 수급동향 실시간 '억 원'대금 가공 크롤러 ──
 @st.cache_data(ttl=1800)
 def get_naver_supply_deal(investor_gubun="1000"):
-    """네이버 금융 장 마감 확정 수급 데이터 백업 크롤러 (1000:외인, 9000:기관)"""
     try:
         from bs4 import BeautifulSoup
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
+            "Referer": "https://finance.naver.com"
         }
         url = f"https://finance.naver.com/sise/sise_deal_rank.naver?investor_gubun={investor_gubun}&sosok=0"
         res = requests.get(url, headers=headers, timeout=10)
-        
         res.encoding = 'cp949'
+        soup = BeautifulSoup(res.text, 'html.parser')
         
-        soup = BeautifulSoup(res.text, "html.parser")
-        # [클래스 완전 면역] 모든 tr 행을 대상으로 안전 탐색
-        rows = soup.select("tr")
+        # 오늘 날짜 기준 오른쪽 컬럼 데이터 수집
+        rows = soup.select('table tr')
         result = []
         for row in rows:
-            name_tag = row.select_one("a.company")
-            if name_tag:
-                name = name_tag.text.strip()
-                cols = row.select("td")
-                
-                # 🎯 [버그 교정] 수급 표의 실제 컬럼 수인 6개 규격에 맞게 검증 한계를 6으로 정정
-                if len(cols) >= 6:
-                    price = cols[2].text.strip()      # 현재가 (3번째 열)
-                    raw_amount = cols[-1].text.strip() # 순매수 주식 수량 (마지막 열)
-                    
+            cols = row.select('td')
+            if len(cols) >= 4:
+                name_tag = row.select_one('a.company')
+                if name_tag:
+                    name = name_tag.text.strip()
                     try:
-                        # [수급대금 실시간 역산] 주식 수량(주)과 현재가를 곱하여 실제 순매수대금(억 원)을 역산출합니다.
-                        price_val = int(price.replace(",", ""))
-                        qty_val = int(raw_amount.replace(",", "").replace("-", ""))
-                        
-                        amount_won = qty_val * price_val
-                        amount_in_hundred_million = amount_won / 100000000 # 1억 원 = 100,000,000원
-                        
-                        is_negative = "-" in raw_amount
-                        sign = "-" if is_negative else ""
-                        
-                        buy_val_str = f"{sign}{amount_in_hundred_million:,.0f}억 원"
+                        qty = cols[1].text.strip().replace(',', '')
+                        amount = cols[2].text.strip().replace(',', '')
+                        amount_val = int(amount)
+                        amount_str = f"{amount_val:,}백만원"
                     except:
-                        # 예외 발생 시 안전하게 주식 수량(주)으로 백업 표기
-                        buy_val_str = f"{raw_amount}주"
-                    
-                    result.append({"종목": name, "순매수": buy_val_str})
-                
-                if len(result) == 5:
-                    break
+                        amount_str = "-"
+                    result.append({"종목": name, "순매수": amount_str})
+            if len(result) >= 5:
+                break
         return result
     except Exception as e:
-        print(f"네이버 수급 크롤링 중 예외 발생: {e}")
+        print(f"네이버 수급 크롤링 오류: {e}")
         return []
 
 
