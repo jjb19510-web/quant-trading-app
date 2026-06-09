@@ -1008,7 +1008,7 @@ def render_daily_report():
                 story.append(Paragraph("📊 당일 거래대금 상위 TOP 10 (ETF 제외)", h2_style))
                 vol_data = [["종목명", "현재가", "당일 누적 거래량"]]
                 for row in volume_data:
-                    vol_data.append([row["종목"], f"{row['현재가']}원" if "원" not in row["현재가"] else row["현재가"], row["거래량"]])
+                    vol_data.append([row["종목"], f"{row['현재가']}원" if "원" not in row["현재가"] else row["현재가"], row["거래대금"]])
                 
                 t3 = Table(vol_data, colWidths=[180, 160, 183])
                 t3.setStyle(TableStyle([
