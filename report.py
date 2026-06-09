@@ -10,7 +10,7 @@ from ui_components import (
     card, CANDLE_UP, CANDLE_DOWN, DIM, TEXT, SURFACE_1, SURFACE_2, LINE, BG, ACCENT
 )
 
-# ── [전역 함수 1] 네이버 금융 수급동향 억 원대 가공 크롤러 ──
+# ── [전역 함수 1] 네이버 금융 수급동향 실시간 '억 원'대금 가공 크롤러 ──
 @st.cache_data(ttl=1800)
 def get_naver_supply_deal(investor_gubun="1000"):
     """네이버 금융 장 마감 확정 수급 데이터 백업 크롤러 (1000:외인, 9000:기관)"""
@@ -25,7 +25,7 @@ def get_naver_supply_deal(investor_gubun="1000"):
         res.encoding = 'cp949'
         
         soup = BeautifulSoup(res.text, "html.parser")
-        # 🎯 [클래스 완전 면역] 동적 클래스명(type_r1 등)에 영향받지 않도록 모든 행 tr을 안전 탐색
+        # 🎯 [클래스 완전 면역] 네이버 동적 클래스명(type_r1 등)에 영향받지 않도록 모든 행 tr을 안전 탐색
         rows = soup.select("tr")
         result = []
         for row in rows:
@@ -34,7 +34,7 @@ def get_naver_supply_deal(investor_gubun="1000"):
                 name = name_tag.text.strip()
                 cols = row.select("td")
                 
-                # 안전한 열 개수(7개 이상) 검증 후 정수 연산 집행
+                # 안전한 열 개수(7개 이상) 검증 후 대금 역산 연산 집행
                 if len(cols) >= 7:
                     price = cols[2].text.strip()     # 현재가 (예: 279,000)
                     raw_amount = cols[6].text.strip() # 순매수량 (예: 279,000)
@@ -421,10 +421,7 @@ def render_daily_report():
     # ── 3. 포트폴리오 현황 ──
     try:
         from broker import get_access_token, get_balance
-        token = st.session_state.get("kis_token")
-        if not token:
-            token = get_access_token()
-            st.session_state["kis_token"] = token
+        token = get_access_token()
         balance_data = get_balance(token)
         if balance_data.get("rt_cd") == "0":
             card("💼 포트폴리오 현황", "KIS API 실시간 기준")
@@ -739,8 +736,7 @@ def render_daily_report():
                             for item in anal_items
                         ])
 
-                        prompt = f"""너는 자산운용사의 수석 마켓 분석 애널리스트야.
-제공된 시장 뉴스 헤드라인과 애널리스트 리서치 데이터를 분석하여, 국내 금융 시장 전체를 아우르는 전문적인 요약 보고서를 작성해줘.
+                        prompt = f"""다음 주식 뉴스와 애널리스트 의견을 투자자 관점에서 분석해줘.
 
 [오늘의 주요 뉴스]
 {news_text}
@@ -748,33 +744,23 @@ def render_daily_report():
 [애널리스트 의견]
 {anal_text}
 
-[CRITICAL SYSTEM RULE] You MUST respond in Korean (한국어) ONLY. Any non-Korean characters including English, Chinese, Japanese, or Arabic are STRICTLY FORBIDDEN. Violation of this rule is not acceptable.
-반드시 한국어로만 답하고, 다음 지침을 엄격하게 준수해줘:
-1. **시장 중심 분석 (상승/하락 요인)**:
-   - 상승/하락 요인을 분석할 때 특정 마이너 종목이나 지엽적인 테마에 몰두하지 마십시오. 환율, 거시경제(매크로), 연준 금리, 지정학적 우려, 업종별 거시 수급 등 **국내 시장 전체의 흐름을 지배하는 거시적 요인** 위주로 분석해야 합니다.
-2. **개별 종목 분석 제한 (대기업 위주)**:
-   - 분석 과정에서 구체적인 개별 기업명을 다루어야 한다면, 반드시 **국내 시가총액 상위권 대기업(예: 삼성전자, SK하이닉스, 현대차, NAVER, LG전자, 한화에어로스페이스 등 국내 주요 대형 우량 기업)** 위주로만 선별하여 무게감 있게 기술해 주십시오. 
-   - 외국계 마이너 종목(예: 비샤이 인터테크놀로지 등)이나 테마성이 짙은 중소형 종목은 분석의 일관성을 위해 완전히 배제하십시오.
-3. **한자(Hanja/Chinese characters) 절대 사용 금지**:
-   - 답변 내에 **한자(예: 經濟, 株式, 投資, 證券 등)를 단 한 글자도 섞어서 쓰지 마십시오.**
-   - 모든 어휘는 가독성을 위해 반드시 **순수한 한글(Hangul) 텍스트(예: 경제, 주식, 투자, 증권 등)**로만 완벽하게 표현해야 합니다.
-
-아래 지정된 마크다운 포맷에 맞추어 정중하고 격식 있는 보고서 서체(~입니다, ~로 분석됩니다)로 기술해줘:
-📈 상승 요인: (시장 전체의 거시적 호재 및 주요 대기업 동향 중심 분석, 2~3줄)
-📉 하락 요인: (시장 전체의 매크로 리스크 및 주요 대형주 우려 중심 분석, 2~3줄)
+반드시 한국어로만 답해줘. 영어나 다른 언어 절대 사용 금지.
+아래 형식으로 구체적이고 자세하게 답해줘:
+📈 상승 요인: (구체적 수치나 종목명 포함해서 2~3줄)
+📉 하락 요인: (구체적 리스크 요인 포함해서 2~3줄)
 📌 핵심 이슈:
-- (핵심 이슈 1: 거시 경제적 배경과 그것이 코스피/코스닥 시장에 미치는 영향 요약)
-- (핵심 이슈 2: 시장 주도 업종 및 시가총액 상위 대기업의 유의미한 동향 요약)
-- (핵심 이슈 3: 단기 시장 방향성에 따른 투자자 유의사항 요약)
-💼 애널리스트 주요 의견: (주요 대기업의 컨센서스 변화, 목표주가 조정 추이 등 구체적으로 2~3줄)
-🔮 오늘 시장 영향 전망: (지수의 하방 지지력 및 종합적인 시장 방향성에 대한 전망 2줄)"""
+- (핵심 1: 배경과 영향 포함)
+- (핵심 2: 배경과 영향 포함)
+- (핵심 3: 배경과 영향 포함)
+💼 애널리스트 주요 의견: (종목별 목표가, 투자의견 등 구체적으로 2~3줄)
+🔮 오늘 시장 영향 전망: (코스피/코스닥 방향성 포함해서 2줄)"""
 
                         groq_key = st.secrets.get("GROQ_API_KEY", "")
                         ai_res = requests.post(
                             "https://api.groq.com/openai/v1/chat/completions",
                             headers={"Content-Type": "application/json", "Authorization": f"Bearer {groq_key}"},
                             json={
-                                "model": "llama-3.3-70b-versatile",
+                                "model": "gemma2-9b-it",
                                 "messages": [{"role": "user", "content": prompt}],
                                 "max_tokens": 800
                             }
@@ -860,7 +846,7 @@ def render_daily_report():
                         "https://api.groq.com/openai/v1/chat/completions",
                         headers={"Content-Type": "application/json", "Authorization": f"Bearer {groq_key}"},
                         json={
-                            "model": "llama-3.3-70b-versatile",
+                            "model": "gemma2-9b-it",
                             "messages": [{"role": "user", "content": rec_prompt}],
                             "max_tokens": 700
                         }
@@ -1020,10 +1006,9 @@ def render_daily_report():
             # 📊 3. 당일 거래대금 TOP 10 (주요 노이즈 ETF 필터링 반영)
             if volume_data:
                 story.append(Paragraph("📊 당일 거래대금 상위 TOP 10 (ETF 제외)", h2_style))
-                # 🎯 헤더 컬럼명을 거래대금으로 변경하고 호출 키값을 row["거래대금"]으로 정정하여 버그 해결
-                vol_data = [["종목명", "현재가", "당일 누적 거래대금"]]
+                vol_data = [["종목명", "현재가", "당일 누적 거래량"]]
                 for row in volume_data:
-                    vol_data.append([row["종목"], f"{row['현재가']}원" if "원" not in row["현재가"] else row["현재가"], row["거래대금"]])
+                    vol_data.append([row["종목"], f"{row['현재가']}원" if "원" not in row["현재가"] else row["현재가"], row["거래량"]])
                 
                 t3 = Table(vol_data, colWidths=[180, 160, 183])
                 t3.setStyle(TableStyle([
