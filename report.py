@@ -12,6 +12,7 @@ from ui_components import (
 
 # ── [전역 함수 1] 네이버 금융 수급동향 억 원대 가공 크롤러 ──
 @st.cache_data(ttl=1800)
+@st.cache_data(ttl=1800)
 def get_naver_supply_deal(investor_gubun="1000"):
     """네이버 금융 장 마감 확정 수급 데이터 백업 크롤러 (1000:외인, 9000:기관)"""
     try:
@@ -25,7 +26,7 @@ def get_naver_supply_deal(investor_gubun="1000"):
         res.encoding = 'cp949'
         
         soup = BeautifulSoup(res.text, "html.parser")
-        # 🎯 [클래스 면역] 테이블 클래스명(type_r1 등) 변화에 상시 대응하기 위해 모든 'tr'을 대상으로 안전 수색
+        # 🎯 [클래스 완전 면역] 동적 클래스명(type_r1 등)에 영향받지 않도록 모든 행 tr을 안전 탐색
         rows = soup.select("tr")
         result = []
         for row in rows:
@@ -34,13 +35,13 @@ def get_naver_supply_deal(investor_gubun="1000"):
                 name = name_tag.text.strip()
                 cols = row.select("td")
                 
-                # 안전한 순매수량 및 현재가 데이터 확보
+                # 안전한 열 개수(7개 이상) 검증 후 정수 연산 집행
                 if len(cols) >= 7:
-                    price = cols[2].text.strip() # 현재가 (예: 279,000)
+                    price = cols[2].text.strip()     # 현재가 (예: 279,000)
                     raw_amount = cols[6].text.strip() # 순매수량 (예: 279,000)
                     
                     try:
-                        # 🎯 [수식 정밀 이식] 주식 수량(주)과 현재가를 곱하여 실제 순매수대금(억 원)을 역산출합니다.
+                        # 🎯 [수급대금 실시간 역산] 주식 수량(주)과 현재가를 곱하여 실제 순매수대금(억 원)을 역산출합니다.
                         price_val = int(price.replace(",", ""))
                         qty_val = int(raw_amount.replace(",", "").replace("-", ""))
                         
@@ -52,7 +53,7 @@ def get_naver_supply_deal(investor_gubun="1000"):
                         
                         buy_val_str = f"{sign}{amount_in_hundred_million:,.0f}억 원"
                     except:
-                        # 연산 실패 시 안전한 기존 주식 수량으로 백업
+                        # 예외 발생 시 안전하게 주식 수량(주)으로 백업 표기
                         buy_val_str = f"{raw_amount}주"
                     
                     result.append({"종목": name, "순매수": buy_val_str})
