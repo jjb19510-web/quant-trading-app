@@ -87,7 +87,7 @@ def get_naver_market_data():
                 price_str = kospi_area.select_one(".num").text.strip().replace(",", "")
                 change_str = kospi_area.select_one(".num2").text.strip().replace(",", "")
                 pct_str = kospi_area.select_one(".num3").text.strip().replace("%", "").replace("+", "").replace("-", "")
-                is_down = "down" in str(kospi_area) or "하락" in str(kospi_area) or "-" in kospi_area.select_one(".num3").text
+                is_down = "num_quot dn" in str(kospi_area)
                 sign = -1 if is_down else 1
                 result["코스피"] = {
                     "price": float(price_str),
@@ -104,7 +104,7 @@ def get_naver_market_data():
                 price_str = kosdaq_area.select_one(".num").text.strip().replace(",", "")
                 change_str = kosdaq_area.select_one(".num2").text.strip().replace(",", "")
                 pct_str = kosdaq_area.select_one(".num3").text.strip().replace("%", "").replace("+", "").replace("-", "")
-                is_down = "down" in str(kosdaq_area) or "하락" in str(kosdaq_area) or "-" in kosdaq_area.select_one(".num3").text
+                is_down = "num_quot dn" in str(kosdaq_area)
                 sign = -1 if is_down else 1
                 result["코스닥"] = {
                     "price": float(price_str),
