@@ -755,12 +755,12 @@ def render_daily_report():
 💼 애널리스트 주요 의견: (종목별 목표가, 투자의견 등 구체적으로 2~3줄)
 🔮 오늘 시장 영향 전망: (코스피/코스닥 방향성 포함해서 2줄)"""
 
-                        groq_key = st.secrets.get("GROQ_API_KEY", "")
+                        openai_key = st.secrets.get("OPENAI_API_KEY", "")
                         ai_res = requests.post(
-                            "https://api.groq.com/openai/v1/chat/completions",
-                            headers={"Content-Type": "application/json", "Authorization": f"Bearer {groq_key}"},
+                            "https://api.openai.com/v1/chat/completions",
+                            headers={"Content-Type": "application/json", "Authorization": f"Bearer {openai_key}"},
                             json={
-                                "model": "llama-3.1-8b-instant",
+                                "model": "gpt-4o-mini",
                                 "messages": [{"role": "user", "content": prompt}],
                                 "max_tokens": 800
                             }
@@ -841,12 +841,12 @@ def render_daily_report():
 
 반드시 한국어로만 명확하게 답해줘."""
 
-                    groq_key = st.secrets.get("GROQ_API_KEY", "")
+                    openai_key = st.secrets.get("OPENAI_API_KEY", "")
                     ai_res = requests.post(
-                        "https://api.groq.com/openai/v1/chat/completions",
-                        headers={"Content-Type": "application/json", "Authorization": f"Bearer {groq_key}"},
+                        "https://api.openai.com/v1/chat/completions",
+                        headers={"Content-Type": "application/json", "Authorization": f"Bearer {openai_key}"},
                         json={
-                            "model": "llama-3.1-8b-instant",
+                            "model": "gpt-4o-mini",
                             "messages": [{"role": "user", "content": rec_prompt}],
                             "max_tokens": 700
                         }
