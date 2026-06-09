@@ -977,7 +977,9 @@ def render_daily_report():
 
             # 헤더 섹션 구성
             story.append(Paragraph("Quantfolio Daily Report", title_style))
-            story.append(Paragraph(f"발행일시: {dt.datetime.now():%Y년 %m월 %d일 %H:%M} | 분석 파트너: Groq Llama-3.3", meta_style))
+            timezone_kst = dt.timezone(dt.timedelta(hours=9))
+            now_kst = dt.datetime.now(timezone_kst)
+            story.append(Paragraph(f"발행일시: {now_kst:%Y년 %m월 %d일 %H:%M} KST | 분석 파트너: OpenAI GPT-4o-mini", meta_style))
             
             # 장식용 탑 배너 라인
             banner = Table([[""]], colWidths=[523], rowHeights=[3])
@@ -1098,7 +1100,7 @@ def render_daily_report():
                         final_table_data.append(row_cells)
                     
                     # 용지 가로 규격(523pt)에 맞춰 분배
-                    t4 = Table(final_table_data, colWidths=[100, 100, 323])
+                    t4 = Table(final_table_data, colWidths=[100, 100, 200, 123])
                     t4.setStyle(TableStyle([
                         ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#0f172a")),
                         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
