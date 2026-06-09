@@ -570,8 +570,8 @@ def render_daily_report():
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
             font={'color': TEXT, 'family': "NanumGothic"},
-            margin=dict(l=30, r=30, t=10, b=30), # 하단 마진을 30px로 넉넉하게 주어 잘림 현상을 원천 방지합니다.
-            height=250 # 가상 높이를 250으로 확대하여 틱 라벨 전체를 부드럽게 감쌉니다.
+            margin=dict(l=30, r=30, t=40, b=30), # 하단 마진을 30px로 넉넉하게 주어 잘림 현상을 원천 방지합니다.
+            height=300 # 가상 높이를 250으로 확대하여 틱 라벨 전체를 부드럽게 감쌉니다.
         )
         st.plotly_chart(fig, use_container_width=True)
 
