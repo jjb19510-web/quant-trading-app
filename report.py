@@ -11,7 +11,7 @@ from ui_components import (
 )
 
 # ── [전역 함수 1] 네이버 금융 수급동향 실시간 '억 원'대금 가공 크롤러 ──
-@st.cache_data(ttl=1800)
+@st.cache_data(ttl=300)
 def get_naver_supply_deal(investor_gubun="1000"):
     try:
         from bs4 import BeautifulSoup
