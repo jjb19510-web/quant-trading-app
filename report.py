@@ -634,6 +634,11 @@ def render_daily_report():
             from broker import get_foreign_institution_trade, get_access_token
             token = st.session_state.get("kis_token")
             if not token:
+                last_attempt = st.session_state.get("kis_token_last_attempt", 0)
+                now_ts = dt.datetime.now().timestamp()
+                if now_ts - last_attempt < 60:
+                    raise Exception("토큰 발급 대기 중 (1분 쿨타임)")
+                st.session_state["kis_token_last_attempt"] = now_ts
                 token = get_access_token()
                 st.session_state["kis_token"] = token
 
