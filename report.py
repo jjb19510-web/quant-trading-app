@@ -718,8 +718,8 @@ def render_daily_report():
             st.warning("📊 KIS API 연결 실패 — 네이버 금융 백업 데이터를 로드합니다.")
         
         with st.spinner("네이버 금융 수급 데이터를 수집 중..."):
-            foreign_rows = get_naver_supply_deal("1000") # 외인 수집
-            institution_rows = get_naver_supply_deal("9000") # 🎯 [코드 교체] 기존 잘못된 코드 1500에서 진짜 기관 수급 코드인 9000으로 교정
+            foreign_rows = get_naver_supply_deal("1000")    # 외국인
+            institution_rows = get_naver_supply_deal("2000") # 기관
             
         # 🎯 [2열 대칭 개편] 애초에 존재하지 않는 개인 탭을 제외하고, 외국인과 기관 2개 컬럼으로 꽉 채워 배치합니다.
         col_f, col_i = st.columns(2)
