@@ -11,7 +11,7 @@ from ui_components import (
 )
 
 # ── [전역 함수 1] 네이버 금융 수급동향 실시간 '억 원'대금 가공 크롤러 ──
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=60)
 def get_naver_supply_deal(investor_gubun="1000"):
     try:
         from bs4 import BeautifulSoup
@@ -625,10 +625,11 @@ def render_daily_report():
     is_weekend = now_kst.weekday() >= 5
     is_after_market = now_kst.time() > dt.time(15, 30) or now_kst.time() < dt.time(9, 0)
     
-    use_naver_fallback = is_weekend or is_after_market
+    # 주말만 네이버 폴백, 장 마감 후에도 KIS 당일 확정치 조회 시도
+    use_naver_fallback = is_weekend
     foreign_rows, institution_rows, individual_rows = [], [], []
 
-    # 1. 장 중이라면 먼저 한투 실시간 수급 API 호출을 정상 시도합니다.
+    # 평일이면 항상 KIS 먼저 시도 (장중 실시간 + 장후 당일 확정치 모두 지원)
     if not use_naver_fallback:
         try:
             from broker import get_foreign_institution_trade, get_access_token
@@ -703,10 +704,10 @@ def render_daily_report():
 
     # 2. 장후 상태이거나 한투 API가 일시 장해 상태일 경우 백업용 네이버 데이터를 로드합니다.
     if use_naver_fallback:
-        if is_weekend or is_after_market:
-            st.warning("📊 현재는 장 마감 상태(15:30~익일 09:00)입니다. 실시간 KIS API 대신 [네이버 금융 당일 장 마감 가집계 확정치] 데이터를 백업 로드합니다.")
+        if is_weekend:
+            st.warning("📊 주말에는 네이버 금융 데이터를 로드합니다.")
         else:
-            st.warning("📊 KIS API 연결 상태가 원활하지 않아 [네이버 금융 실시간 가집계] 백업 데이터를 로드합니다.")
+            st.warning("📊 KIS API 연결 실패 — 네이버 금융 백업 데이터를 로드합니다.")
         
         with st.spinner("네이버 금융 수급 데이터를 수집 중..."):
             foreign_rows = get_naver_supply_deal("1000") # 외인 수집
