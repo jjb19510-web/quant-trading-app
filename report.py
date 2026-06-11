@@ -671,23 +671,11 @@ def render_daily_report():
                 individual_raw = get_foreign_institution_trade(token, div_cls="2")
 
             # ── 🔍 임시 디버그: 실제 KIS 응답 확인 ──
-            with st.expander("🔧 KIS 수급 API 디버그 로그 (확인 후 삭제)", expanded=True):
-                st.write("**외국인 응답 (div_cls=0):**")
-                st.json({
-                    "rt_cd": foreign_raw.get("rt_cd"),
-                    "msg_cd": foreign_raw.get("msg_cd"),
-                    "msg1": foreign_raw.get("msg1"),
-                    "output_count": len(foreign_raw.get("output", [])),
-                    "output_sample": foreign_raw.get("output", [])[:2]
-                })
-                st.write("**기관 응답 (div_cls=1):**")
-                st.json({
-                    "rt_cd": institution_raw.get("rt_cd"),
-                    "msg_cd": institution_raw.get("msg_cd"),
-                    "msg1": institution_raw.get("msg1"),
-                    "output_count": len(institution_raw.get("output", [])),
-                    "output_sample": institution_raw.get("output", [])[:2]
-                })
+            with st.expander("🔧 KIS 수급 API 디버그 (확인 후 삭제)", expanded=True):
+                st.write("**외국인 (div_cls=0)**")
+                st.json({"rt_cd": foreign_raw.get("rt_cd"), "msg1": foreign_raw.get("msg1"), "output_count": len(foreign_raw.get("output", [])), "sample": foreign_raw.get("output", [])[:2]})
+                st.write("**기관 (div_cls=1)**")
+                st.json({"rt_cd": institution_raw.get("rt_cd"), "msg1": institution_raw.get("msg1"), "output_count": len(institution_raw.get("output", [])), "sample": institution_raw.get("output", [])[:2]})
 
             foreign_rows = parse_supply(foreign_raw)
             institution_rows = parse_supply(institution_raw)

@@ -204,51 +204,25 @@ def sell_order(ticker, qty, token):
 
 
 def get_foreign_institution_trade(token, div_cls="0", market="J"):
-    """외국인/기관/개인 순매수 상위 종목 조회
+    """투자자별 순매수 상위 종목 조회
     div_cls: "0" = 외국인, "1" = 기관, "2" = 개인
-    TR FHPTJ04400000 실패 시 FHKST01700000 자동 폴백
+    TR: FHKST01700000
     """
-    # 1차 시도: 외국인/기관 가집계 (FHPTJ04400000)
-    url = f"{BASE_URL}/uapi/domestic-stock/v1/quotations/foreign-institution-total"
+    url = f"{BASE_URL}/uapi/domestic-stock/v1/quotations/investor-trend-estimate"
     headers = {
-        "content-type": "application/json",
-        "authorization": f"Bearer {token}",
-        "appkey": APP_KEY,
-        "appsecret": APP_SECRET,
-        "tr_id": "FHPTJ04400000"
-    }
-    params = {
-        "FID_COND_MRKT_DIV_CODE": market,
-        "FID_COND_SCR_DIV_CODE": "16449",
-        "FID_INPUT_ISCD": "0001",
-        "FID_DIV_CLS_CODE": div_cls,
-        "FID_RANK_SORT_CLS_CODE": "0",
-        "FID_ETC_CLS_CODE": "0"
-    }
-    try:
-        res = requests.get(url, headers=headers, params=params, timeout=10)
-        data = res.json()
-        if data.get("rt_cd") == "0" and data.get("output"):
-            return data
-    except Exception as e:
-        print(f"FHPTJ04400000 호출 실패: {e}")
-
-    # 2차 시도: 투자자별 매매종목 (FHKST01700000) — 외국인/기관 공통 지원
-    url2 = f"{BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-investor"
-    headers2 = {
         "content-type": "application/json",
         "authorization": f"Bearer {token}",
         "appkey": APP_KEY,
         "appsecret": APP_SECRET,
         "tr_id": "FHKST01700000"
     }
-    # div_cls 매핑: "0"→외국인("3"), "1"→기관("1"), "2"→개인("4")
-    inv_map = {"0": "3", "1": "1", "2": "4"}
-    params2 = {
+    # div_cls 매핑: "0"=외국인, "1"=기관, "2"=개인
+    div_map = {"0": "1", "1": "2", "2": "3"}
+    params = {
         "FID_COND_MRKT_DIV_CODE": market,
         "FID_COND_SCR_DIV_CODE": "20171",
         "FID_INPUT_ISCD": "0000",
-        "FID_DIV_CLS_CODE": inv_map.get(div_cls, "3"),
+        "FID_DIV_CLS_CODE": div_map.get(div_cls, "1"),
         "FID_BLNG_CLS_CODE": "0",
         "FID_TRGT_CLS_CODE": "111111111",
         "FID_TRGT_EXLS_CLS_CODE": "0000000000",
@@ -258,22 +232,29 @@ def get_foreign_institution_trade(token, div_cls="0", market="J"):
         "FID_INPUT_DATE_1": ""
     }
     try:
-        res2 = requests.get(url2, headers=headers2, params=params2, timeout=10)
-        data2 = res2.json()
-        if data2.get("rt_cd") == "0" and data2.get("output"):
-            # output 필드명을 FHPTJ04400000 형식으로 정규화
+        res = requests.get(url, headers=headers, params=params, timeout=10)
+        data = res.json()
+        print(f"[KIS 수급 TR응답] rt_cd={data.get('rt_cd')} msg={data.get('msg1')} output수={len(data.get('output', []))}")
+        if data.get("rt_cd") == "0" and data.get("output"):
+            # 필드명 정규화
             normalized = []
-            for item in data2.get("output", []):
-                normalized.append({
-                    "hts_kor_isnm": item.get("hts_kor_isnm", item.get("stck_shrn_iscd", "")),
-                    "frgn_ntby_qty": item.get("frgn_ntby_qty", item.get("ntby_qty", "0"))
-                })
-            data2["output"] = normalized
-            return data2
+            for item in data.get("output", []):
+                name = item.get("hts_kor_isnm") or item.get("stck_shrn_iscd", "")
+                qty = (item.get("frgn_ntby_qty")
+                       or item.get("orgn_ntby_qty")
+                       or item.get("prsn_ntby_qty")
+                       or item.get("ntby_qty", "0"))
+                if name:
+                    normalized.append({
+                        "hts_kor_isnm": name,
+                        "frgn_ntby_qty": qty
+                    })
+            data["output"] = normalized
+            return data
     except Exception as e:
-        print(f"FHKST01700000 호출 실패: {e}")
+        print(f"[KIS 수급 오류] {e}")
 
-    return {"rt_cd": "9", "msg1": "모든 수급 API 호출 실패", "output": []}
+    return {"rt_cd": "9", "msg1": "KIS 수급 API 호출 실패", "output": []}
 
 
 # ── 카카오톡 나에게 보내기 ──
