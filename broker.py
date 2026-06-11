@@ -208,7 +208,7 @@ def get_foreign_institution_trade(token, div_cls="0", market="J"):
     div_cls: "0" = 외국인, "1" = 기관, "2" = 개인
     TR: FHKST01700000
     """
-    url = f"{BASE_URL}/uapi/domestic-stock/v1/quotations/investor-trend-estimate"
+    url = f"{BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-investor-trend-estimate"
     headers = {
         "content-type": "application/json",
         "authorization": f"Bearer {token}",

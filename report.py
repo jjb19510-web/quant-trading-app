@@ -13,6 +13,9 @@ from ui_components import (
 # ── [전역 함수 1] 네이버 금융 수급동향 실시간 '억 원'대금 가공 크롤러 ──
 @st.cache_data(ttl=60)
 def get_naver_supply_deal(investor_gubun="1000"):
+    """네이버 금융 수급동향 순매수 TOP5 크롤러
+    investor_gubun: "1000"=외국인, "9000"=기관
+    """
     try:
         from bs4 import BeautifulSoup
         headers = {
@@ -23,33 +26,50 @@ def get_naver_supply_deal(investor_gubun="1000"):
         res = requests.get(url, headers=headers, timeout=10)
         res.encoding = 'cp949'
         soup = BeautifulSoup(res.text, 'html.parser')
-        
-        # 오늘 날짜 기준 오른쪽 컬럼 데이터 수집
-        rows = soup.select('table tr')
-        result = []
-        for row in rows:
+
+        etf_keywords = ["KODEX", "TIGER", "KBSTAR", "ARIRANG", "HANARO", "KOSEF", "PLUS", "ACE", "SOL", "TIMEFOLIO", "ETF", "ETN", "인버스", "레버리지", "선물", "RISE", "WOORI"]
+
+        collected = []
+        for row in soup.select('table.type_5 tr, table tr'):
             cols = row.select('td')
-            if len(cols) >= 4:
-                name_tag = row.select_one('a.company')
-                if name_tag:
-                    name = name_tag.text.strip()
-                    etf_keywords = ["KODEX", "TIGER", "KBSTAR", "ARIRANG", "HANARO", "KOSEF", "PLUS", "ACE", "SOL", "TIMEFOLIO", "ETF", "ETN", "인버스", "레버리지", "선물", "RISE"]
-                    if any(k in name for k in etf_keywords):
-                        continue
-                    try:
-                        amount = cols[2].text.strip().replace(',', '')
-                        amount_val = int(amount)
-                        amount_100m = amount_val / 100
-                        if amount_100m >= 10000:
-                            amount_str = f"{int(amount_100m // 10000)}조 {int(amount_100m % 10000):,}억원"
-                        else:
-                            amount_str = f"{amount_100m:,.0f}억원"
-                    except:
-                        amount_str = "-"
-                    result.append({"종목": name, "순매수": amount_str})
-            if len(result) >= 5:
-                break
-        return result
+            if len(cols) < 4:
+                continue
+            name_tag = row.select_one('a.tltle, td.tltle a, a[href*="code="]')
+            if not name_tag:
+                continue
+            name = name_tag.text.strip()
+            if not name or any(k in name for k in etf_keywords):
+                continue
+
+            # 순매수 금액: 백만원 단위 → 억원 변환
+            try:
+                # 컬럼 순서: 순위, 종목명, 현재가, 전일비, 등락률, 순매수거래량, 순매수거래대금
+                amount_raw = ""
+                for col in reversed(cols):
+                    txt = col.text.strip().replace(',', '').replace('-', '')
+                    if txt.isdigit() and len(txt) >= 3:
+                        amount_raw = txt
+                        break
+                if not amount_raw:
+                    continue
+                amount_val = int(amount_raw)  # 백만원 단위
+                amount_100m = amount_val / 100  # 억원 단위
+                if amount_100m <= 0:
+                    continue
+                if amount_100m >= 10000:
+                    t = int(amount_100m // 10000)
+                    b = int(amount_100m % 10000)
+                    amount_str = f"{t}조 {b:,}억원" if b > 0 else f"{t}조원"
+                else:
+                    amount_str = f"{amount_100m:,.0f}억원"
+                collected.append({"종목": name, "순매수": amount_str, "_val": amount_val})
+            except:
+                continue
+
+        # 순매수 금액 내림차순 정렬 후 TOP5
+        collected.sort(key=lambda x: x["_val"], reverse=True)
+        return [{"종목": r["종목"], "순매수": r["순매수"]} for r in collected[:5]]
+
     except Exception as e:
         print(f"네이버 수급 크롤링 오류: {e}")
         return []
