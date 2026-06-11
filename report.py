@@ -644,13 +644,21 @@ def render_daily_report():
 
             def parse_supply(data):
                 rows = []
-                for item in data.get("output", [])[:5]:
-                    name = item.get("hts_kor_isnm", "")
-                    buy = item.get("frgn_ntby_qty", "0")
+                output = data.get("output", [])
+                for item in output[:5]:
+                    # 종목명: 여러 필드명 대응
+                    name = (item.get("hts_kor_isnm")
+                            or item.get("stck_shrn_iscd")
+                            or item.get("mksc_shrn_iscd", ""))
+                    # 순매수량: 외국인/기관/개인별 필드명 모두 대응
+                    buy = (item.get("frgn_ntby_qty")
+                           or item.get("orgn_ntby_qty")
+                           or item.get("ntby_qty")
+                           or item.get("prsn_ntby_qty", "0"))
                     if name:
                         try:
-                            # 콤마 구분 기입으로 시각적 가독성 개선
-                            buy_str = f"{int(buy):,}주"
+                            buy_int = int(str(buy).replace(",", ""))
+                            buy_str = f"{buy_int:,}주"
                         except:
                             buy_str = f"{buy}주"
                         rows.append({"종목": name, "순매수": buy_str})
@@ -660,6 +668,25 @@ def render_daily_report():
                 foreign_raw = get_foreign_institution_trade(token, div_cls="0")
                 institution_raw = get_foreign_institution_trade(token, div_cls="1")
                 individual_raw = get_foreign_institution_trade(token, div_cls="2")
+
+            # ── 🔍 임시 디버그: 실제 KIS 응답 확인 ──
+            with st.expander("🔧 KIS 수급 API 디버그 로그 (확인 후 삭제)", expanded=True):
+                st.write("**외국인 응답 (div_cls=0):**")
+                st.json({
+                    "rt_cd": foreign_raw.get("rt_cd"),
+                    "msg_cd": foreign_raw.get("msg_cd"),
+                    "msg1": foreign_raw.get("msg1"),
+                    "output_count": len(foreign_raw.get("output", [])),
+                    "output_sample": foreign_raw.get("output", [])[:2]
+                })
+                st.write("**기관 응답 (div_cls=1):**")
+                st.json({
+                    "rt_cd": institution_raw.get("rt_cd"),
+                    "msg_cd": institution_raw.get("msg_cd"),
+                    "msg1": institution_raw.get("msg1"),
+                    "output_count": len(institution_raw.get("output", [])),
+                    "output_sample": institution_raw.get("output", [])[:2]
+                })
 
             foreign_rows = parse_supply(foreign_raw)
             institution_rows = parse_supply(institution_raw)
