@@ -12,9 +12,10 @@ from ui_components import (
 
 # ── [전역 함수 1] 네이버 금융 수급동향 실시간 '억 원'대금 가공 크롤러 ──
 @st.cache_data(ttl=60)
-def get_naver_supply_deal(investor_gubun="1000"):
-    """네이버 금융 수급동향 순매수 TOP5 크롤러
-    investor_gubun: "1000"=외국인, "9000"=기관
+def get_naver_supply_deal(investor_gubun="9000"):
+    """네이버 금융 투자자별 순매수 상위 종목 (코스피)
+    investor_gubun: "9000"=외국인, "1000"=기관
+    테이블 구조: 종목명 | 수량(천주) | 금액(백만원) | 당일거래량
     """
     try:
         from bs4 import BeautifulSoup
@@ -22,51 +23,53 @@ def get_naver_supply_deal(investor_gubun="1000"):
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
             "Referer": "https://finance.naver.com"
         }
-        url = f"https://finance.naver.com/sise/sise_deal_rank.naver?investor_gubun={investor_gubun}&sosok=0"
+        url = f"https://finance.naver.com/sise/sise_deal_rank.naver?investor_gubun={investor_gubun}"
         res = requests.get(url, headers=headers, timeout=10)
-        res.encoding = 'cp949'
+        res.encoding = 'euc-kr'
         soup = BeautifulSoup(res.text, 'html.parser')
 
-        etf_keywords = ["KODEX", "TIGER", "KBSTAR", "ARIRANG", "HANARO", "KOSEF", "PLUS", "ACE", "SOL", "TIMEFOLIO", "ETF", "ETN", "인버스", "레버리지", "선물", "RISE", "WOORI"]
+        etf_keywords = ["KODEX", "TIGER", "KBSTAR", "ARIRANG", "HANARO", "KOSEF", "PLUS",
+                        "ACE", "SOL", "TIMEFOLIO", "ETF", "ETN", "인버스", "레버리지", "선물", "RISE", "WOORI"]
+
+        # 오늘 날짜(가장 최근) 데이터가 들어있는 첫 번째 테이블만 사용
+        tables = soup.select("table")
+        target_table = None
+        for t in tables:
+            if t.select_one("td.tltle a"):
+                target_table = t
+                break
+
+        if target_table is None:
+            return []
 
         collected = []
-        for row in soup.select('table.type_5 tr, table tr'):
-            cols = row.select('td')
+        for row in target_table.select("tr"):
+            cols = row.select("td")
             if len(cols) < 4:
                 continue
-            name_tag = row.select_one('a.tltle, td.tltle a, a[href*="code="]')
+            name_tag = cols[0].select_one("a")
             if not name_tag:
                 continue
             name = name_tag.text.strip()
             if not name or any(k in name for k in etf_keywords):
                 continue
-
-            # 순매수 금액: 백만원 단위 → 억원 변환
             try:
-                # 컬럼 순서: 순위, 종목명, 현재가, 전일비, 등락률, 순매수거래량, 순매수거래대금
-                amount_raw = ""
-                for col in reversed(cols):
-                    txt = col.text.strip().replace(',', '').replace('-', '')
-                    if txt.isdigit() and len(txt) >= 3:
-                        amount_raw = txt
-                        break
-                if not amount_raw:
+                amount_raw = cols[2].text.strip().replace(",", "")
+                amount_mil = int(amount_raw)  # 백만원 단위
+                if amount_mil <= 0:
                     continue
-                amount_val = int(amount_raw)  # 백만원 단위
-                amount_100m = amount_val / 100  # 억원 단위
-                if amount_100m <= 0:
-                    continue
+                amount_100m = amount_mil / 100  # 억원 단위
                 if amount_100m >= 10000:
-                    t = int(amount_100m // 10000)
-                    b = int(amount_100m % 10000)
-                    amount_str = f"{t}조 {b:,}억원" if b > 0 else f"{t}조원"
+                    t_won = int(amount_100m // 10000)
+                    b_won = int(amount_100m % 10000)
+                    amount_str = f"{t_won}조 {b_won:,}억원" if b_won > 0 else f"{t_won}조원"
                 else:
                     amount_str = f"{amount_100m:,.0f}억원"
-                collected.append({"종목": name, "순매수": amount_str, "_val": amount_val})
+                collected.append({"종목": name, "순매수": amount_str, "_val": amount_mil})
             except:
                 continue
 
-        # 순매수 금액 내림차순 정렬 후 TOP5
+        # 이미 큰 순서로 나오지만 안전하게 재정렬 후 TOP5
         collected.sort(key=lambda x: x["_val"], reverse=True)
         return [{"종목": r["종목"], "순매수": r["순매수"]} for r in collected[:5]]
 
@@ -718,8 +721,8 @@ def render_daily_report():
             st.warning("📊 KIS API 연결 실패 — 네이버 금융 백업 데이터를 로드합니다.")
         
         with st.spinner("네이버 금융 수급 데이터를 수집 중..."):
-            foreign_rows = get_naver_supply_deal("1000")    # 외국인
-            institution_rows = get_naver_supply_deal("2000") # 기관
+            foreign_rows = get_naver_supply_deal("9000")    # 외국인
+            institution_rows = get_naver_supply_deal("1000") # 기관
             
         # 🎯 [2열 대칭 개편] 애초에 존재하지 않는 개인 탭을 제외하고, 외국인과 기관 2개 컬럼으로 꽉 채워 배치합니다.
         col_f, col_i = st.columns(2)
