@@ -32,6 +32,7 @@ def get_naver_supply_deal(investor_gubun="9000"):
         for i in range(5):
             try_date = (today - dt.timedelta(days=i)).strftime("%Y%m%d")
             df = stock.get_market_net_purchases_of_equities(try_date, try_date, "KOSPI", investor_name)
+            st.write(f"🔧 {try_date} / {investor_name}: shape={df.shape if df is not None else None}")
             if df is not None and not df.empty:
                 date_str = try_date
                 break
