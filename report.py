@@ -15,50 +15,40 @@ from ui_components import (
 def get_naver_supply_deal(investor_gubun="9000"):
     """네이버 금융 투자자별 순매수 상위 종목 (코스피)
     investor_gubun: "9000"=외국인, "1000"=기관
-    테이블 구조: 종목명 | 수량(천주) | 금액(백만원) | 당일거래량
     """
     try:
         from bs4 import BeautifulSoup
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-            "Referer": "https://finance.naver.com"
+            "Referer": "https://finance.naver.com/sise/sise_deal_rank.naver"
         }
         url = f"https://finance.naver.com/sise/sise_deal_rank.naver?investor_gubun={investor_gubun}"
         res = requests.get(url, headers=headers, timeout=10)
-        res.encoding = 'euc-kr'
+        res.encoding = 'cp949'
         soup = BeautifulSoup(res.text, 'html.parser')
 
         etf_keywords = ["KODEX", "TIGER", "KBSTAR", "ARIRANG", "HANARO", "KOSEF", "PLUS",
                         "ACE", "SOL", "TIMEFOLIO", "ETF", "ETN", "인버스", "레버리지", "선물", "RISE", "WOORI"]
 
-        # 오늘 날짜(가장 최근) 데이터가 들어있는 첫 번째 테이블만 사용
-        tables = soup.select("table")
-        target_table = None
-        for t in tables:
-            if t.select_one("td.tltle a"):
-                target_table = t
-                break
-
-        if target_table is None:
-            return []
-
         collected = []
-        for row in target_table.select("tr"):
-            cols = row.select("td")
-            if len(cols) < 4:
-                continue
-            name_tag = cols[0].select_one("a")
-            if not name_tag:
-                continue
-            name = name_tag.text.strip()
+        for a_tag in soup.select("a.tltle"):
+            name = a_tag.text.strip()
             if not name or any(k in name for k in etf_keywords):
                 continue
+
+            tr = a_tag.find_parent("tr")
+            if not tr:
+                continue
+            cols = tr.select("td")
+            if len(cols) < 4:
+                continue
+
             try:
                 amount_raw = cols[2].text.strip().replace(",", "")
-                amount_mil = int(amount_raw)  # 백만원 단위
+                amount_mil = int(amount_raw)
                 if amount_mil <= 0:
                     continue
-                amount_100m = amount_mil / 100  # 억원 단위
+                amount_100m = amount_mil / 100
                 if amount_100m >= 10000:
                     t_won = int(amount_100m // 10000)
                     b_won = int(amount_100m % 10000)
@@ -69,7 +59,6 @@ def get_naver_supply_deal(investor_gubun="9000"):
             except:
                 continue
 
-        # 이미 큰 순서로 나오지만 안전하게 재정렬 후 TOP5
         collected.sort(key=lambda x: x["_val"], reverse=True)
         return [{"종목": r["종목"], "순매수": r["순매수"]} for r in collected[:5]]
 
