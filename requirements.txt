@@ -6,3 +6,4 @@ numpy
 finance-datareader
 beautifulsoup4
 reportlab
+pykrx
