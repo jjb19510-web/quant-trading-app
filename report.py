@@ -72,7 +72,7 @@ def get_naver_supply_deal(investor_gubun="9000"):
         return rows
 
     except Exception as e:
-        print(f"pykrx 수급 조회 오류: {e}")
+        st.error(f"🔧 pykrx 오류: {type(e).__name__}: {e}")
         return []
 
 
