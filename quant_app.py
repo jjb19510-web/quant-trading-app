@@ -638,6 +638,7 @@ with tab2:
                     })
             
             if scorecard_rows:
+                kis_token_for_supply = get_kis_token() if KIS_AVAILABLE else None
                 cols = st.columns(min(len(scorecard_rows), 3))
                 for idx, row in enumerate(scorecard_rows):
                     with cols[idx % 3]:
@@ -728,7 +729,7 @@ with tab2:
                           </div>
                           
                           <!-- 목표가/손절 -->
-                          <div style='display:flex; gap:8px; margin-top:10px;'>
+                          <div style='display:flex; gap:8px; margin-top:10px; margin-bottom:10px;'>
                             <div style='flex:1; background:rgba(239,68,68,0.06); border:0.5px solid rgba(239,68,68,0.2); border-radius:8px; padding:7px 10px; text-align:center;'>
                               <div style='font-size:10px; color:#9ca3af; margin-bottom:2px;'>🎯 목표까지</div>
                               <div style='font-size:12px; font-weight:600; color:#ef4444;'>{to_target:.1f}%</div>
@@ -741,6 +742,59 @@ with tab2:
                           
                         </div>
                         """, unsafe_allow_html=True)
+
+                        # ── 외국인/기관 수급 섹션 (KIS API) ──
+                        if KIS_AVAILABLE and kis_token_for_supply:
+                            try:
+                                from broker import get_stock_investor
+                                supply_ticker = row["종목명"].split("(")[-1].replace(")", "").strip().replace(".KS", "").replace(".KQ", "")
+                                inv_data = get_stock_investor(supply_ticker, kis_token_for_supply)
+
+                                if inv_data.get("rt_cd") == "0" and inv_data.get("output"):
+                                    latest = inv_data["output"][0]
+                                    date_str = latest.get("stck_bsop_date", "")
+                                    date_fmt = f"{date_str[4:6]}/{date_str[6:8]}" if len(date_str) == 8 else date_str
+
+                                    frgn_qty = int(latest.get("frgn_ntby_qty", 0))
+                                    orgn_qty = int(latest.get("orgn_ntby_qty", 0))
+                                    frgn_amt_eok = int(latest.get("frgn_ntby_tr_pbmn", 0)) / 100  # 백만원 → 억원
+                                    orgn_amt_eok = int(latest.get("orgn_ntby_tr_pbmn", 0)) / 100
+
+                                    frgn_color = "#ef4444" if frgn_qty >= 0 else "#3b82f6"
+                                    orgn_color = "#ef4444" if orgn_qty >= 0 else "#3b82f6"
+                                    frgn_arrow = "▲" if frgn_qty >= 0 else "▼"
+                                    orgn_arrow = "▲" if orgn_qty >= 0 else "▼"
+
+                                    # 게이지 바 너비 (최대 ±100억 기준 스케일)
+                                    max_scale = 100
+                                    frgn_pct = min(abs(frgn_amt_eok) / max_scale * 100, 100)
+                                    orgn_pct = min(abs(orgn_amt_eok) / max_scale * 100, 100)
+
+                                    st.markdown(f"""
+                                    <div style='background:#0f1117; border:0.5px solid #1e2330; border-radius:10px; padding:12px; margin-top:-2px;'>
+                                      <div style='font-size:10px; color:#6b7280; margin-bottom:8px;'>💰 수급 동향 · {date_fmt} 기준</div>
+                                      <div style='margin-bottom:8px;'>
+                                        <div style='display:flex; justify-content:space-between; margin-bottom:3px;'>
+                                          <span style='font-size:11px; color:#9ca3af;'>🌍 외국인</span>
+                                          <span style='font-size:11px; font-weight:600; color:{frgn_color};'>{frgn_arrow} {abs(frgn_amt_eok):,.1f}억원</span>
+                                        </div>
+                                        <div style='background:#1e2330; border-radius:4px; height:5px; width:100%;'>
+                                          <div style='background:{frgn_color}; border-radius:4px; height:5px; width:{frgn_pct}%;'></div>
+                                        </div>
+                                      </div>
+                                      <div>
+                                        <div style='display:flex; justify-content:space-between; margin-bottom:3px;'>
+                                          <span style='font-size:11px; color:#9ca3af;'>🏦 기관</span>
+                                          <span style='font-size:11px; font-weight:600; color:{orgn_color};'>{orgn_arrow} {abs(orgn_amt_eok):,.1f}억원</span>
+                                        </div>
+                                        <div style='background:#1e2330; border-radius:4px; height:5px; width:100%;'>
+                                          <div style='background:{orgn_color}; border-radius:4px; height:5px; width:{orgn_pct}%;'></div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                            except Exception:
+                                pass
             # ── [종목별 실시간 성적표 통합 렌더링 끝] ──
 
             if "backtest_results" not in st.session_state:
