@@ -429,22 +429,6 @@ with tab2:
                 st.session_state["kis_token"] = kis_token
             name_map = get_krx_name_map()
 
-            # ── 🔧 임시 디버그: 종목별 투자자 정보(FHKST01010900) 응답 확인 ──
-            if KIS_AVAILABLE and kis_token and tickers:
-                with st.expander("🔧 투자자 정보 API 디버그 (확인 후 삭제)", expanded=True):
-                    try:
-                        from broker import get_stock_investor
-                        debug_ticker = tickers[0].replace(".KS", "").replace(".KQ", "")
-                        investor_raw = get_stock_investor(debug_ticker, kis_token)
-                        st.write(f"**조회 종목: {debug_ticker}**")
-                        st.json({
-                            "rt_cd": investor_raw.get("rt_cd"),
-                            "msg1": investor_raw.get("msg1"),
-                            "output_count": len(investor_raw.get("output", [])),
-                            "sample": investor_raw.get("output", [])[:3]
-                        })
-                    except Exception as e:
-                        st.error(f"투자자 정보 조회 오류: {e}")
             for i, ticker in enumerate(tickers):
                 with price_cols[i]:
                     price_data = None
@@ -486,6 +470,50 @@ with tab2:
                             <div style='font-size:14px; color:{DIM};'>조회 실패</div>
                         </div>
                         """, unsafe_allow_html=True)
+
+            # ── 외국인/기관 수급 카드 ──
+            if KIS_AVAILABLE and kis_token and market == "한국주식 (KS)":
+                card("💰 외국인 · 기관 수급", "최근 영업일 기준 (장중에는 전일 데이터)")
+                from broker import get_stock_investor
+                supply_cols = st.columns(len(tickers))
+                for i, ticker in enumerate(tickers):
+                    with supply_cols[i]:
+                        try:
+                            raw_ticker = ticker.replace(".KS", "").replace(".KQ", "")
+                            inv_data = get_stock_investor(raw_ticker, kis_token)
+                            display_name = name_map.get(raw_ticker, ticker)
+                            if inv_data.get("rt_cd") == "0" and inv_data.get("output"):
+                                latest = inv_data["output"][0]
+                                date_str = latest.get("stck_bsop_date", "")
+                                date_fmt = f"{date_str[4:6]}/{date_str[6:8]}" if len(date_str) == 8 else date_str
+
+                                frgn_qty = int(latest.get("frgn_ntby_qty", 0))
+                                orgn_qty = int(latest.get("orgn_ntby_qty", 0))
+                                frgn_amt = int(latest.get("frgn_ntby_tr_pbmn", 0))
+                                orgn_amt = int(latest.get("orgn_ntby_tr_pbmn", 0))
+
+                                frgn_color = "#ef4444" if frgn_qty >= 0 else "#3b82f6"
+                                orgn_color = "#ef4444" if orgn_qty >= 0 else "#3b82f6"
+                                frgn_arrow = "▲" if frgn_qty >= 0 else "▼"
+                                orgn_arrow = "▲" if orgn_qty >= 0 else "▼"
+
+                                st.markdown(f"""
+                                <div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:12px; padding:14px 18px; margin-bottom:8px;'>
+                                    <div style='font-size:12px; color:{DIM}; margin-bottom:6px;'>{display_name} · {date_fmt} 기준</div>
+                                    <div style='display:flex; justify-content:space-between; padding:4px 0;'>
+                                        <span style='color:#9ca3af; font-size:12px;'>🌍 외국인</span>
+                                        <span style='color:{frgn_color}; font-size:13px; font-weight:600; font-family:JetBrains Mono;'>{frgn_arrow} {abs(frgn_qty):,}주 ({frgn_amt:+,}백만)</span>
+                                    </div>
+                                    <div style='display:flex; justify-content:space-between; padding:4px 0;'>
+                                        <span style='color:#9ca3af; font-size:12px;'>🏦 기관</span>
+                                        <span style='color:{orgn_color}; font-size:13px; font-weight:600; font-family:JetBrains Mono;'>{orgn_arrow} {abs(orgn_qty):,}주 ({orgn_amt:+,}백만)</span>
+                                    </div>
+                                </div>
+                                """, unsafe_allow_html=True)
+                            else:
+                                st.info(f"{display_name}: 데이터 없음")
+                        except Exception as e:
+                            st.info(f"수급 조회 실패: {e}")
 
             render_summary_cards(
                 invested=investment,
