@@ -428,6 +428,23 @@ with tab2:
             if kis_token:
                 st.session_state["kis_token"] = kis_token
             name_map = get_krx_name_map()
+
+            # ── 🔧 임시 디버그: 종목별 투자자 정보(FHKST01010900) 응답 확인 ──
+            if KIS_AVAILABLE and kis_token and tickers:
+                with st.expander("🔧 투자자 정보 API 디버그 (확인 후 삭제)", expanded=True):
+                    try:
+                        from broker import get_stock_investor
+                        debug_ticker = tickers[0].replace(".KS", "").replace(".KQ", "")
+                        investor_raw = get_stock_investor(debug_ticker, kis_token)
+                        st.write(f"**조회 종목: {debug_ticker}**")
+                        st.json({
+                            "rt_cd": investor_raw.get("rt_cd"),
+                            "msg1": investor_raw.get("msg1"),
+                            "output_count": len(investor_raw.get("output", [])),
+                            "sample": investor_raw.get("output", [])[:3]
+                        })
+                    except Exception as e:
+                        st.error(f"투자자 정보 조회 오류: {e}")
             for i, ticker in enumerate(tickers):
                 with price_cols[i]:
                     price_data = None
