@@ -298,6 +298,26 @@ def send_kakao_message(message: str) -> dict:
         }, ensure_ascii=False)
     }
 
+    def get_stock_investor(ticker, token, market="J"):
+        """종목별 외국인/기관 순매수 현황 조회
+        TR: FHKST01010900 (주식현재가 투자자)
+        ※ 당일 데이터는 장 종료 후 제공됨 (장중에는 전일 데이터)
+        """
+        url = f"{BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-investor"
+        headers = {
+        "content-type": "application/json",
+        "authorization": f"Bearer {token}",
+        "appkey": APP_KEY,
+        "appsecret": APP_SECRET,
+        "tr_id": "FHKST01010900"
+        }
+        params = {
+        "FID_COND_MRKT_DIV_CODE": market,
+        "FID_INPUT_ISCD": ticker
+        }
+        res = requests.get(url, headers=headers, params=params)
+        return res.json()
+
     res = requests.post(url, headers=headers, data=data)
     result = res.json()
 
