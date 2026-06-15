@@ -795,8 +795,9 @@ def render_daily_report():
                 """, unsafe_allow_html=True)
         else:
             st.info("뉴스를 불러오지 못했어요.")
-    except:
-        st.info("뉴스를 불러오지 못했어요.")
+    except Exception as e:
+        st.error(f"뉴스 오류: {e}")
+        st.write(f"items 수: {len(items) if 'items' in dir() else 'N/A'}")
 
     st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
 
