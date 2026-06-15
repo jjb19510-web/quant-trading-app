@@ -666,8 +666,10 @@ def render_daily_report():
         # 경제/시장: 한국경제 + 매일경제 → 3개
         # 정책/거시: 연합뉴스 + 조선비즈 → 2개
         news_sources = [
-            {"query": "코스피 주식 시장",    "domains": ["hankyung.com", "mk.co.kr"],     "limit": 3},
-            {"query": "금리 정책 경제 섹터", "domains": ["yna.co.kr", "biz.chosun.com"],  "limit": 2},
+            {"query": "한국경제 코스피 주식",   "domains": ["hankyung.com"],              "limit": 2},
+            {"query": "매일경제 코스피 주식",   "domains": ["mk.co.kr"],                  "limit": 1},
+            {"query": "연합뉴스 금리 정책",     "domains": ["yna.co.kr"],                 "limit": 1},
+            {"query": "조선비즈 경제 정책",     "domains": ["biz.chosun.com"],            "limit": 1},
         ]
 
         all_items = []
@@ -698,18 +700,6 @@ def render_daily_report():
             if title not in seen:
                 seen.add(title)
                 items.append(item)
-        st.write(f"🔧 수집된 뉴스 수: {len(items)}개 / all_items: {len(all_items)}개")
-        for source in news_sources:
-            res_dbg = requests.get(
-                "https://openapi.naver.com/v1/search/news.json",
-                headers={"X-Naver-Client-Id": naver_id, "X-Naver-Client-Secret": naver_secret},
-                params={"query": source["query"], "display": 5, "sort": "date"},
-                timeout=5
-            )
-            dbg_data = res_dbg.json()
-            st.write(f"쿼리: {source['query']} / 상태: {res_dbg.status_code} / 총결과: {dbg_data.get('total', 0)}개")
-            for it in dbg_data.get("items", [])[:2]:
-                st.write(f"  링크: {it.get('originallink', it.get('link', ''))}")
         if items:
             for item in items:
                 title = item["title"].replace("<b>", "").replace("</b>", "")
