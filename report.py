@@ -699,8 +699,17 @@ def render_daily_report():
                 seen.add(title)
                 items.append(item)
         st.write(f"🔧 수집된 뉴스 수: {len(items)}개 / all_items: {len(all_items)}개")
-        for dbg in all_items[:3]:
-            st.write(f"링크: {dbg.get('originallink', dbg.get('link', ''))}")
+        for source in news_sources:
+            res_dbg = requests.get(
+                "https://openapi.naver.com/v1/search/news.json",
+                headers={"X-Naver-Client-Id": naver_id, "X-Naver-Client-Secret": naver_secret},
+                params={"query": source["query"], "display": 5, "sort": "date"},
+                timeout=5
+            )
+            dbg_data = res_dbg.json()
+            st.write(f"쿼리: {source['query']} / 상태: {res_dbg.status_code} / 총결과: {dbg_data.get('total', 0)}개")
+            for it in dbg_data.get("items", [])[:2]:
+                st.write(f"  링크: {it.get('originallink', it.get('link', ''))}")
         if items:
             for item in items:
                 title = item["title"].replace("<b>", "").replace("</b>", "")
