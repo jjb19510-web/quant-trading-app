@@ -698,6 +698,9 @@ def render_daily_report():
             if title not in seen:
                 seen.add(title)
                 items.append(item)
+        st.write(f"🔧 수집된 뉴스 수: {len(items)}개 / all_items: {len(all_items)}개")
+        for dbg in all_items[:3]:
+            st.write(f"링크: {dbg.get('originallink', dbg.get('link', ''))}")
         if items:
             for item in items:
                 title = item["title"].replace("<b>", "").replace("</b>", "")
