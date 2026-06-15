@@ -661,12 +661,43 @@ def render_daily_report():
     try:
         naver_id = st.secrets.get("NAVER_CLIENT_ID", "")
         naver_secret = st.secrets.get("NAVER_CLIENT_SECRET", "")
-        url = "https://openapi.naver.com/v1/search/news.json?query=주식+코스피&display=5&sort=date"
-        res = requests.get(url, headers={
-            "X-Naver-Client-Id": naver_id,
-            "X-Naver-Client-Secret": naver_secret
-        }, timeout=5)
-        items = res.json().get("items", [])
+
+        # 언론사별 쿼리 + 도메인 필터 설정
+        # 경제/시장: 한국경제 + 매일경제 → 3개
+        # 정책/거시: 연합뉴스 + 조선비즈 → 2개
+        news_sources = [
+            {"query": "코스피 주식 시장",    "domains": ["hankyung.com", "mk.co.kr"],     "limit": 3},
+            {"query": "금리 정책 경제 섹터", "domains": ["yna.co.kr", "biz.chosun.com"],  "limit": 2},
+        ]
+
+        all_items = []
+        for source in news_sources:
+            res = requests.get(
+                "https://openapi.naver.com/v1/search/news.json",
+                headers={
+                    "X-Naver-Client-Id": naver_id,
+                    "X-Naver-Client-Secret": naver_secret
+                },
+                params={"query": source["query"], "display": 30, "sort": "date"},
+                timeout=5
+            )
+            collected = []
+            for item in res.json().get("items", []):
+                link = item.get("originallink", item.get("link", ""))
+                if any(d in link for d in source["domains"]):
+                    collected.append(item)
+                if len(collected) >= source["limit"]:
+                    break
+            all_items.extend(collected)
+
+        # 중복 제거
+        seen = set()
+        items = []
+        for item in all_items:
+            title = item.get("title", "")
+            if title not in seen:
+                seen.add(title)
+                items.append(item)
         if items:
             for item in items:
                 title = item["title"].replace("<b>", "").replace("</b>", "")
