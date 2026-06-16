@@ -32,11 +32,34 @@ def load_ticker_info(ticker):
 @st.cache_data(ttl=600)
 def load_competitor_info(ct):
     import time
-    time.sleep(0.5)
+    time.sleep(0.3)
+    raw = ct.replace(".KS","").replace(".KQ","")
+    result = {"per": None, "pbr": None, "roe": None, "mkt_cap": None, "price": None}
     try:
-        return yf.Ticker(ct).info
-    except:
-        return {}
+        nv_url = f"https://m.stock.naver.com/api/stock/{raw}/integration"
+        nv_res = requests.get(nv_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
+        nv_data = nv_res.json()
+        total_infos = nv_data.get("totalInfos", [])
+        def clean(v):
+            return str(v).replace("원","").replace("%","").replace("배","").replace(",","").strip()
+        for item in total_infos:
+            c = str(item.get("code","")).lower()
+            v = str(item.get("value","")).strip()
+            if not v or v == "-": continue
+            try:
+                cv = clean(v)
+                if c == "per": result["per"] = float(cv)
+                elif c == "pbr": result["pbr"] = float(cv)
+                elif c == "roe": result["roe"] = float(cv)
+                elif c == "marketvalue": result["mkt_cap"] = float(cv) * 1e6
+                elif c == "nav": result["price"] = float(cv)
+            except: pass
+        # 현재가
+        price_data = nv_data.get("dealTrendInfos", [{}])
+        if price_data:
+            result["price"] = price_data[0].get("closePrice", None)
+    except: pass
+    return result
 
 def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
 
@@ -203,13 +226,8 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
                 )
                 st.plotly_chart(fig_fin, use_container_width=True, config={"displayModeBar": False})
 
-        # 밸류에이션
-        per = info.get("trailingPE") or info.get("forwardPE")
-        pbr = info.get("priceToBook")
-        roe = info.get("returnOnEquity")
-        eps = info.get("trailingEps")
-        mkt_cap = info.get("marketCap")
-        div_yield = info.get("dividendYield")
+        # 밸류에이션 — 네이버 모바일 API 메인, yfinance 보완
+        per = pbr = roe = eps = mkt_cap = div_yield = None
 
         if is_korean:
             try:
@@ -222,48 +240,33 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
                     return val_str.replace("원","").replace("%","").replace("배","").replace("x","").replace(",","").strip()
 
                 for info_item in total_infos:
-                    k = str(info_item.get("key", "")).upper()
-                    c = str(info_item.get("code", "")).lower()
-                    v = str(info_item.get("value", "")).strip()
-                    if not v or v == "-":
-                        continue
+                    c = str(info_item.get("code","")).lower()
+                    v = str(info_item.get("value","")).strip()
+                    if not v or v == "-": continue
                     val_clean = clean_val(v)
                     try:
-                        if c == "per" or k == "PER":
-                            if not per:
-                                per = float(val_clean)
-                        elif c == "pbr" or k == "PBR":
-                            if not pbr:
-                                pbr = float(val_clean)
-                        elif c == "eps" or k == "EPS":
-                            if not eps:
-                                eps = float(val_clean)
-                        elif c == "bps" or k == "BPS":
-                            pass  # 사용 안함
-                        elif c == "roe" or k == "ROE":
-                            if not roe:
-                                roe = float(val_clean) / 100
-                        elif c == "dividendyield" or k == "배당수익률":
-                            if not div_yield:
-                                div_yield = float(val_clean) / 100
-                        elif c == "marketvalue" or k == "시가총액":
-                            if not mkt_cap:
-                                # 순수 숫자(백만원 단위)로 오는 경우
-                                try:
-                                    mkt_cap = float(val_clean) * 1e6
-                                except:
-                                    pass
-                    except:
-                        pass
+                        if c == "per": per = float(val_clean)
+                        elif c == "pbr": pbr = float(val_clean)
+                        elif c == "eps": eps = float(val_clean)
+                        elif c == "roe": roe = float(val_clean) / 100
+                        elif c == "dividendyield": div_yield = float(val_clean) / 100
+                        elif c == "marketvalue":
+                            # 백만원 단위 숫자로 옴
+                            mkt_cap = float(val_clean) * 1e6
+                    except: pass
+            except: pass
 
-                # 시가총액이 여전히 없으면 현재가 * 상장주식수로 계산
-                if not mkt_cap:
-                    shares = info.get("sharesOutstanding") or info.get("impliedSharesOutstanding")
-                    if shares:
-                        mkt_cap = curr_price * shares
-
-            except:
-                pass
+        # yfinance 보완 (해외주식 또는 네이버에서 못 가져온 항목)
+        if not per: per = info.get("trailingPE") or info.get("forwardPE")
+        if not pbr: pbr = info.get("priceToBook")
+        if not roe: roe = info.get("returnOnEquity")
+        if not eps: eps = info.get("trailingEps")
+        if not mkt_cap:
+            mkt_cap = info.get("marketCap")
+            if not mkt_cap:
+                shares = info.get("sharesOutstanding")
+                if shares: mkt_cap = curr_price * shares
+        if not div_yield: div_yield = info.get("dividendYield")
 
         v1, v2, v3, v4, v5, v6 = st.columns(6)
         for col, label, value in [
@@ -625,13 +628,14 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
                 ci = load_competitor_info(ct)
                 ct_raw = ct.replace(".KS", "").replace(".KQ", "")
                 is_target = ct == ticker
+                price_val = ci.get("price")
                 comp_data.append({
                     "종목": f"★ {name_map.get(ct_raw, ct_raw)}" if is_target else name_map.get(ct_raw, ct_raw),
-                    "현재가": f"{int(ci.get('currentPrice', ci.get('regularMarketPrice', 0))):,}원" if ci.get('currentPrice') or ci.get('regularMarketPrice') else "N/A",
-                    "PER": f"{ci.get('trailingPE', 0):.1f}배" if ci.get('trailingPE') else "N/A",
-                    "PBR": f"{ci.get('priceToBook', 0):.1f}배" if ci.get('priceToBook') else "N/A",
-                    "ROE": f"{ci.get('returnOnEquity', 0)*100:.1f}%" if ci.get('returnOnEquity') else "N/A",
-                    "시가총액": f"{ci.get('marketCap', 0)/1e12:.1f}조" if ci.get('marketCap') else "N/A",
+                    "현재가": f"{int(float(price_val)):,}원" if price_val else "N/A",
+                    "PER": f"{ci['per']:.1f}배" if ci.get('per') else "N/A",
+                    "PBR": f"{ci['pbr']:.1f}배" if ci.get('pbr') else "N/A",
+                    "ROE": f"{ci['roe']:.1f}%" if ci.get('roe') else "N/A",
+                    "시가총액": f"{ci['mkt_cap']/1e12:.1f}조" if ci.get('mkt_cap') else "N/A",
                 })
             except:
                 pass
