@@ -159,8 +159,7 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
                     legend=dict(orientation="h", y=1.12),
                     xaxis=dict(gridcolor="rgba(0,0,0,0)"),
                     yaxis=dict(
-                        title=f"매출액({rev_unit})",
-                        titlefont=dict(color=ACCENT),
+                        title=dict(text=f"매출액({rev_unit})", font=dict(color=ACCENT)),
                         tickfont=dict(color=ACCENT),
                         gridcolor=LINE,
                         tickformat=",",
@@ -168,8 +167,7 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
                         side="left"
                     ),
                     yaxis2=dict(
-                        title=f"영업이익({op_unit})",
-                        titlefont=dict(color=CANDLE_UP),
+                        title=dict(text=f"영업이익({op_unit})", font=dict(color=CANDLE_UP)),
                         tickfont=dict(color=CANDLE_UP),
                         gridcolor="rgba(0,0,0,0)",
                         tickformat=",",
@@ -457,7 +455,8 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
             yaxis2=dict(
                 overlaying="y", side="right",
                 showgrid=False, tickformat=",",
-                title="거래량", titlefont=dict(color="#6b7280"), tickfont=dict(color="#6b7280")
+                title=dict(text="거래량", font=dict(color="#6b7280")),
+                tickfont=dict(color="#6b7280")
             ),
             xaxis=dict(gridcolor=LINE)
         )
