@@ -16,8 +16,27 @@ def load_ticker_data(ticker):
 
 @st.cache_data(ttl=600)
 def load_ticker_info(ticker):
+    import time
     t = yf.Ticker(ticker)
-    return t.info, t.financials
+    try:
+        info = t.info
+    except:
+        info = {}
+    time.sleep(1)
+    try:
+        financials = t.financials
+    except:
+        financials = None
+    return info, financials
+
+@st.cache_data(ttl=600)
+def load_competitor_info(ct):
+    import time
+    time.sleep(0.5)
+    try:
+        return yf.Ticker(ct).info
+    except:
+        return {}
 
 def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
 
@@ -569,7 +588,7 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
         comp_data = []
         for ct in comp_tickers:
             try:
-                ci = yf.Ticker(ct).info
+                ci = load_competitor_info(ct)
                 ct_raw = ct.replace(".KS", "").replace(".KQ", "")
                 is_target = ct == ticker
                 comp_data.append({
