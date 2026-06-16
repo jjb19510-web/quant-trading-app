@@ -106,7 +106,7 @@ def get_kis_token():
     except:
         return None
 
-tab1, tab2, tab3, tab4 = st.tabs(["📊 대시보드", "🔍 분석", "💼 포트폴리오", "📋 리포트"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 대시보드", "🔍 분석", "💼 포트폴리오", "📋 리포트", "🔬 심층분석"])
 
 with tab1:
     render_dashboard()
@@ -1105,3 +1105,7 @@ with tab3:
 with tab4:
     from report import render_report
     render_report()
+
+with tab5:
+    from deep_analysis import render_deep_analysis
+    render_deep_analysis(KIS_AVAILABLE, get_kis_token)
