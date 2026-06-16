@@ -184,21 +184,21 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
                     legend=dict(orientation="h", y=1.12),
                     xaxis=dict(gridcolor="rgba(0,0,0,0)"),
                     yaxis=dict(
-                        title=dict(text=f"매출액({rev_unit})", font=dict(color=ACCENT)),
                         tickfont=dict(color=ACCENT),
                         gridcolor=LINE,
                         tickformat=",",
                         ticksuffix=rev_unit,
-                        side="left"
+                        side="left",
+                        showgrid=True
                     ),
                     yaxis2=dict(
-                        title=dict(text=f"영업이익({op_unit})", font=dict(color=CANDLE_UP)),
                         tickfont=dict(color=CANDLE_UP),
                         gridcolor="rgba(0,0,0,0)",
                         tickformat=",",
                         ticksuffix=op_unit,
                         side="right",
-                        overlaying="y"
+                        overlaying="y",
+                        showgrid=False
                     )
                 )
                 st.plotly_chart(fig_fin, use_container_width=True, config={"displayModeBar": False})
@@ -218,40 +218,50 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
                 nv_data = nv_res.json()
                 total_infos = nv_data.get("totalInfos", [])
 
-                def clean_val(v):
-                    return str(v).replace("원", "").replace("%", "").replace("배", "").replace(",", "").strip()
+                def clean_val(val_str):
+                    return val_str.replace("원","").replace("%","").replace("배","").replace("x","").replace(",","").strip()
 
-                for item in total_infos:
-                    c = str(item.get("code", "")).lower()
-                    k = str(item.get("key", "")).upper()
-                    v = str(item.get("value", "")).strip()
+                for info_item in total_infos:
+                    k = str(info_item.get("key", "")).upper()
+                    c = str(info_item.get("code", "")).lower()
+                    v = str(info_item.get("value", "")).strip()
                     if not v or v == "-":
                         continue
+                    val_clean = clean_val(v)
                     try:
-                        cv = clean_val(v)
-                        if (c == "per" or k == "PER") and not per:
-                            per = float(cv)
-                        elif (c == "pbr" or k == "PBR") and not pbr:
-                            pbr = float(cv)
-                        elif (c == "eps" or k == "EPS") and not eps:
-                            eps = float(cv)
-                        elif (c == "roe" or k == "ROE") and not roe:
-                            roe = float(cv) / 100
-                        elif (c == "dividendyield" or "배당수익률" in k) and not div_yield:
-                            div_yield = float(cv) / 100
-                        elif (c == "marketvalue" or "시가총액" in k) and not mkt_cap:
-                            # "X조 Y억" 형태 파싱
-                            import re
-                            jo = re.search(r"(\d+\.?\d*)조", v)
-                            eok = re.search(r"(\d+\.?\d*)억", v)
-                            if jo:
-                                mkt_cap = float(jo.group(1)) * 1e12
-                                if eok:
-                                    mkt_cap += float(eok.group(1)) * 1e8
-                            elif eok:
-                                mkt_cap = float(eok.group(1)) * 1e8
+                        if c == "per" or k == "PER":
+                            if not per:
+                                per = float(val_clean)
+                        elif c == "pbr" or k == "PBR":
+                            if not pbr:
+                                pbr = float(val_clean)
+                        elif c == "eps" or k == "EPS":
+                            if not eps:
+                                eps = float(val_clean)
+                        elif c == "bps" or k == "BPS":
+                            pass  # 사용 안함
+                        elif c == "roe" or k == "ROE":
+                            if not roe:
+                                roe = float(val_clean) / 100
+                        elif c == "dividendyield" or k == "배당수익률":
+                            if not div_yield:
+                                div_yield = float(val_clean) / 100
+                        elif c == "marketvalue" or k == "시가총액":
+                            if not mkt_cap:
+                                # 순수 숫자(백만원 단위)로 오는 경우
+                                try:
+                                    mkt_cap = float(val_clean) * 1e6
+                                except:
+                                    pass
                     except:
                         pass
+
+                # 시가총액이 여전히 없으면 현재가 * 상장주식수로 계산
+                if not mkt_cap:
+                    shares = info.get("sharesOutstanding") or info.get("impliedSharesOutstanding")
+                    if shares:
+                        mkt_cap = curr_price * shares
+
             except:
                 pass
 
