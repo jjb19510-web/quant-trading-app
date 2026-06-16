@@ -91,14 +91,13 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
     # ══════════════════════════════════════════
     # 1. 재무제표 분석
     # ══════════════════════════════════════════
-    card("📊 재무제표 분석", "매출/영업이익 추이 · PER/PBR 밸류에이션")
+    card("📊 재무제표 분석", "매출/영업이익 추이 (이중 축) · PER/PBR 밸류에이션")
 
     try:
         t_obj = yf.Ticker(ticker)
         info = t_obj.info
         financials = t_obj.financials
 
-        # 연간 재무 차트
         if financials is not None and not financials.empty:
             rev_row = next((r for r in ["Total Revenue", "Revenue"] if r in financials.index), None)
             op_row = next((r for r in ["Operating Income", "EBIT"] if r in financials.index), None)
@@ -108,51 +107,72 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
                 cols_fin = financials.columns[:4]
                 years = [str(c.year) for c in cols_fin][::-1]
 
+                def auto_unit(max_eok):
+                    if abs(max_eok) >= 10000:
+                        return "조원", 10000
+                    return "억원", 1
+
+                rev_unit, rev_div = "억원", 1
+                op_unit, op_div = "억원", 1
+
                 if rev_row:
-                    rev_vals = [round(float(financials.loc[rev_row, c]) / 1e8, 1) for c in cols_fin][::-1]
+                    rev_eok = [round(float(financials.loc[rev_row, c]) / 1e8, 1) for c in cols_fin][::-1]
+                    rev_unit, rev_div = auto_unit(max(abs(v) for v in rev_eok))
+                    rev_vals = [round(v / rev_div, 2) for v in rev_eok]
+                    rev_hover = [f"{v:,.2f}{rev_unit}" if rev_unit == "조원" else f"{v:,.0f}{rev_unit}" for v in rev_vals]
                     fig_fin.add_trace(go.Bar(
                         x=years, y=rev_vals,
-                        name="매출액",
-                        marker_color=ACCENT, opacity=0.8,
-                        hovertemplate="<b>%{x}년 매출액</b><br>%{customdata:,}억원<extra></extra>",
-                        customdata=rev_vals
+                        name=f"매출액({rev_unit})",
+                        marker_color=ACCENT, opacity=0.75,
+                        yaxis="y1",
+                        hovertemplate="<b>%{x}년 매출액</b><br>%{customdata}<extra></extra>",
+                        customdata=rev_hover
                     ))
+
                 if op_row:
-                    op_vals = [round(float(financials.loc[op_row, c]) / 1e8, 1) for c in cols_fin][::-1]
+                    op_eok = [round(float(financials.loc[op_row, c]) / 1e8, 1) for c in cols_fin][::-1]
+                    op_unit, op_div = auto_unit(max(abs(v) for v in op_eok))
+                    op_vals = [round(v / op_div, 2) for v in op_eok]
+                    op_hover = [f"{v:,.2f}{op_unit}" if op_unit == "조원" else f"{v:,.0f}{op_unit}" for v in op_vals]
                     fig_fin.add_trace(go.Bar(
                         x=years, y=op_vals,
-                        name="영업이익",
+                        name=f"영업이익({op_unit})",
                         marker_color=CANDLE_UP, opacity=0.9,
-                        hovertemplate="<b>%{x}년 영업이익</b><br>%{customdata:,}억원<extra></extra>",
-                        customdata=op_vals
+                        yaxis="y2",
+                        hovertemplate="<b>%{x}년 영업이익</b><br>%{customdata}<extra></extra>",
+                        customdata=op_hover
                     ))
 
-                # 최대값 기준으로 y축 단위 결정
-                all_vals = (rev_vals if rev_row else []) + (op_vals if op_row else [])
-                max_val = max(all_vals) if all_vals else 1
-                if max_val >= 10000:
-                    tick_suffix = "억"
-                    tick_format = ","
-                else:
-                    tick_suffix = "억"
-                    tick_format = ","
-
                 fig_fin.update_layout(
-                    barmode="group", height=320,
+                    barmode="group", height=340,
                     paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                     font=dict(color=TEXT, size=11),
-                    margin=dict(l=0, r=20, t=30, b=20),
+                    margin=dict(l=60, r=60, t=30, b=20),
                     legend=dict(orientation="h", y=1.12),
+                    xaxis=dict(gridcolor="rgba(0,0,0,0)"),
                     yaxis=dict(
+                        title=f"매출액({rev_unit})",
+                        titlefont=dict(color=ACCENT),
+                        tickfont=dict(color=ACCENT),
                         gridcolor=LINE,
-                        tickformat=tick_format,
-                        ticksuffix=tick_suffix,
+                        tickformat=",",
+                        ticksuffix=rev_unit,
+                        side="left"
                     ),
-                    xaxis=dict(gridcolor="rgba(0,0,0,0)")
+                    yaxis2=dict(
+                        title=f"영업이익({op_unit})",
+                        titlefont=dict(color=CANDLE_UP),
+                        tickfont=dict(color=CANDLE_UP),
+                        gridcolor="rgba(0,0,0,0)",
+                        tickformat=",",
+                        ticksuffix=op_unit,
+                        side="right",
+                        overlaying="y"
+                    )
                 )
                 st.plotly_chart(fig_fin, use_container_width=True, config={"displayModeBar": False})
 
-        # 밸류에이션 — yfinance 우선, 한국주식은 네이버 보완
+        # 밸류에이션
         per = info.get("trailingPE") or info.get("forwardPE")
         pbr = info.get("priceToBook")
         roe = info.get("returnOnEquity")
@@ -176,16 +196,11 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
                     if not v or v == "-":
                         continue
                     try:
-                        if c == "per" and not per:
-                            per = float(clean_val(v))
-                        elif c == "pbr" and not pbr:
-                            pbr = float(clean_val(v))
-                        elif c == "eps" and not eps:
-                            eps = float(clean_val(v))
-                        elif c == "roe" and not roe:
-                            roe = float(clean_val(v)) / 100
-                        elif c == "dividendyield" and not div_yield:
-                            div_yield = float(clean_val(v)) / 100
+                        if c == "per" and not per: per = float(clean_val(v))
+                        elif c == "pbr" and not pbr: pbr = float(clean_val(v))
+                        elif c == "eps" and not eps: eps = float(clean_val(v))
+                        elif c == "roe" and not roe: roe = float(clean_val(v)) / 100
+                        elif c == "dividendyield" and not div_yield: div_yield = float(clean_val(v)) / 100
                     except:
                         pass
             except:
@@ -216,10 +231,10 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
     # ══════════════════════════════════════════
     # 2. 기술적 분석
     # ══════════════════════════════════════════
-    card("📈 기술적 분석", "RSI · 이동평균 · 볼린저밴드 · 52주 위치")
+    card("📈 기술적 분석", "추세 · 모멘텀 · 변동성 · 거래량 종합 진단")
 
     try:
-        # RSI
+        # 기본 지표
         delta = close.diff()
         gain = delta.where(delta > 0, 0).rolling(14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
@@ -227,59 +242,166 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
         rsi = 100 - (100 / (1 + rs))
         rsi_val = float(rsi.iloc[-1])
 
-        # 이동평균
         ma20 = close.rolling(20).mean()
         ma60 = close.rolling(60).mean()
         ma120 = close.rolling(120).mean()
 
-        # 볼린저밴드
         bb_mid = close.rolling(20).mean()
         bb_std = close.rolling(20).std()
         bb_upper = bb_mid + 2 * bb_std
         bb_lower = bb_mid - 2 * bb_std
 
-        # 52주 위치
-        high_52 = float(high.rolling(252).max().iloc[-1])
-        low_52 = float(low.rolling(252).min().iloc[-1])
+        high_52 = float(high.max())
+        low_52 = float(low.min())
         pos_52 = (curr_price - low_52) / (high_52 - low_52) * 100 if high_52 != low_52 else 50
+
+        # 거래량 분석
+        vol_ma20 = volume.rolling(20).mean()
+        vol_ratio = float(volume.iloc[-1]) / float(vol_ma20.iloc[-1]) if float(vol_ma20.iloc[-1]) > 0 else 1
+
+        # 추세 판단
+        ma20_val = float(ma20.iloc[-1])
+        ma60_val = float(ma60.iloc[-1])
+        ma120_val = float(ma120.iloc[-1])
+
+        if curr_price > ma20_val > ma60_val > ma120_val:
+            trend = "강한 상승추세 📈"
+            trend_color = CANDLE_UP
+        elif curr_price > ma20_val and ma20_val > ma60_val:
+            trend = "상승추세 🟢"
+            trend_color = CANDLE_UP
+        elif curr_price < ma20_val < ma60_val < ma120_val:
+            trend = "강한 하락추세 📉"
+            trend_color = CANDLE_DOWN
+        elif curr_price < ma20_val and ma20_val < ma60_val:
+            trend = "하락추세 🔴"
+            trend_color = CANDLE_DOWN
+        else:
+            trend = "횡보/혼조 ⚖️"
+            trend_color = "#f59e0b"
 
         # RSI 상태
         if rsi_val < 30:
-            rsi_label = "과매도 🔴"
+            rsi_label = "과매도 — 반등 가능성"
             rsi_color = CANDLE_UP
         elif rsi_val > 70:
-            rsi_label = "과매수 🔵"
+            rsi_label = "과매수 — 조정 주의"
             rsi_color = CANDLE_DOWN
+        elif rsi_val > 55:
+            rsi_label = "강세 구간"
+            rsi_color = "#22c55e"
+        elif rsi_val < 45:
+            rsi_label = "약세 구간"
+            rsi_color = "#ef4444"
         else:
-            rsi_label = "중립 🟡"
+            rsi_label = "중립"
             rsi_color = "#f59e0b"
 
-        ma_status = "골든크로스 🟢" if float(ma20.iloc[-1]) > float(ma60.iloc[-1]) else "데드크로스 🔴"
-        bb_pct = (curr_price - float(bb_lower.iloc[-1])) / (float(bb_upper.iloc[-1]) - float(bb_lower.iloc[-1])) * 100
-        if bb_pct > 80:
-            bb_label = "상단 근접 (과열)"
-        elif bb_pct < 20:
-            bb_label = "하단 근접 (침체)"
-        else:
-            bb_label = "중간 구간"
+        # 볼린저밴드 위치
+        bb_upper_val = float(bb_upper.iloc[-1])
+        bb_lower_val = float(bb_lower.iloc[-1])
+        bb_pct = (curr_price - bb_lower_val) / (bb_upper_val - bb_lower_val) * 100 if bb_upper_val != bb_lower_val else 50
 
-        t1, t2, t3, t4 = st.columns(4)
-        for col, label, value, sub in [
-            (t1, "RSI (14)", f"{rsi_val:.1f}", rsi_label),
-            (t2, "이동평균", ma_status, f"MA20: {float(ma20.iloc[-1]):,.0f}원"),
-            (t3, "볼린저밴드", bb_label, f"위치: {bb_pct:.0f}%"),
-            (t4, "52주 위치", f"{pos_52:.1f}%", f"고가: {high_52:,.0f} / 저가: {low_52:,.0f}"),
+        if bb_pct > 85:
+            bb_label = "상단 돌파 (과열 주의)"
+            bb_color = CANDLE_DOWN
+        elif bb_pct > 60:
+            bb_label = "상단 근접 (강세)"
+            bb_color = "#22c55e"
+        elif bb_pct < 15:
+            bb_label = "하단 이탈 (과매도)"
+            bb_color = CANDLE_UP
+        elif bb_pct < 40:
+            bb_label = "하단 근접 (약세)"
+            bb_color = "#ef4444"
+        else:
+            bb_label = "중간 구간 (중립)"
+            bb_color = "#f59e0b"
+
+        # 지지선/저항선 (최근 60일 기준)
+        recent_high = float(high.iloc[-60:].max())
+        recent_low = float(low.iloc[-60:].min())
+        support = float(low.iloc[-60:].nsmallest(5).mean())
+        resistance = float(high.iloc[-60:].nlargest(5).mean())
+
+        # 거래량 상태
+        if vol_ratio > 2.0:
+            vol_label = f"폭발적 거래량 ({vol_ratio:.1f}배)"
+            vol_color = CANDLE_UP
+        elif vol_ratio > 1.3:
+            vol_label = f"거래량 증가 ({vol_ratio:.1f}배)"
+            vol_color = "#22c55e"
+        elif vol_ratio < 0.5:
+            vol_label = f"거래량 급감 ({vol_ratio:.1f}배)"
+            vol_color = "#6b7280"
+        else:
+            vol_label = f"평균 수준 ({vol_ratio:.1f}배)"
+            vol_color = "#f59e0b"
+
+        # 종합 진단
+        score = 0
+        if curr_price > ma20_val: score += 1
+        if curr_price > ma60_val: score += 1
+        if ma20_val > ma60_val: score += 1
+        if rsi_val > 50: score += 1
+        if bb_pct > 50: score += 1
+        if vol_ratio > 1.0: score += 1
+
+        if score >= 5:
+            diagnosis = "매우 강세 — 모멘텀 유효"
+            diag_color = CANDLE_UP
+        elif score >= 4:
+            diagnosis = "강세 — 추세 유지 중"
+            diag_color = "#22c55e"
+        elif score >= 3:
+            diagnosis = "중립 — 방향성 탐색"
+            diag_color = "#f59e0b"
+        elif score >= 2:
+            diagnosis = "약세 — 추세 약화"
+            diag_color = "#ef4444"
+        else:
+            diagnosis = "매우 약세 — 하락 압력"
+            diag_color = CANDLE_DOWN
+
+        # 종합 진단 배너
+        st.markdown(f"""
+        <div style='background:{diag_color}15; border:1px solid {diag_color}40; border-radius:10px; padding:14px 18px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center;'>
+            <div>
+                <div style='font-size:11px; color:{DIM}; margin-bottom:4px;'>기술적 종합 진단</div>
+                <div style='font-size:16px; font-weight:700; color:{diag_color};'>{diagnosis}</div>
+            </div>
+            <div style='text-align:right;'>
+                <div style='font-size:11px; color:{DIM}; margin-bottom:4px;'>종합 점수</div>
+                <div style='font-size:20px; font-weight:700; color:{diag_color};'>{score}/6</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # 지표 카드 2행
+        r1c1, r1c2, r1c3 = st.columns(3)
+        r2c1, r2c2, r2c3 = st.columns(3)
+
+        for col, label, value, sub, color in [
+            (r1c1, "추세", trend, f"MA20: {ma20_val:,.0f}원", trend_color),
+            (r1c2, f"RSI (14): {rsi_val:.1f}", rsi_label, f"과매도<30 | 과매수>70", rsi_color),
+            (r1c3, "볼린저밴드", bb_label, f"위치: {bb_pct:.0f}% | 밴드폭: {bb_upper_val-bb_lower_val:,.0f}원", bb_color),
+            (r2c1, "52주 위치", f"{pos_52:.1f}%", f"고가: {high_52:,.0f} / 저가: {low_52:,.0f}", "#a855f7"),
+            (r2c2, "거래량", vol_label, f"오늘: {int(volume.iloc[-1]):,}주", vol_color),
+            (r2c3, "지지/저항", f"{support:,.0f} / {resistance:,.0f}", "최근 60일 기준 (지지/저항)", "#6b7280"),
         ]:
             with col:
                 st.markdown(f"""
                 <div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:10px; padding:12px; margin-bottom:8px;'>
                     <div style='font-size:10px; color:{DIM}; margin-bottom:4px;'>{label}</div>
-                    <div style='font-size:13px; font-weight:700;'>{value}</div>
-                    <div style='font-size:10px; color:{DIM}; margin-top:2px;'>{sub}</div>
+                    <div style='font-size:13px; font-weight:700; color:{color};'>{value}</div>
+                    <div style='font-size:10px; color:{DIM}; margin-top:3px;'>{sub}</div>
                 </div>
                 """, unsafe_allow_html=True)
 
+        # 차트 (주가 + 거래량)
         fig_tech = go.Figure()
+
+        # 볼린저밴드
         fig_tech.add_trace(go.Scatter(
             x=close.index[-60:], y=bb_upper.iloc[-60:],
             name="BB상단", line=dict(color="#ef4444", width=1, dash="dash"), opacity=0.5
@@ -289,25 +411,46 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
             name="BB하단", line=dict(color="#3b82f6", width=1, dash="dash"), opacity=0.5,
             fill="tonexty", fillcolor="rgba(99,102,241,0.05)"
         ))
+
+        # 주가/이동평균
         fig_tech.add_trace(go.Scatter(
-            x=close.index[-60:], y=close.iloc[-60:],
-            name="주가", line=dict(color=ACCENT, width=2)
+            x=close.index[-60:], y=ma120.iloc[-60:],
+            name="MA120", line=dict(color="#6b7280", width=1)
+        ))
+        fig_tech.add_trace(go.Scatter(
+            x=close.index[-60:], y=ma60.iloc[-60:],
+            name="MA60", line=dict(color="#a855f7", width=1.2)
         ))
         fig_tech.add_trace(go.Scatter(
             x=close.index[-60:], y=ma20.iloc[-60:],
             name="MA20", line=dict(color="orange", width=1.2)
         ))
         fig_tech.add_trace(go.Scatter(
-            x=close.index[-60:], y=ma60.iloc[-60:],
-            name="MA60", line=dict(color="#a855f7", width=1.2)
+            x=close.index[-60:], y=close.iloc[-60:],
+            name="주가", line=dict(color=ACCENT, width=2)
         ))
+
+        # 거래량 (보조 y축)
+        vol_colors = [CANDLE_UP if float(close.iloc[i]) >= float(close.iloc[i-1]) else CANDLE_DOWN
+                      for i in range(len(close.iloc[-60:]))]
+        fig_tech.add_trace(go.Bar(
+            x=volume.index[-60:], y=volume.iloc[-60:],
+            name="거래량", yaxis="y2",
+            marker_color=vol_colors, opacity=0.4
+        ))
+
         fig_tech.update_layout(
-            height=300,
+            height=360,
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
             font=dict(color=TEXT, size=11),
-            margin=dict(l=0, r=0, t=30, b=20),
+            margin=dict(l=0, r=60, t=30, b=20),
             legend=dict(orientation="h", y=1.12),
-            yaxis=dict(gridcolor=LINE, tickformat=",", ticksuffix="원"),
+            yaxis=dict(gridcolor=LINE, tickformat=",", ticksuffix="원", side="left"),
+            yaxis2=dict(
+                overlaying="y", side="right",
+                showgrid=False, tickformat=",",
+                title="거래량", titlefont=dict(color="#6b7280"), tickfont=dict(color="#6b7280")
+            ),
             xaxis=dict(gridcolor=LINE)
         )
         st.plotly_chart(fig_tech, use_container_width=True, config={"displayModeBar": False})
@@ -445,16 +588,14 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
     # ══════════════════════════════════════════
     # 5. AI 종합 투자의견
     # ══════════════════════════════════════════
-    card("🤖 AI 종합 투자의견", "재무·기술적·수급 데이터 기반 AI 분석 (참고용, 투자 책임은 본인에게 있습니다)")
+    card("🤖 AI 종합 투자의견", "재무·기술적·수급 데이터 기반 AI 분석 (참고용)")
 
     if st.button("🤖 AI 투자의견 생성", use_container_width=True, key="ai_opinion_btn"):
         with st.spinner("AI가 종목을 심층 분석하는 중..."):
             try:
-                t_info2 = yf.Ticker(ticker).info
                 curr_per = per if per else "N/A"
                 curr_pbr = pbr if pbr else "N/A"
                 curr_roe = f"{roe*100:.1f}%" if roe else "N/A"
-                target_price_analyst = t_info2.get("targetMeanPrice", "N/A")
 
                 prompt = f"""당신은 국내 최고 수준의 증권사 리서치센터 수석 애널리스트입니다.
 아래 데이터를 바탕으로 {display_name}({raw_ticker})에 대한 전문 투자 리포트를 작성해주세요.
@@ -464,14 +605,16 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
 - PER: {curr_per}
 - PBR: {curr_pbr}
 - ROE: {curr_roe}
-- 애널리스트 평균 목표주가: {target_price_analyst}원
 
 [기술적 분석]
 - RSI(14): {rsi_val:.1f} ({rsi_label})
-- 이동평균 상태: {ma_status}
-- 볼린저밴드 위치: {bb_pct:.0f}%
-- 52주 위치: {pos_52:.1f}% (저점 대비)
+- 추세: {trend}
+- 볼린저밴드: {bb_label} (위치: {bb_pct:.0f}%)
+- 52주 위치: {pos_52:.1f}%
 - 52주 고가: {high_52:,.0f}원 / 저가: {low_52:,.0f}원
+- 거래량: {vol_label}
+- 지지선: {support:,.0f}원 / 저항선: {resistance:,.0f}원
+- 기술적 종합점수: {score}/6 ({diagnosis})
 
 [작성 규칙]
 1. 반드시 한국어로만 작성
@@ -479,17 +622,19 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
 3. 단기(1개월)/중기(3개월)/장기(6개월) 관점 구분
 4. 투자의견은 반드시 매수/중립/매도 중 하나로 명시
 5. 목표주가는 현재가 기준 상승/하락 여력(%)도 함께 제시
-6. 문장은 간결하고 핵심만
+6. 지지선/저항선 기반 매수 구간 및 손절선 제시
 
 아래 형식으로 정확히 작성:
 
 【투자의견】 매수 / 중립 / 매도 (하나만)
 【목표주가】 X,XXX원 (현재가 대비 +X%)
+【매수 적정 구간】 X,XXX원 ~ X,XXX원
+【손절 기준선】 X,XXX원 (현재가 대비 -X%)
 
 【핵심 투자포인트】
-1. (포인트 1)
-2. (포인트 2)
-3. (포인트 3)
+1. (포인트 1 — 수치 근거 포함)
+2. (포인트 2 — 수치 근거 포함)
+3. (포인트 3 — 수치 근거 포함)
 
 【주요 리스크】
 1. (리스크 1)
@@ -512,7 +657,7 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
                     json={
                         "model": "gpt-4o-mini",
                         "messages": [{"role": "user", "content": prompt}],
-                        "max_tokens": 1000
+                        "max_tokens": 1200
                     }
                 )
                 ai_data = ai_res.json()
