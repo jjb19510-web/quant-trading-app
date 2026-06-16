@@ -9,6 +9,16 @@ from data_utils import load_krx_listing, get_krx_name_map
 from ui_components import card, ACCENT, CANDLE_UP, CANDLE_DOWN, DIM, TEXT, SURFACE_1, SURFACE_2, LINE, BG
 
 
+@st.cache_data(ttl=600)
+def load_ticker_data(ticker):
+    hist = yf.download(ticker, period="1y", progress=False)
+    return hist
+
+@st.cache_data(ttl=600)
+def load_ticker_info(ticker):
+    t = yf.Ticker(ticker)
+    return t.info, t.financials
+
 def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
 
     st.markdown(
@@ -60,7 +70,7 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
     display_name = name_map.get(raw_ticker, ticker_input)
 
     with st.spinner(f"{display_name} 데이터 분석 중..."):
-        hist = yf.download(ticker, period="1y", progress=False)
+        hist = load_ticker_data(ticker)
         if hist.empty:
             st.error("주가 데이터를 불러오지 못했어요. 종목코드를 확인해주세요.")
             return
@@ -94,9 +104,7 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
     card("📊 재무제표 분석", "매출/영업이익 추이 (이중 축) · PER/PBR 밸류에이션")
 
     try:
-        t_obj = yf.Ticker(ticker)
-        info = t_obj.info
-        financials = t_obj.financials
+        info, financials = load_ticker_info(ticker)
 
         if financials is not None and not financials.empty:
             rev_row = next((r for r in ["Total Revenue", "Revenue"] if r in financials.index), None)
@@ -541,7 +549,7 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
     card("🏢 경쟁사 비교", "동종업계 PER/PBR/ROE 비교")
 
     try:
-        t_info = yf.Ticker(ticker).info
+        t_info = info
         sector = t_info.get("sector", "")
 
         competitors_map = {
