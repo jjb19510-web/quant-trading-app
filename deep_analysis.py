@@ -151,6 +151,22 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
     chg_color = CANDLE_UP if chg >= 0 else CANDLE_DOWN
     chg_arrow = "▲" if chg >= 0 else "▼"
 
+    # KIS API로 실시간 현재가 보완 (한국 주식만)
+    if KIS_AVAILABLE and is_korean:
+        try:
+            from broker import get_access_token, get_current_price as kis_get_price
+            kis_token = get_kis_token()
+            if kis_token:
+                price_data = kis_get_price(raw_ticker, kis_token)
+                if price_data:
+                    curr_price = price_data["current"]
+                    chg = price_data["change"]
+                    chg_pct = price_data["change_pct"]
+                    chg_color = CANDLE_UP if chg >= 0 else CANDLE_DOWN
+                    chg_arrow = "▲" if chg >= 0 else "▼"
+        except:
+            pass
+
     st.markdown(f"""
     <div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:12px; padding:18px; margin-bottom:20px;'>
         <div style='font-size:13px; color:{DIM}; margin-bottom:4px;'>{raw_ticker}</div>
