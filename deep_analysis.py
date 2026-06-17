@@ -500,123 +500,147 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
     # ══════════════════════════════════════════
     card("💰 단타 매매 계산기", "수수료 포함 세후 수익/손실 · 수익/손실 배율 · 손익분기점")
 
-    with st.container():
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            calc_buy = st.number_input("매수가 (원)", value=int(curr_price), step=100, key="calc_buy")
-        with c2:
-            calc_invest = st.number_input("투입금액 (만원)", value=1000, step=100, key="calc_invest")
-        with c3:
-            calc_buy_fee = st.number_input("매수 수수료 (%)", value=0.015, step=0.001, format="%.3f", key="calc_buy_fee")
+    import streamlit.components.v1 as components
+    calc_html = f"""
+    <style>
+      * {{ box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }}
+      body {{ background: transparent; margin: 0; padding: 0; color: #e2e8f0; }}
+      .grid2 {{ display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }}
+      .grid3 {{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 14px; }}
+      label {{ font-size: 11px; color: #9ca3af; display: block; margin-bottom: 4px; }}
+      input {{ width: 100%; padding: 8px 10px; background: #1e2330; border: 0.5px solid #2d3748; border-radius: 8px; color: #e2e8f0; font-size: 13px; font-family: 'JetBrains Mono', monospace; }}
+      input:focus {{ outline: none; border-color: #6366f1; }}
+      .card {{ background: #13161f; border: 0.5px solid #1e2330; border-radius: 10px; padding: 14px; text-align: center; }}
+      .card .label {{ font-size: 11px; color: #9ca3af; margin-bottom: 4px; }}
+      .card .value {{ font-size: 20px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }}
+      .card .sub {{ font-size: 11px; color: #9ca3af; margin-top: 4px; }}
+      .profit {{ background: #22c55e15; border: 1px solid #22c55e40; border-radius: 12px; padding: 14px; }}
+      .loss {{ background: #ef444415; border: 1px solid #ef444440; border-radius: 12px; padding: 14px; }}
+      .row {{ display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px; }}
+      .row .k {{ color: #9ca3af; }}
+      .row .v {{ color: #e2e8f0; }}
+      .divider {{ border-top: 0.5px solid rgba(255,255,255,0.1); margin: 8px 0; padding-top: 8px; display: flex; justify-content: space-between; }}
+      .section-title {{ font-size: 12px; font-weight: 600; margin-bottom: 10px; }}
+    </style>
 
-        c4, c5, c6 = st.columns(3)
-        with c4:
-            calc_target = st.number_input("목표가 (원)", value=int(curr_price * 1.05), step=100, key="calc_target")
-        with c5:
-            calc_stop = st.number_input("손절가 (원)", value=int(curr_price * 0.97), step=100, key="calc_stop")
-        with c6:
-            calc_sell_fee = st.number_input("매도 수수료+세금 (%)", value=0.265, step=0.001, format="%.3f", key="calc_sell_fee")
+    <div class="grid3">
+      <div>
+        <label>매수가 (원)</label>
+        <input type="number" id="buy_price" value="{int(curr_price)}" step="100" oninput="calc()">
+      </div>
+      <div>
+        <label>목표가 (원)</label>
+        <input type="number" id="target" value="{int(curr_price * 1.05)}" step="100" oninput="calc()">
+      </div>
+      <div>
+        <label>손절가 (원)</label>
+        <input type="number" id="stop" value="{int(curr_price * 0.97)}" step="100" oninput="calc()">
+      </div>
+    </div>
 
-        # ── 계산 ──
-        invest_won = calc_invest * 10000
-        qty = int(invest_won / (calc_buy * (1 + calc_buy_fee / 100))) if calc_buy > 0 else 0
-        actual_buy = qty * calc_buy
-        buy_fee_won = actual_buy * calc_buy_fee / 100
-        total_cost = actual_buy + buy_fee_won
+    <div class="grid3">
+      <div>
+        <label>투입금액 (만원)</label>
+        <input type="number" id="invest" value="1000" step="100" oninput="calc()">
+      </div>
+      <div>
+        <label>매수 수수료 (%)</label>
+        <input type="number" id="buy_fee" value="0.015" step="0.001" oninput="calc()">
+      </div>
+      <div>
+        <label>매도 수수료+세금 (%)</label>
+        <input type="number" id="sell_fee" value="0.265" step="0.001" oninput="calc()">
+      </div>
+    </div>
 
-        bep = calc_buy * (1 + calc_buy_fee / 100) / (1 - calc_sell_fee / 100) if calc_buy > 0 else 0
+    <div class="grid3" id="summary_cards"></div>
 
-        target_sell = qty * calc_target
-        target_fee = target_sell * calc_sell_fee / 100
-        target_net = target_sell - target_fee - total_cost
-        target_pct = (calc_target - calc_buy) / calc_buy * 100 if calc_buy > 0 else 0
-        target_net_pct = target_net / total_cost * 100 if total_cost > 0 else 0
+    <div class="grid2" id="result_cards" style="margin-top: 4px;"></div>
 
-        stop_sell = qty * calc_stop
-        stop_fee = stop_sell * calc_sell_fee / 100
-        stop_net = stop_sell - stop_fee - total_cost
-        stop_pct = (calc_stop - calc_buy) / calc_buy * 100 if calc_buy > 0 else 0
-        stop_net_pct = stop_net / total_cost * 100 if total_cost > 0 else 0
+    <script>
+    function fmt(n) {{ return Math.round(n).toLocaleString('ko-KR'); }}
+    function fmtP(n) {{ return parseFloat(n).toFixed(2); }}
 
-        rr = abs(target_net / stop_net) if stop_net != 0 else 0
-        rr_label = "✅ 양호 (2.0 이상)" if rr >= 2 else ("⚠️ 보통 (1.5~2.0)" if rr >= 1.5 else "❌ 불량 (1.5 미만)")
-        rr_color = "#22c55e" if rr >= 2 else ("#f59e0b" if rr >= 1.5 else "#ef4444")
+    function calc() {{
+      const buy = parseFloat(document.getElementById('buy_price').value) || 0;
+      const invest_man = parseFloat(document.getElementById('invest').value) || 0;
+      const target = parseFloat(document.getElementById('target').value) || 0;
+      const stop = parseFloat(document.getElementById('stop').value) || 0;
+      const buy_fee_pct = parseFloat(document.getElementById('buy_fee').value) || 0;
+      const sell_fee_pct = parseFloat(document.getElementById('sell_fee').value) || 0;
 
-        # ── 요약 카드 3개 ──
-        m1, m2, m3 = st.columns(3)
-        with m1:
-            st.markdown(f"""
-            <div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:10px; padding:14px; text-align:center; margin-top:8px;'>
-                <div style='font-size:11px; color:{DIM}; margin-bottom:4px;'>매수 수량</div>
-                <div style='font-size:22px; font-weight:700; font-family:JetBrains Mono;'>{qty:,}주</div>
-                <div style='font-size:11px; color:{DIM}; margin-top:4px;'>실투입 {total_cost/10000:,.0f}만원</div>
-            </div>
-            """, unsafe_allow_html=True)
-        with m2:
-            st.markdown(f"""
-            <div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:10px; padding:14px; text-align:center; margin-top:8px;'>
-                <div style='font-size:11px; color:{DIM}; margin-bottom:4px;'>손익분기점</div>
-                <div style='font-size:22px; font-weight:700; font-family:JetBrains Mono;'>{bep:,.0f}원</div>
-                <div style='font-size:11px; color:{DIM}; margin-top:4px;'>수수료 포함 실제 BEP</div>
-            </div>
-            """, unsafe_allow_html=True)
-        with m3:
-            st.markdown(f"""
-            <div style='background:{rr_color}22; border:1px solid {rr_color}40; border-radius:10px; padding:14px; text-align:center; margin-top:8px;'>
-                <div style='font-size:11px; color:{rr_color}; margin-bottom:4px;'>수익/손실 배율</div>
-                <div style='font-size:22px; font-weight:700; font-family:JetBrains Mono; color:{rr_color};'>1 : {rr:.2f}</div>
-                <div style='font-size:11px; color:{rr_color}; margin-top:4px;'>{rr_label}</div>
-            </div>
-            """, unsafe_allow_html=True)
+      if (!buy || !invest_man) return;
 
-        # ── 목표가/손절가 결과 ──
-        r1, r2 = st.columns(2)
-        with r1:
-            profit_color = CANDLE_UP if target_net >= 0 else CANDLE_DOWN
-            st.markdown(f"""
-            <div style='background:#22c55e15; border:1px solid #22c55e40; border-radius:12px; padding:16px; margin-top:8px;'>
-                <div style='font-size:12px; color:#22c55e; font-weight:600; margin-bottom:10px;'>🎯 목표가 도달 시</div>
-                <div style='display:flex; justify-content:space-between; font-size:12px; margin-bottom:6px;'>
-                    <span style='color:{DIM};'>목표가</span>
-                    <span style='color:{TEXT};'>{calc_target:,}원 (+{target_pct:.2f}%)</span>
-                </div>
-                <div style='display:flex; justify-content:space-between; font-size:12px; margin-bottom:6px;'>
-                    <span style='color:{DIM};'>매도 수수료+세금</span>
-                    <span style='color:#ef4444;'>-{target_fee:,.0f}원</span>
-                </div>
-                <div style='display:flex; justify-content:space-between; font-size:12px; margin-bottom:6px;'>
-                    <span style='color:{DIM};'>매도 총액</span>
-                    <span style='color:{TEXT};'>{target_sell:,}원</span>
-                </div>
-                <div style='border-top:0.5px solid #22c55e30; margin:8px 0; padding-top:8px; display:flex; justify-content:space-between;'>
-                    <span style='font-weight:600; color:{TEXT};'>세후 순수익</span>
-                    <span style='color:#22c55e; font-weight:700; font-size:15px;'>+{target_net:,.0f}원 (+{target_net_pct:.2f}%)</span>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+      const invest = invest_man * 10000;
+      const qty = Math.floor(invest / (buy * (1 + buy_fee_pct / 100)));
+      const actual_buy = qty * buy;
+      const buy_fee_won = actual_buy * buy_fee_pct / 100;
+      const total_cost = actual_buy + buy_fee_won;
+      const bep = buy * (1 + buy_fee_pct / 100) / (1 - sell_fee_pct / 100);
 
-        with r2:
-            st.markdown(f"""
-            <div style='background:#ef444415; border:1px solid #ef444440; border-radius:12px; padding:16px; margin-top:8px;'>
-                <div style='font-size:12px; color:#ef4444; font-weight:600; margin-bottom:10px;'>🛑 손절가 도달 시</div>
-                <div style='display:flex; justify-content:space-between; font-size:12px; margin-bottom:6px;'>
-                    <span style='color:{DIM};'>손절가</span>
-                    <span style='color:{TEXT};'>{calc_stop:,}원 ({stop_pct:.2f}%)</span>
-                </div>
-                <div style='display:flex; justify-content:space-between; font-size:12px; margin-bottom:6px;'>
-                    <span style='color:{DIM};'>매도 수수료+세금</span>
-                    <span style='color:#ef4444;'>-{stop_fee:,.0f}원</span>
-                </div>
-                <div style='display:flex; justify-content:space-between; font-size:12px; margin-bottom:6px;'>
-                    <span style='color:{DIM};'>매도 총액</span>
-                    <span style='color:{TEXT};'>{stop_sell:,}원</span>
-                </div>
-                <div style='border-top:0.5px solid #ef444430; margin:8px 0; padding-top:8px; display:flex; justify-content:space-between;'>
-                    <span style='font-weight:600; color:{TEXT};'>세후 손실</span>
-                    <span style='color:#ef4444; font-weight:700; font-size:15px;'>{stop_net:,.0f}원 ({stop_net_pct:.2f}%)</span>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+      const target_sell = qty * target;
+      const target_fee = target_sell * sell_fee_pct / 100;
+      const target_net = target_sell - target_fee - total_cost;
+      const target_pct = (target - buy) / buy * 100;
+      const target_net_pct = target_net / total_cost * 100;
+
+      const stop_sell = qty * stop;
+      const stop_fee = stop_sell * sell_fee_pct / 100;
+      const stop_net = stop_sell - stop_fee - total_cost;
+      const stop_pct = (stop - buy) / buy * 100;
+      const stop_net_pct = stop_net / total_cost * 100;
+
+      const rr = stop_net !== 0 ? Math.abs(target_net / stop_net) : 0;
+      const rr_color = rr >= 2 ? '#22c55e' : rr >= 1.5 ? '#f59e0b' : '#ef4444';
+      const rr_bg = rr >= 2 ? '#22c55e15' : rr >= 1.5 ? '#f59e0b15' : '#ef444415';
+      const rr_border = rr >= 2 ? '#22c55e40' : rr >= 1.5 ? '#f59e0b40' : '#ef444440';
+      const rr_label = rr >= 2 ? '✅ 양호 (2.0 이상)' : rr >= 1.5 ? '⚠️ 보통 (1.5~2.0)' : '❌ 불량 (1.5 미만)';
+
+      document.getElementById('summary_cards').innerHTML = `
+        <div class="card">
+          <div class="label">매수 수량</div>
+          <div class="value">${{fmt(qty)}}주</div>
+          <div class="sub">실투입 ${{fmt(total_cost/10000)}}만원</div>
+        </div>
+        <div class="card">
+          <div class="label">손익분기점</div>
+          <div class="value">${{fmt(bep)}}원</div>
+          <div class="sub">수수료 포함 실제 BEP</div>
+        </div>
+        <div class="card" style="background:${{rr_bg}}; border: 1px solid ${{rr_border}};">
+          <div class="label" style="color:${{rr_color}};">수익/손실 배율</div>
+          <div class="value" style="color:${{rr_color}};">손절 1 → 수익 ${{fmtP(rr)}}</div>
+          <div class="sub" style="color:${{rr_color}};">${{rr_label}}</div>
+        </div>
+      `;
+
+      document.getElementById('result_cards').innerHTML = `
+        <div class="profit">
+          <div class="section-title" style="color:#22c55e;">🎯 목표가 도달 시</div>
+          <div class="row"><span class="k">목표가</span><span class="v">${{fmt(target)}}원 (+${{fmtP(target_pct)}}%)</span></div>
+          <div class="row"><span class="k">매도 수수료+세금</span><span style="color:#ef4444;">-${{fmt(target_fee)}}원</span></div>
+          <div class="row"><span class="k">매도 총액</span><span class="v">${{fmt(target_sell)}}원</span></div>
+          <div class="divider">
+            <span style="font-weight:600; font-size:13px;">세후 순수익</span>
+            <span style="color:#22c55e; font-weight:700; font-size:15px; font-family:'JetBrains Mono',monospace;">+${{fmt(target_net)}}원 (+${{fmtP(target_net_pct)}}%)</span>
+          </div>
+        </div>
+        <div class="loss">
+          <div class="section-title" style="color:#ef4444;">🛑 손절가 도달 시</div>
+          <div class="row"><span class="k">손절가</span><span class="v">${{fmt(stop)}}원 (${{fmtP(stop_pct)}}%)</span></div>
+          <div class="row"><span class="k">매도 수수료+세금</span><span style="color:#ef4444;">-${{fmt(stop_fee)}}원</span></div>
+          <div class="row"><span class="k">매도 총액</span><span class="v">${{fmt(stop_sell)}}원</span></div>
+          <div class="divider">
+            <span style="font-weight:600; font-size:13px;">세후 손실</span>
+            <span style="color:#ef4444; font-weight:700; font-size:15px; font-family:'JetBrains Mono',monospace;">${{fmt(stop_net)}}원 (${{fmtP(stop_net_pct)}}%)</span>
+          </div>
+        </div>
+      `;
+    }}
+    calc();
+    </script>
+    """
+    components.html(calc_html, height=520, scrolling=False)
 
     st.markdown("---")
 
