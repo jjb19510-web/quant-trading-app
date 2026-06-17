@@ -30,6 +30,16 @@ def load_naver_info(raw_ticker):
     """네이버 모바일 API — quant_app.py SUB3와 동일한 파싱 로직"""
     result = {"per": "N/A", "pbr": "N/A", "roe": "N/A", "eps": "N/A",
               "div_yield": "N/A", "mkt_str": "N/A", "price": None}
+
+    # 1. DART에서 ROE 먼저 시도 (quant_app.py SUB3와 동일)
+    try:
+        from dart_utils import get_dart_roe
+        roe_val = get_dart_roe(raw_ticker)
+        if roe_val is not None:
+            result["roe"] = f"{roe_val:.1f}%"
+    except: pass
+
+    # 2. 네이버 API로 나머지 항목 + ROE 보완
     try:
         url = f"https://m.stock.naver.com/api/stock/{raw_ticker}/integration"
         res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
@@ -50,11 +60,11 @@ def load_naver_info(raw_ticker):
                 elif c == "pbr" or k == "PBR":
                     if result["pbr"] == "N/A": result["pbr"] = f"{float(val_clean):.1f}배"
                 elif c == "eps" or k == "EPS":
-                    result["eps"] = f"{int(float(val_clean)):,}원"
+                    if result["eps"] == "N/A": result["eps"] = f"{int(float(val_clean)):,}원"
                 elif c == "roe" or k == "ROE":
                     if result["roe"] == "N/A": result["roe"] = f"{float(val_clean):.1f}%"
                 elif c == "dividendyield" or k == "배당수익률":
-                    result["div_yield"] = f"{float(val_clean):.2f}%"
+                    if result["div_yield"] == "N/A": result["div_yield"] = f"{float(val_clean):.2f}%"
                 elif c == "marketvalue" or k == "시가총액":
                     result["mkt_str"] = v
             except: pass
