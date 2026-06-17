@@ -420,6 +420,76 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
         )
         st.plotly_chart(fig_tech, use_container_width=True, config={"displayModeBar": False})
 
+        # ── AI 기술적 종합 판단 (자동 생성) ──
+        try:
+            openai_key = st.secrets.get("OPENAI_API_KEY", "")
+            if openai_key:
+                with st.spinner("AI 기술적 분석 중..."):
+                    tech_prompt = f"""당신은 증권사 기술적 분석 전문 애널리스트입니다.
+아래 기술적 지표를 바탕으로 {display_name}({raw_ticker})의 단기 기술적 판단을 내려주세요.
+
+[기술적 지표]
+- 현재가: {curr_price:,.0f}원
+- RSI(14): {rsi_val:.1f} — {rsi_label}
+- 추세: {trend}
+- 볼린저밴드: {bb_label} (위치: {bb_pct:.0f}%)
+- 52주 위치: {pos_52:.1f}% (고가: {high_52:,.0f}원 / 저가: {low_52:,.0f}원)
+- 거래량: {vol_label}
+- 지지선: {support:,.0f}원 / 저항선: {resistance:,.0f}원
+- 종합 점수: {score}/6 ({diagnosis})
+
+[출력 형식 — 반드시 아래 형식 그대로]
+
+【기술적 판단】 매수 / 중립 / 매도 중 하나만
+
+【한줄 요약】
+(현재 차트 상황을 1문장으로 — 핵심 지표 2개 이상 언급)
+
+【매수 관점】
+- (강점 1)
+- (강점 2)
+
+【주의 관점】
+- (리스크 1)
+- (리스크 2)
+
+【단기 행동 가이드】
+- 매수 타이밍: (언제 어떤 조건에서 매수할지)
+- 목표 구간: (단기 목표가 또는 저항선 기준)
+- 손절 기준: (어떤 조건에서 손절할지)
+
+⚠️ 기술적 분석은 참고용이며 투자 책임은 본인에게 있습니다."""
+
+                    ai_res = requests.post(
+                        "https://api.openai.com/v1/chat/completions",
+                        headers={"Content-Type": "application/json", "Authorization": f"Bearer {openai_key}"},
+                        json={"model": "gpt-4o-mini", "messages": [{"role": "user", "content": tech_prompt}], "max_tokens": 600}
+                    )
+                    tech_opinion = ai_res.json()["choices"][0]["message"]["content"]
+
+                    # 판단 배지 색상
+                    if "매수" in tech_opinion[:50]:
+                        t_badge_color = CANDLE_UP
+                        t_badge_text = "매수 📈"
+                    elif "매도" in tech_opinion[:50]:
+                        t_badge_color = CANDLE_DOWN
+                        t_badge_text = "매도 📉"
+                    else:
+                        t_badge_color = "#f59e0b"
+                        t_badge_text = "중립 ⚖️"
+
+                    st.markdown(f"""
+                    <div style='background:{SURFACE_2}; border:1px solid {t_badge_color}40; border-radius:12px; padding:20px; margin-top:16px;'>
+                        <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;'>
+                            <div style='font-size:14px; font-weight:700;'>🤖 AI 기술적 종합 판단</div>
+                            <span style='background:{t_badge_color}22; border:1px solid {t_badge_color}; border-radius:20px; padding:5px 16px; font-size:14px; font-weight:800; color:{t_badge_color};'>{t_badge_text}</span>
+                        </div>
+                        <div style='font-size:13px; line-height:1.9; white-space:pre-line; color:{TEXT};'>{tech_opinion}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+        except Exception as e:
+            pass
+
     except Exception as e:
         st.info(f"기술적 분석 실패: {e}")
 
