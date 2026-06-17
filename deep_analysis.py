@@ -33,11 +33,19 @@ def load_naver_info(raw_ticker):
 
     # 1. DART에서 ROE 먼저 시도 (quant_app.py SUB3와 동일)
     try:
-        from dart_utils import get_dart_roe
+        from dart_utils import get_dart_roe, get_dart_per_pbr
         roe_val = get_dart_roe(raw_ticker)
         if roe_val is not None:
             result["roe"] = f"{roe_val:.1f}%"
-    except: pass
+        # PER/PBR도 DART에서 보완
+        if result["per"] == "N/A" or result["pbr"] == "N/A":
+            dart_per, dart_pbr = get_dart_per_pbr(raw_ticker, 0)
+            if dart_per and result["per"] == "N/A":
+                result["per"] = f"{dart_per:.1f}배"
+            if dart_pbr and result["pbr"] == "N/A":
+                result["pbr"] = f"{dart_pbr:.1f}배"
+    except Exception as e:
+        print(f"dart_utils 오류: {e}")
 
     # 2. 네이버 API로 나머지 항목 + ROE 보완
     try:
