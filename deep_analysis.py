@@ -517,19 +517,36 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
                     orgn_vals = [round(safe_int(o.get("orgn_ntby_tr_pbmn",0))/100, 1) for o in output][::-1]
 
                     fig_sup = go.Figure()
-                    fig_sup.add_trace(go.Bar(x=dates_fmt, y=frgn_vals, name="외국인",
-                        marker_color=[CANDLE_UP if v>=0 else CANDLE_DOWN for v in frgn_vals], opacity=0.85,
-                        hovertemplate="<b>%{x} 외국인</b><br>%{customdata:,}억원<extra></extra>", customdata=frgn_vals))
-                    fig_sup.add_trace(go.Bar(x=dates_fmt, y=orgn_vals, name="기관",
-                        marker_color=["rgba(168,85,247,0.8)" if v>=0 else "rgba(99,102,241,0.6)" for v in orgn_vals], opacity=0.85,
-                        hovertemplate="<b>%{x} 기관</b><br>%{customdata:,}억원<extra></extra>", customdata=orgn_vals))
-                    fig_sup.add_hline(y=0, line=dict(color=DIM, width=1, dash="dot"))
-                    fig_sup.update_layout(barmode="group", height=300,
-                        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                        font=dict(color=TEXT, size=11), margin=dict(l=0,r=0,t=30,b=20),
+                    
+                    # 외국인 라인 (고정 오렌지색)
+                    fig_sup.add_trace(go.Scatter(
+                        x=dates_fmt, y=frgn_vals, name="외국인",
+                        mode="lines+markers",
+                        line=dict(color="#f97316", width=2.5),
+                        marker=dict(size=6, symbol="circle"),
+                        hovertemplate="<b>%{x} 외국인</b><br>%{y:,.1f}억원<extra></extra>"
+                    ))
+                    
+                    # 기관 라인 (고정 보라색)
+                    fig_sup.add_trace(go.Scatter(
+                        x=dates_fmt, y=orgn_vals, name="기관",
+                        mode="lines+markers",
+                        line=dict(color="#a855f7", width=2.5),
+                        marker=dict(size=6, symbol="circle"),
+                        hovertemplate="<b>%{x} 기관</b><br>%{y:,.1f}억원<extra></extra>"
+                    ))
+                    
+                    fig_sup.add_hline(y=0, line=dict(color=DIM, width=1.5, dash="dot"))
+                    fig_sup.update_layout(
+                        height=300,
+                        paper_bgcolor="rgba(0,0,0,0)", 
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        font=dict(color=TEXT, size=11), 
+                        margin=dict(l=0, r=0, t=30, b=20),
                         legend=dict(orientation="h", y=1.12),
                         yaxis=dict(gridcolor=LINE, tickformat=",", ticksuffix="억"),
-                        xaxis=dict(gridcolor=LINE))
+                        xaxis=dict(gridcolor=LINE, showgrid=False)
+                    )
                     st.plotly_chart(fig_sup, use_container_width=True, config={"displayModeBar": False})
 
                     s1, s2, s3, s4 = st.columns(4)
