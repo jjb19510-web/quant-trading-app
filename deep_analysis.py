@@ -642,9 +642,9 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
                     orgn_vals = [round(safe_int(o.get("orgn_ntby_tr_pbmn",0))/100, 1) for o in output][::-1]
 
                     # 누적 계산은 30일치 전체 데이터를 유지하되, 차트용 데이터만 최근 5영업일(일주일)로 슬라이싱
-                    dates_chart = dates_fmt[-5:]
-                    frgn_chart = frgn_vals[-5:]
-                    orgn_chart = orgn_vals[-5:]
+                    dates_chart = dates_fmt[-10:]
+                    frgn_chart = frgn_vals[-10:]
+                    orgn_chart = orgn_vals[-10:]
 
                     fig_sup = go.Figure()
                     
@@ -667,7 +667,7 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
                     fig_sup.add_hline(y=0, line=dict(color=DIM, width=1, dash="dot"))
                     fig_sup.update_layout(
                         barmode="group", 
-                        bargap=0.45,       # 5일만 표현하므로 그룹 간 간격을 널찍하게 확보
+                        bargap=0.35,       # 5일만 표현하므로 그룹 간 간격을 널찍하게 확보
                         bargroupgap=0.08,   # 외국인/기관 막대 사이의 간격
                         height=300,
                         paper_bgcolor="rgba(0,0,0,0)", 
