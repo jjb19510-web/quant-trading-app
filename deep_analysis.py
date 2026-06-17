@@ -48,17 +48,6 @@ def load_naver_info(raw_ticker):
         def clean_val(val_str):
             return val_str.replace("원","").replace("%","").replace("배","").replace("x","").replace(",","").strip()
 
-        # 🔧 임시 디버그
-        import streamlit as st
-        with st.expander("🔧 네이버 API 디버그", expanded=True):
-            for info in data.get("totalInfos", []):
-                st.write(f"code={info.get('code','')!r} | key={info.get('key','')!r} | value={info.get('value','')!r}")
-
-        # 🔧 임시 디버그
-        import streamlit as st
-        with st.expander("🔧 네이버 API 디버그", expanded=True):
-            for info in data.get("totalInfos", []):
-                st.write(f"code={info.get('code','')!r} | key={info.get('key','')!r} | value={info.get('value','')!r}")
 
         for info in data.get("totalInfos", []):
             k = str(info.get("key","")).upper()
@@ -75,7 +64,7 @@ def load_naver_info(raw_ticker):
                     if result["eps"] == "N/A": result["eps"] = f"{int(float(val_clean)):,}원"
                 elif c == "roe" or k == "ROE":
                     if result["roe"] == "N/A": result["roe"] = f"{float(val_clean):.1f}%"
-                elif c == "dividendyield" or k == "배당수익률":
+                elif c == "dividendyieldratio" or c == "dividendyield" or k == "배당수익률":
                     if result["div_yield"] == "N/A": result["div_yield"] = f"{float(val_clean):.2f}%"
                 elif c == "marketvalue" or k == "시가총액":
                     result["mkt_str"] = v
