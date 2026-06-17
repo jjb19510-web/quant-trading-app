@@ -496,6 +496,131 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
     st.markdown("---")
 
     # ══════════════════════════════════════════
+    # 💰 단타 매매 계산기
+    # ══════════════════════════════════════════
+    card("💰 단타 매매 계산기", "수수료 포함 세후 수익/손실 · 수익/손실 배율 · 손익분기점")
+
+    with st.container():
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            calc_buy = st.number_input("매수가 (원)", value=int(curr_price), step=100, key="calc_buy")
+        with c2:
+            calc_invest = st.number_input("투입금액 (만원)", value=1000, step=100, key="calc_invest")
+        with c3:
+            calc_buy_fee = st.number_input("매수 수수료 (%)", value=0.015, step=0.001, format="%.3f", key="calc_buy_fee")
+
+        c4, c5, c6 = st.columns(3)
+        with c4:
+            calc_target = st.number_input("목표가 (원)", value=int(curr_price * 1.05), step=100, key="calc_target")
+        with c5:
+            calc_stop = st.number_input("손절가 (원)", value=int(curr_price * 0.97), step=100, key="calc_stop")
+        with c6:
+            calc_sell_fee = st.number_input("매도 수수료+세금 (%)", value=0.265, step=0.001, format="%.3f", key="calc_sell_fee")
+
+        # ── 계산 ──
+        invest_won = calc_invest * 10000
+        qty = int(invest_won / (calc_buy * (1 + calc_buy_fee / 100))) if calc_buy > 0 else 0
+        actual_buy = qty * calc_buy
+        buy_fee_won = actual_buy * calc_buy_fee / 100
+        total_cost = actual_buy + buy_fee_won
+
+        bep = calc_buy * (1 + calc_buy_fee / 100) / (1 - calc_sell_fee / 100) if calc_buy > 0 else 0
+
+        target_sell = qty * calc_target
+        target_fee = target_sell * calc_sell_fee / 100
+        target_net = target_sell - target_fee - total_cost
+        target_pct = (calc_target - calc_buy) / calc_buy * 100 if calc_buy > 0 else 0
+        target_net_pct = target_net / total_cost * 100 if total_cost > 0 else 0
+
+        stop_sell = qty * calc_stop
+        stop_fee = stop_sell * calc_sell_fee / 100
+        stop_net = stop_sell - stop_fee - total_cost
+        stop_pct = (calc_stop - calc_buy) / calc_buy * 100 if calc_buy > 0 else 0
+        stop_net_pct = stop_net / total_cost * 100 if total_cost > 0 else 0
+
+        rr = abs(target_net / stop_net) if stop_net != 0 else 0
+        rr_label = "✅ 양호 (2.0 이상)" if rr >= 2 else ("⚠️ 보통 (1.5~2.0)" if rr >= 1.5 else "❌ 불량 (1.5 미만)")
+        rr_color = "#22c55e" if rr >= 2 else ("#f59e0b" if rr >= 1.5 else "#ef4444")
+
+        # ── 요약 카드 3개 ──
+        m1, m2, m3 = st.columns(3)
+        with m1:
+            st.markdown(f"""
+            <div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:10px; padding:14px; text-align:center; margin-top:8px;'>
+                <div style='font-size:11px; color:{DIM}; margin-bottom:4px;'>매수 수량</div>
+                <div style='font-size:22px; font-weight:700; font-family:JetBrains Mono;'>{qty:,}주</div>
+                <div style='font-size:11px; color:{DIM}; margin-top:4px;'>실투입 {total_cost/10000:,.0f}만원</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with m2:
+            st.markdown(f"""
+            <div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:10px; padding:14px; text-align:center; margin-top:8px;'>
+                <div style='font-size:11px; color:{DIM}; margin-bottom:4px;'>손익분기점</div>
+                <div style='font-size:22px; font-weight:700; font-family:JetBrains Mono;'>{bep:,.0f}원</div>
+                <div style='font-size:11px; color:{DIM}; margin-top:4px;'>수수료 포함 실제 BEP</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with m3:
+            st.markdown(f"""
+            <div style='background:{rr_color}22; border:1px solid {rr_color}40; border-radius:10px; padding:14px; text-align:center; margin-top:8px;'>
+                <div style='font-size:11px; color:{rr_color}; margin-bottom:4px;'>수익/손실 배율</div>
+                <div style='font-size:22px; font-weight:700; font-family:JetBrains Mono; color:{rr_color};'>1 : {rr:.2f}</div>
+                <div style='font-size:11px; color:{rr_color}; margin-top:4px;'>{rr_label}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # ── 목표가/손절가 결과 ──
+        r1, r2 = st.columns(2)
+        with r1:
+            profit_color = CANDLE_UP if target_net >= 0 else CANDLE_DOWN
+            st.markdown(f"""
+            <div style='background:#22c55e15; border:1px solid #22c55e40; border-radius:12px; padding:16px; margin-top:8px;'>
+                <div style='font-size:12px; color:#22c55e; font-weight:600; margin-bottom:10px;'>🎯 목표가 도달 시</div>
+                <div style='display:flex; justify-content:space-between; font-size:12px; margin-bottom:6px;'>
+                    <span style='color:{DIM};'>목표가</span>
+                    <span style='color:{TEXT};'>{calc_target:,}원 (+{target_pct:.2f}%)</span>
+                </div>
+                <div style='display:flex; justify-content:space-between; font-size:12px; margin-bottom:6px;'>
+                    <span style='color:{DIM};'>매도 수수료+세금</span>
+                    <span style='color:#ef4444;'>-{target_fee:,.0f}원</span>
+                </div>
+                <div style='display:flex; justify-content:space-between; font-size:12px; margin-bottom:6px;'>
+                    <span style='color:{DIM};'>매도 총액</span>
+                    <span style='color:{TEXT};'>{target_sell:,}원</span>
+                </div>
+                <div style='border-top:0.5px solid #22c55e30; margin:8px 0; padding-top:8px; display:flex; justify-content:space-between;'>
+                    <span style='font-weight:600; color:{TEXT};'>세후 순수익</span>
+                    <span style='color:#22c55e; font-weight:700; font-size:15px;'>+{target_net:,.0f}원 (+{target_net_pct:.2f}%)</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with r2:
+            st.markdown(f"""
+            <div style='background:#ef444415; border:1px solid #ef444440; border-radius:12px; padding:16px; margin-top:8px;'>
+                <div style='font-size:12px; color:#ef4444; font-weight:600; margin-bottom:10px;'>🛑 손절가 도달 시</div>
+                <div style='display:flex; justify-content:space-between; font-size:12px; margin-bottom:6px;'>
+                    <span style='color:{DIM};'>손절가</span>
+                    <span style='color:{TEXT};'>{calc_stop:,}원 ({stop_pct:.2f}%)</span>
+                </div>
+                <div style='display:flex; justify-content:space-between; font-size:12px; margin-bottom:6px;'>
+                    <span style='color:{DIM};'>매도 수수료+세금</span>
+                    <span style='color:#ef4444;'>-{stop_fee:,.0f}원</span>
+                </div>
+                <div style='display:flex; justify-content:space-between; font-size:12px; margin-bottom:6px;'>
+                    <span style='color:{DIM};'>매도 총액</span>
+                    <span style='color:{TEXT};'>{stop_sell:,}원</span>
+                </div>
+                <div style='border-top:0.5px solid #ef444430; margin:8px 0; padding-top:8px; display:flex; justify-content:space-between;'>
+                    <span style='font-weight:600; color:{TEXT};'>세후 손실</span>
+                    <span style='color:#ef4444; font-weight:700; font-size:15px;'>{stop_net:,.0f}원 ({stop_net_pct:.2f}%)</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    # ══════════════════════════════════════════
     # 3. 수급 히스토리
     # ══════════════════════════════════════════
     card("💰 외국인/기관 수급 히스토리", "최근 30일 순매수 추이 (KIS API)")
@@ -516,28 +641,34 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
                     frgn_vals = [round(safe_int(o.get("frgn_ntby_tr_pbmn",0))/100, 1) for o in output][::-1]
                     orgn_vals = [round(safe_int(o.get("orgn_ntby_tr_pbmn",0))/100, 1) for o in output][::-1]
 
+                    # 누적 계산은 30일치 전체 데이터를 유지하되, 차트용 데이터만 최근 5영업일(일주일)로 슬라이싱
+                    dates_chart = dates_fmt[-5:]
+                    frgn_chart = frgn_vals[-5:]
+                    orgn_chart = orgn_vals[-5:]
+
                     fig_sup = go.Figure()
                     
-                    # 외국인 라인 (고정 오렌지색)
-                    fig_sup.add_trace(go.Scatter(
-                        x=dates_fmt, y=frgn_vals, name="외국인",
-                        mode="lines+markers",
-                        line=dict(color="#f97316", width=2.5),
-                        marker=dict(size=6, symbol="circle"),
+                    # 외국인 바 (고정 레드)
+                    fig_sup.add_trace(go.Bar(
+                        x=dates_chart, y=frgn_chart, name="외국인",
+                        marker_color="#ef4444",
+                        opacity=0.85,
                         hovertemplate="<b>%{x} 외국인</b><br>%{y:,.1f}억원<extra></extra>"
                     ))
                     
-                    # 기관 라인 (고정 보라색)
-                    fig_sup.add_trace(go.Scatter(
-                        x=dates_fmt, y=orgn_vals, name="기관",
-                        mode="lines+markers",
-                        line=dict(color="#a855f7", width=2.5),
-                        marker=dict(size=6, symbol="circle"),
+                    # 기관 바 (고정 파랑)
+                    fig_sup.add_trace(go.Bar(
+                        x=dates_chart, y=orgn_chart, name="기관",
+                        marker_color="#190be3",
+                        opacity=0.85,
                         hovertemplate="<b>%{x} 기관</b><br>%{y:,.1f}억원<extra></extra>"
                     ))
                     
-                    fig_sup.add_hline(y=0, line=dict(color=DIM, width=1.5, dash="dot"))
+                    fig_sup.add_hline(y=0, line=dict(color=DIM, width=1, dash="dot"))
                     fig_sup.update_layout(
+                        barmode="group", 
+                        bargap=0.45,       # 5일만 표현하므로 그룹 간 간격을 널찍하게 확보
+                        bargroupgap=0.08,   # 외국인/기관 막대 사이의 간격
                         height=300,
                         paper_bgcolor="rgba(0,0,0,0)", 
                         plot_bgcolor="rgba(0,0,0,0)",
@@ -545,7 +676,7 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
                         margin=dict(l=0, r=0, t=30, b=20),
                         legend=dict(orientation="h", y=1.12),
                         yaxis=dict(gridcolor=LINE, tickformat=",", ticksuffix="억"),
-                        xaxis=dict(gridcolor=LINE, showgrid=False)
+                        xaxis=dict(gridcolor=LINE)
                     )
                     st.plotly_chart(fig_sup, use_container_width=True, config={"displayModeBar": False})
 
