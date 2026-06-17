@@ -520,7 +520,17 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
     # ══════════════════════════════════════════
     # 🎯 변동성 돌파 목표가
     # ══════════════════════════════════════════
-    card("🎯 변동성 돌파 목표가", "전일 변동폭 기준 오늘 돌파 기준가 자동 계산 (래리 윌리엄스 K값 전략)")
+    card("🎯 변동성 돌파 목표가", "전일 변동폭 기준 오늘 돌파 기준가 자동 계산")
+
+    st.markdown(f"""
+    <div style='background:{SURFACE_1}; border-left:4px solid {ACCENT}; border-radius:0 8px 8px 0; padding:14px 18px; margin-bottom:16px; font-size:13px; line-height:1.8; color:{TEXT};'>
+        <b>💡 변동성 돌파 전략이란?</b><br>
+        어제 주가가 크게 움직였으면 오늘도 비슷하게 움직일 가능성이 높아요.<br>
+        오늘 시장이 열리면 주가를 지켜보다가, <b>돌파 기준가를 넘어서는 순간 매수</b>하고 <b>당일 종가에 매도</b>하는 단타 전략이에요.<br><br>
+        <b>계산법:</b> 오늘 시가 + (전일 고가 - 전일 저가) × K값<br>
+        <b>K값이 낮을수록</b> 기준가가 낮아서 자주 돌파되고, <b>K값이 높을수록</b> 확실할 때만 진입해요.
+    </div>
+    """, unsafe_allow_html=True)
 
     try:
         today_open = float(open_p.iloc[-1])
@@ -541,10 +551,15 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
         if breached:
             next_k = not_breached[0] if not_breached else None
             st.markdown(f"""
-            <div style='background:#22c55e15; border:1px solid #22c55e40; border-radius:10px; padding:14px 18px; margin-bottom:14px;'>
-                <div style='font-size:12px; color:#22c55e; font-weight:600; margin-bottom:4px;'>✅ K={max(breached)} 돌파 완료 — 매수 신호 발생</div>
-                <div style='font-size:12px; color:{DIM};'>현재가 {curr_price:,.0f}원이 K={max(breached)} 기준가({vb_targets[max(breached)]:,.0f}원)를 돌파했어요.</div>
-                {f"<div style='font-size:12px; color:{DIM}; margin-top:4px;'>다음 저항선: K={next_k} 기준가 {vb_targets[next_k]:,.0f}원</div>" if next_k else ""}
+            <div style='background:#22c55e15; border:1px solid #22c55e40; border-radius:10px; padding:16px 18px; margin-bottom:14px;'>
+                <div style='font-size:13px; color:#22c55e; font-weight:700; margin-bottom:6px;'>✅ 돌파 성공 — 단타 진입 신호!</div>
+                <div style='font-size:13px; color:{TEXT}; margin-bottom:4px;'>
+                    현재가 <b>{curr_price:,.0f}원</b>이 K={max(breached)} 기준가 <b>{vb_targets[max(breached)]:,.0f}원</b>을 넘었어요.
+                </div>
+                <div style='font-size:12px; color:{DIM}; margin-top:6px;'>
+                    📌 지금 매수 후 오늘 장 마감 전(15:20~15:30)에 매도하는 전략을 고려해보세요.
+                </div>
+                {f"<div style='font-size:12px; color:{DIM}; margin-top:4px;'>다음 목표가(저항): K={next_k} 기준가 {vb_targets[next_k]:,.0f}원</div>" if next_k else ""}
             </div>
             """, unsafe_allow_html=True)
         else:
@@ -552,13 +567,19 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
             nearest_target = vb_targets[nearest_k]
             gap_pct = (nearest_target - curr_price) / curr_price * 100
             st.markdown(f"""
-            <div style='background:#f59e0b15; border:1px solid #f59e0b40; border-radius:10px; padding:14px 18px; margin-bottom:14px;'>
-                <div style='font-size:12px; color:#f59e0b; font-weight:600; margin-bottom:4px;'>⏳ 아직 미돌파 — 대기 중</div>
-                <div style='font-size:12px; color:{DIM};'>가장 가까운 돌파 기준가: K={nearest_k} → {nearest_target:,.0f}원 (현재가 대비 +{gap_pct:.2f}%)</div>
+            <div style='background:#f59e0b15; border:1px solid #f59e0b40; border-radius:10px; padding:16px 18px; margin-bottom:14px;'>
+                <div style='font-size:13px; color:#f59e0b; font-weight:700; margin-bottom:6px;'>⏳ 아직 대기 중 — 돌파 전</div>
+                <div style='font-size:13px; color:{TEXT}; margin-bottom:4px;'>
+                    가장 가까운 돌파 기준가는 K={nearest_k}일 때 <b>{nearest_target:,.0f}원</b>이에요.
+                </div>
+                <div style='font-size:12px; color:{DIM}; margin-top:6px;'>
+                    📌 현재가({curr_price:,.0f}원)에서 <b>+{gap_pct:.2f}%</b>만 더 오르면 단타 진입 신호가 발생해요.<br>
+                    장중에 이 가격을 돌파하는지 지켜보세요!
+                </div>
             </div>
             """, unsafe_allow_html=True)
 
-        # K값별 기준가 카드
+        k_desc = {0.3: "보수적 진입", 0.4: "안정적 진입", 0.5: "표준 진입", 0.6: "확실한 진입"}
         k_cols = st.columns(4)
         for i, (k, target) in enumerate(vb_targets.items()):
             is_breached = curr_price >= target
@@ -569,11 +590,19 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
             with k_cols[i]:
                 st.markdown(f"""
                 <div style='background:{bg}; border:0.5px solid {border}; border-radius:10px; padding:12px; text-align:center;'>
+                    <div style='font-size:10px; color:{DIM}; margin-bottom:2px;'>{k_desc[k]}</div>
                     <div style='font-size:11px; color:{DIM}; margin-bottom:4px;'>K = {k}</div>
                     <div style='font-size:16px; font-weight:700; font-family:JetBrains Mono; color:{color};'>{target:,.0f}원</div>
-                    <div style='font-size:11px; color:{color}; margin-top:4px;'>{'✅ 돌파' if is_breached else f'+{gap:.2f}%'}</div>
+                    <div style='font-size:11px; color:{color}; margin-top:4px;'>{'✅ 돌파 완료!' if is_breached else f'현재가 대비 +{gap:.2f}%'}</div>
                 </div>
                 """, unsafe_allow_html=True)
+
+        st.markdown(f"""
+        <div style='background:{SURFACE_1}; border-radius:8px; padding:10px 16px; margin-top:10px; font-size:12px; color:{DIM}; line-height:1.7;'>
+            💡 <b>어떤 K값을 써야 할까요?</b> 처음이라면 <b>K=0.5(표준)</b>를 추천해요.
+            K값이 낮을수록 진입 기회가 많지만 가짜 신호도 많고, 높을수록 신호는 적지만 신뢰도가 높아요.
+        </div>
+        """, unsafe_allow_html=True)
 
         # 전일 데이터 요약
         st.markdown(f"""
