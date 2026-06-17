@@ -501,6 +501,123 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
     st.markdown("---")
 
     # ══════════════════════════════════════════
+    # ✅ 단타 체크리스트
+    # ══════════════════════════════════════════
+    card("✅ 단타 체크리스트", "조건 충족 여부 자동 점검 · 진입 추천 / 보류 / 위험 판단")
+
+    try:
+        checks = [
+            {
+                "name": "거래량 모멘텀",
+                "pass": vol_ratio >= 1.3,
+                "detail": f"오늘 거래량 평균 대비 {vol_ratio:.1f}배 {'✓ 활발' if vol_ratio >= 1.3 else '✗ 부족'}",
+                "why": "단타는 거래량이 살아있어야 빠른 매도가 가능해요"
+            },
+            {
+                "name": "RSI 진입 구간",
+                "pass": 30 <= rsi_val <= 60,
+                "detail": f"RSI {rsi_val:.1f} — {'✓ 진입 가능 구간 (30~60)' if 30 <= rsi_val <= 60 else ('✗ 과매수 (60 초과), 고점 매수 위험' if rsi_val > 60 else '✗ 과매도 (30 미만), 추가 하락 가능')}",
+                "why": "RSI 30~60이 단타 진입 최적 구간이에요"
+            },
+            {
+                "name": "볼린저밴드 위치",
+                "pass": bb_pct <= 70,
+                "detail": f"밴드 위치 {bb_pct:.0f}% — {'✓ 적정 구간' if bb_pct <= 70 else '✗ 상단 과열 (70% 초과), 눌림 가능성'}",
+                "why": "밴드 상단(70% 이상)은 단기 과열 구간이라 단타 진입 시 리스크가 높아요"
+            },
+            {
+                "name": "추세 방향",
+                "pass": "상승" in trend,
+                "detail": f"{trend} — {'✓ 추세 방향 유리' if '상승' in trend else '✗ 역추세 단타, 리스크 높음'}",
+                "why": "추세를 따라가는 단타가 역추세보다 성공률이 높아요"
+            },
+            {
+                "name": "52주 위치",
+                "pass": pos_52 <= 85,
+                "detail": f"52주 위치 {pos_52:.1f}% — {'✓ 신고가 부담 없음' if pos_52 <= 85 else '✗ 신고가 근접 (85% 초과), 차익실현 매물 주의'}",
+                "why": "52주 신고가 근처는 차익실현 매물이 많아 단타 목표가 달성이 어려워요"
+            },
+            {
+                "name": "기술적 종합 점수",
+                "pass": score >= 4,
+                "detail": f"종합 {score}/6점 — {'✓ 진입 적합' if score >= 4 else '✗ 진입 조건 부족'}",
+                "why": "6개 지표 중 4개 이상 충족해야 단타 성공률이 높아요"
+            },
+        ]
+
+        passed = sum(1 for c in checks if c["pass"])
+        total = len(checks)
+
+        if passed >= 5:
+            verdict = "진입 추천"
+            verdict_color = "#22c55e"
+            verdict_bg = "#22c55e15"
+            verdict_border = "#22c55e40"
+            verdict_icon = "🟢"
+            verdict_desc = "대부분의 단타 조건을 충족했어요. 계산기에서 수익/손실 배율 확인 후 진입하세요."
+        elif passed >= 4:
+            verdict = "조건부 진입"
+            verdict_color = "#f59e0b"
+            verdict_bg = "#f59e0b15"
+            verdict_border = "#f59e0b40"
+            verdict_icon = "🟡"
+            verdict_desc = "일부 조건이 미충족이에요. 미충족 항목을 확인하고 리스크를 인지한 후 진입하세요."
+        elif passed >= 3:
+            verdict = "보류 권장"
+            verdict_color = "#f59e0b"
+            verdict_bg = "#f59e0b10"
+            verdict_border = "#f59e0b30"
+            verdict_icon = "🟠"
+            verdict_desc = "절반 이상의 조건이 미충족이에요. 더 좋은 타이밍을 기다리는 게 유리해요."
+        else:
+            verdict = "진입 위험"
+            verdict_color = "#ef4444"
+            verdict_bg = "#ef444415"
+            verdict_border = "#ef444440"
+            verdict_icon = "🔴"
+            verdict_desc = "대부분의 단타 조건을 충족하지 못했어요. 이 종목은 오늘 단타를 피하세요."
+
+        # 종합 판단 배너
+        st.markdown(f"""
+        <div style='background:{verdict_bg}; border:1px solid {verdict_border}; border-radius:12px; padding:16px 20px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center;'>
+            <div>
+                <div style='font-size:11px; color:{verdict_color}; margin-bottom:4px;'>단타 종합 판단 ({passed}/{total} 충족)</div>
+                <div style='font-size:18px; font-weight:700; color:{verdict_color};'>{verdict_icon} {verdict}</div>
+                <div style='font-size:12px; color:{DIM}; margin-top:6px;'>{verdict_desc}</div>
+            </div>
+            <div style='text-align:right;'>
+                <div style='font-size:36px; font-weight:700; color:{verdict_color};'>{passed}<span style='font-size:18px; color:{DIM};'>/{total}</span></div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # 체크리스트 항목
+        for i in range(0, len(checks), 2):
+            cols = st.columns(2)
+            for j, col in enumerate(cols):
+                if i + j < len(checks):
+                    c = checks[i + j]
+                    c_color = "#22c55e" if c["pass"] else "#ef4444"
+                    c_bg = "#22c55e10" if c["pass"] else "#ef444410"
+                    c_border = "#22c55e30" if c["pass"] else "#ef444430"
+                    c_icon = "✅" if c["pass"] else "❌"
+                    with col:
+                        st.markdown(f"""
+                        <div style='background:{c_bg}; border:0.5px solid {c_border}; border-radius:10px; padding:12px; margin-bottom:8px;'>
+                            <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;'>
+                                <span style='font-size:12px; font-weight:600; color:{c_color};'>{c_icon} {c["name"]}</span>
+                            </div>
+                            <div style='font-size:12px; color:{DIM}; margin-bottom:4px;'>{c["detail"]}</div>
+                            <div style='font-size:11px; color:#6b7280; border-top:0.5px solid {c_border}; padding-top:6px; margin-top:6px;'>💡 {c["why"]}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+    except Exception as e:
+        st.info(f"체크리스트 생성 실패: {e}")
+
+    st.markdown("---")
+
+    # ══════════════════════════════════════════
     # 💰 단타 매매 계산기
     # ══════════════════════════════════════════
     card("💰 단타 매매 계산기", "기술적 분석 기반 지지선/저항선 자동 적용 · 수수료 포함 세후 수익/손실")
