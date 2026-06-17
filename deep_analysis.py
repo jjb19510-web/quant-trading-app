@@ -383,8 +383,12 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
                 if inv_data.get("rt_cd") == "0" and inv_data.get("output"):
                     output = inv_data["output"][:30]
                     dates_fmt = [f"{o['stck_bsop_date'][4:6]}/{o['stck_bsop_date'][6:8]}" for o in output][::-1]
-                    frgn_vals = [round(int(o.get("frgn_ntby_tr_pbmn",0))/100, 1) for o in output][::-1]
-                    orgn_vals = [round(int(o.get("orgn_ntby_tr_pbmn",0))/100, 1) for o in output][::-1]
+                    def safe_int(val):
+                        try: return int(str(val).strip()) if str(val).strip() else 0
+                        except: return 0
+
+                    frgn_vals = [round(safe_int(o.get("frgn_ntby_tr_pbmn",0))/100, 1) for o in output][::-1]
+                    orgn_vals = [round(safe_int(o.get("orgn_ntby_tr_pbmn",0))/100, 1) for o in output][::-1]
 
                     fig_sup = go.Figure()
                     fig_sup.add_trace(go.Bar(x=dates_fmt, y=frgn_vals, name="외국인",
