@@ -96,9 +96,14 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
         st.markdown("<div style='margin-top:28px;'></div>", unsafe_allow_html=True)
         analyze_btn = st.button("🔬 심층분석 시작", use_container_width=True)
 
-    if not ticker_input or not analyze_btn:
+    if analyze_btn and ticker_input:
+        st.session_state["deep_ticker"] = ticker_input
+    
+    if not st.session_state.get("deep_ticker"):
         st.info("종목명 또는 코드를 입력하고 심층분석 시작 버튼을 눌러주세요.")
         return
+    
+    ticker_input = st.session_state["deep_ticker"]
 
     df_krx = load_krx_listing()
     name_map = get_krx_name_map()
@@ -498,7 +503,7 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
     # ══════════════════════════════════════════
     # 💰 단타 매매 계산기
     # ══════════════════════════════════════════
-    card("💰 단타 매매 계산기", "수수료 포함 세후 수익/손실 · 수익/손실 배율 · 손익분기점")
+    card("💰 단타 매매 계산기", "기술적 분석 기반 지지선/저항선 자동 적용 · 수수료 포함 세후 수익/손실")
 
     import streamlit.components.v1 as components
     calc_html = f"""
@@ -530,11 +535,11 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
       </div>
       <div>
         <label>목표가 (원)</label>
-        <input type="number" id="target" value="{int(curr_price * 1.05)}" step="100" oninput="calc()">
+        <input type="number" id="target" value="{int(resistance)}" step="100" oninput="calc()">
       </div>
       <div>
         <label>손절가 (원)</label>
-        <input type="number" id="stop" value="{int(curr_price * 0.97)}" step="100" oninput="calc()">
+        <input type="number" id="stop" value="{int(support)}" step="100" oninput="calc()">
       </div>
     </div>
 
@@ -765,6 +770,10 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
     card("🤖 AI 종합 투자의견", "재무·기술적·수급 데이터 기반 (참고용)")
 
     if st.button("🤖 AI 투자의견 생성", use_container_width=True, key="ai_opinion_btn"):
+        st.session_state["ai_opinion_requested"] = True
+
+    if st.session_state.get("ai_opinion_requested") and not st.session_state.get("ai_opinion"):
+        st.session_state["ai_opinion_requested"] = False
         with st.spinner("AI가 종목을 심층 분석하는 중..."):
             try:
                 nv = load_naver_info(raw_ticker) if is_korean else {}
