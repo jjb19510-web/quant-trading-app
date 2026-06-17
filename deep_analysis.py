@@ -142,6 +142,7 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
         high = hist["High"].squeeze()
         low = hist["Low"].squeeze()
         volume = hist["Volume"].squeeze()
+        open_p = hist["Open"].squeeze()
 
     curr_price = float(close.iloc[-1])
     prev_price = float(close.iloc[-2])
