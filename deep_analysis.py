@@ -146,57 +146,94 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
 
         if financials is not None and not financials.empty:
             rev_row = next((r for r in ["Total Revenue","Revenue"] if r in financials.index), None)
-            op_row = next((r for r in ["Operating Income","EBIT"] if r in financials.index), None)
+            ni_row = next((r for r in ["Net Income","Net Income Common Stockholders"] if r in financials.index), None)
 
-            if rev_row or op_row:
+            if rev_row or ni_row:
                 def auto_unit(max_eok):
                     return ("조원", 10000) if abs(max_eok) >= 10000 else ("억원", 1)
 
-                fig_fin = go.Figure()
-                cols_fin = financials.columns[:4]
-                years = [str(c.year) for c in cols_fin][::-1]
-                rev_unit, op_unit = "억원", "억원"
+                # 최대 5년치
+                cols_fin = financials.columns[:5]
+                years = [f"{c.year}년" for c in cols_fin][::-1]
 
+                rev_eok, ni_eok = [], []
                 if rev_row:
                     rev_eok = [round(float(financials.loc[rev_row, c]) / 1e8, 1) for c in cols_fin][::-1]
-                    rev_unit, rev_div = auto_unit(max(abs(v) for v in rev_eok))
-                    rev_vals = [round(v / rev_div, 2) for v in rev_eok]
-                    rev_hover = [f"{v:,.2f}{rev_unit}" if rev_unit=="조원" else f"{v:,.0f}{rev_unit}" for v in rev_vals]
-                    fig_fin.add_trace(go.Bar(
-                        x=years, y=rev_vals, name=f"매출액({rev_unit})",
-                        marker_color=ACCENT, opacity=0.6, yaxis="y1",
-                        hovertemplate="<b>%{x}년 매출액</b><br>%{customdata}<extra></extra>",
-                        customdata=rev_hover
-                    ))
+                if ni_row:
+                    ni_eok = [round(float(financials.loc[ni_row, c]) / 1e8, 1) for c in cols_fin][::-1]
 
-                if op_row:
-                    op_eok = [round(float(financials.loc[op_row, c]) / 1e8, 1) for c in cols_fin][::-1]
-                    op_unit, op_div = auto_unit(max(abs(v) for v in op_eok))
-                    op_vals = [round(v / op_div, 2) for v in op_eok]
-                    op_hover = [f"{v:,.2f}{op_unit}" if op_unit=="조원" else f"{v:,.0f}{op_unit}" for v in op_vals]
+                # 단위 결정
+                max_val = max([abs(v) for v in rev_eok + ni_eok] or [1])
+                unit, div = auto_unit(max_val)
+
+                rev_vals = [round(v / div, 2) for v in rev_eok] if rev_eok else []
+                ni_vals = [round(v / div, 2) for v in ni_eok] if ni_eok else []
+
+                # 순이익률 계산
+                margin_vals = []
+                if rev_eok and ni_eok:
+                    for r, n in zip(rev_eok, ni_eok):
+                        margin_vals.append(round(n / r * 100, 2) if r != 0 else 0)
+
+                # 순이익 성장률
+                growth_vals = []
+                if ni_eok:
+                    for i in range(len(ni_eok)):
+                        if i == 0 or ni_eok[i-1] == 0:
+                            growth_vals.append(None)
+                        else:
+                            growth_vals.append(round((ni_eok[i] - ni_eok[i-1]) / abs(ni_eok[i-1]) * 100, 2))
+
+                # 차트
+                fig_fin = go.Figure()
+
+                if rev_vals:
+                    fig_fin.add_trace(go.Bar(
+                        x=years, y=rev_vals, name=f"매출({unit})",
+                        marker_color="#3b82f6", opacity=0.7, yaxis="y1",
+                        hovertemplate=f"<b>%{{x}} 매출</b><br>%{{y:,.2f}}{unit}<extra></extra>"
+                    ))
+                if ni_vals:
+                    fig_fin.add_trace(go.Bar(
+                        x=years, y=ni_vals, name=f"순이익({unit})",
+                        marker_color="#60a5fa", opacity=0.85, yaxis="y1",
+                        hovertemplate=f"<b>%{{x}} 순이익</b><br>%{{y:,.2f}}{unit}<extra></extra>"
+                    ))
+                if margin_vals:
                     fig_fin.add_trace(go.Scatter(
-                        x=years, y=op_vals, name=f"영업이익({op_unit})",
-                        mode="lines+markers+text",
-                        line=dict(color=CANDLE_UP, width=2.5),
-                        marker=dict(size=8, color=CANDLE_UP),
-                        text=op_hover, textposition="top center",
-                        textfont=dict(color=CANDLE_UP, size=11),
+                        x=years, y=margin_vals, name="순이익률(%)",
+                        mode="lines+markers",
+                        line=dict(color="#f59e0b", width=2.5),
+                        marker=dict(size=7, color="#f59e0b"),
                         yaxis="y2",
-                        hovertemplate="<b>%{x}년 영업이익</b><br>%{customdata}<extra></extra>",
-                        customdata=op_hover
+                        hovertemplate="<b>%{x} 순이익률</b><br>%{y:.2f}%<extra></extra>"
                     ))
 
                 fig_fin.update_layout(
-                    height=340,
+                    barmode="group", height=320,
                     paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                     font=dict(color=TEXT, size=11),
-                    margin=dict(l=60, r=60, t=40, b=20),
+                    margin=dict(l=50, r=60, t=30, b=20),
                     legend=dict(orientation="h", y=1.12),
                     xaxis=dict(gridcolor="rgba(0,0,0,0)"),
-                    yaxis=dict(tickfont=dict(color=ACCENT), gridcolor=LINE, tickformat=",", ticksuffix=rev_unit, side="left"),
-                    yaxis2=dict(tickfont=dict(color=CANDLE_UP), gridcolor="rgba(0,0,0,0)", tickformat=",", ticksuffix=op_unit, side="right", overlaying="y", showgrid=False)
+                    yaxis=dict(tickfont=dict(color="#3b82f6"), gridcolor=LINE, tickformat=",", ticksuffix=unit, side="left"),
+                    yaxis2=dict(tickfont=dict(color="#f59e0b"), gridcolor="rgba(0,0,0,0)", tickformat=".1f", ticksuffix="%", side="right", overlaying="y", showgrid=False)
                 )
                 st.plotly_chart(fig_fin, use_container_width=True, config={"displayModeBar": False})
+
+                # 요약 테이블
+                table_data = {"항목": ["매출", "순이익", "순이익률", "순이익 성장률"]}
+                for i, y in enumerate(years):
+                    col_data = []
+                    col_data.append(f"{rev_vals[i]:,.1f}{unit}" if rev_vals and i < len(rev_vals) else "N/A")
+                    col_data.append(f"{ni_vals[i]:,.1f}{unit}" if ni_vals and i < len(ni_vals) else "N/A")
+                    col_data.append(f"{margin_vals[i]:.2f}%" if margin_vals and i < len(margin_vals) else "N/A")
+                    g = growth_vals[i] if growth_vals and i < len(growth_vals) else None
+                    col_data.append(f"{g:+.2f}%" if g is not None else "-")
+                    table_data[y] = col_data
+
+                df_table = pd.DataFrame(table_data)
+                st.dataframe(df_table, use_container_width=True, hide_index=True)
 
         # 밸류에이션 — 네이버 API (quant_app.py SUB3와 동일)
         nv = load_naver_info(raw_ticker) if is_korean else {}
