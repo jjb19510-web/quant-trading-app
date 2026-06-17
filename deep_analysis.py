@@ -501,6 +501,79 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
     st.markdown("---")
 
     # ══════════════════════════════════════════
+    # 🎯 변동성 돌파 목표가
+    # ══════════════════════════════════════════
+    card("🎯 변동성 돌파 목표가", "전일 변동폭 기준 오늘 돌파 기준가 자동 계산 (래리 윌리엄스 K값 전략)")
+
+    try:
+        today_open = float(open_p.iloc[-1])
+        prev_high = float(high.iloc[-2])
+        prev_low = float(low.iloc[-2])
+        prev_close = float(close.iloc[-2])
+        prev_range = prev_high - prev_low
+
+        vb_targets = {}
+        for k in [0.3, 0.4, 0.5, 0.6]:
+            vb_targets[k] = today_open + prev_range * k
+
+        # 현재가가 어떤 K값을 돌파했는지
+        breached = [k for k, t in vb_targets.items() if curr_price >= t]
+        not_breached = [k for k, t in vb_targets.items() if curr_price < t]
+
+        # 안내 배너
+        if breached:
+            next_k = not_breached[0] if not_breached else None
+            st.markdown(f"""
+            <div style='background:#22c55e15; border:1px solid #22c55e40; border-radius:10px; padding:14px 18px; margin-bottom:14px;'>
+                <div style='font-size:12px; color:#22c55e; font-weight:600; margin-bottom:4px;'>✅ K={max(breached)} 돌파 완료 — 매수 신호 발생</div>
+                <div style='font-size:12px; color:{DIM};'>현재가 {curr_price:,.0f}원이 K={max(breached)} 기준가({vb_targets[max(breached)]:,.0f}원)를 돌파했어요.</div>
+                {f"<div style='font-size:12px; color:{DIM}; margin-top:4px;'>다음 저항선: K={next_k} 기준가 {vb_targets[next_k]:,.0f}원</div>" if next_k else ""}
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            nearest_k = min(not_breached)
+            nearest_target = vb_targets[nearest_k]
+            gap_pct = (nearest_target - curr_price) / curr_price * 100
+            st.markdown(f"""
+            <div style='background:#f59e0b15; border:1px solid #f59e0b40; border-radius:10px; padding:14px 18px; margin-bottom:14px;'>
+                <div style='font-size:12px; color:#f59e0b; font-weight:600; margin-bottom:4px;'>⏳ 아직 미돌파 — 대기 중</div>
+                <div style='font-size:12px; color:{DIM};'>가장 가까운 돌파 기준가: K={nearest_k} → {nearest_target:,.0f}원 (현재가 대비 +{gap_pct:.2f}%)</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # K값별 기준가 카드
+        k_cols = st.columns(4)
+        for i, (k, target) in enumerate(vb_targets.items()):
+            is_breached = curr_price >= target
+            gap = (target - curr_price) / curr_price * 100
+            color = "#22c55e" if is_breached else "#6b7280"
+            bg = "#22c55e15" if is_breached else SURFACE_2
+            border = "#22c55e40" if is_breached else LINE
+            with k_cols[i]:
+                st.markdown(f"""
+                <div style='background:{bg}; border:0.5px solid {border}; border-radius:10px; padding:12px; text-align:center;'>
+                    <div style='font-size:11px; color:{DIM}; margin-bottom:4px;'>K = {k}</div>
+                    <div style='font-size:16px; font-weight:700; font-family:JetBrains Mono; color:{color};'>{target:,.0f}원</div>
+                    <div style='font-size:11px; color:{color}; margin-top:4px;'>{'✅ 돌파' if is_breached else f'+{gap:.2f}%'}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+        # 전일 데이터 요약
+        st.markdown(f"""
+        <div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:8px; padding:12px 16px; margin-top:10px; display:flex; gap:24px;'>
+            <span style='font-size:12px; color:{DIM};'>오늘 시가 <b style='color:{TEXT};'>{today_open:,.0f}원</b></span>
+            <span style='font-size:12px; color:{DIM};'>전일 고가 <b style='color:{TEXT};'>{prev_high:,.0f}원</b></span>
+            <span style='font-size:12px; color:{DIM};'>전일 저가 <b style='color:{TEXT};'>{prev_low:,.0f}원</b></span>
+            <span style='font-size:12px; color:{DIM};'>전일 변동폭 <b style='color:{TEXT};'>{prev_range:,.0f}원</b></span>
+        </div>
+        """, unsafe_allow_html=True)
+
+    except Exception as e:
+        st.info(f"변동성 돌파 계산 실패: {e}")
+
+    st.markdown("---")
+
+    # ══════════════════════════════════════════
     # ✅ 단타 체크리스트
     # ══════════════════════════════════════════
     card("✅ 단타 체크리스트", "조건 충족 여부 자동 점검 · 진입 추천 / 보류 / 위험 판단")
