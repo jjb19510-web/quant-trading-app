@@ -48,6 +48,18 @@ def load_naver_info(raw_ticker):
         def clean_val(val_str):
             return val_str.replace("원","").replace("%","").replace("배","").replace("x","").replace(",","").strip()
 
+        # 🔧 임시 디버그
+        import streamlit as st
+        with st.expander("🔧 네이버 API 디버그", expanded=True):
+            for info in data.get("totalInfos", []):
+                st.write(f"code={info.get('code','')!r} | key={info.get('key','')!r} | value={info.get('value','')!r}")
+
+        # 🔧 임시 디버그
+        import streamlit as st
+        with st.expander("🔧 네이버 API 디버그", expanded=True):
+            for info in data.get("totalInfos", []):
+                st.write(f"code={info.get('code','')!r} | key={info.get('key','')!r} | value={info.get('value','')!r}")
+
         for info in data.get("totalInfos", []):
             k = str(info.get("key","")).upper()
             c = str(info.get("code","")).lower()
