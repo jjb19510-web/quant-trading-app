@@ -125,20 +125,40 @@ def load_market_data(tickers, start_date, end_date, market):
 
 
 # ── [실시간 상장사 목록 로드 엔진] ──
+# 최신 상장 종목 수동 보완 테이블
+MANUAL_STOCK_MAP = {
+    "삼양컴텍": ("484590", "KOSPI"),
+    "에이피알": ("278470", "KOSPI"),
+    "시프트업": ("462870", "KOSPI"),
+}
+    
 @st.cache_data(ttl=86400)
 def load_krx_listing():
     try:
         import FinanceDataReader as fdr
         df = fdr.StockListing('KRX')
         if df is not None and not df.empty:
+            manual_rows = []
+            for name, (code, market) in MANUAL_STOCK_MAP.items():
+                if not (df['Name'].str.upper() == name.upper()).any():
+                    manual_rows.append({'Name': name, 'Symbol': code, 'Market': market})
+            if manual_rows:
+                import pandas as pd
+                manual_df = pd.DataFrame(manual_rows)
+                df = pd.concat([df, manual_df], ignore_index=True)
             return df
     except:
         pass
     try:
-        return pd.read_csv("https://raw.githubusercontent.com/corazzon/finance-data-analysis/main/krx.csv")
+        import pandas as pd
+        base_df = pd.read_csv("https://raw.githubusercontent.com/corazzon/finance-data-analysis/main/krx.csv")
+        manual_rows = [{'Name': n, 'Symbol': c, 'Market': m} for n, (c, m) in MANUAL_STOCK_MAP.items()]
+        manual_df = pd.DataFrame(manual_rows)
+        return pd.concat([base_df, manual_df], ignore_index=True)
     except:
-        return None
-
+        import pandas as pd
+        manual_rows = [{'Name': n, 'Symbol': c, 'Market': m} for n, (c, m) in MANUAL_STOCK_MAP.items()]
+        return pd.DataFrame(manual_rows)
 
 # ── [상장사 이름 매핑 맵 수집 엔진] ──
 @st.cache_data(ttl=86400)
