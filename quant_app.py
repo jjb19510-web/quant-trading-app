@@ -177,6 +177,8 @@ with tab2:
                                 else:
                                     tickers_list.append(t_clean + ".KS")
                             else:
+                                # 네이버 검색 API로 종목코드 검색
+                                found = False
                                 try:
                                     import FinanceDataReader as fdr
                                     krx_all = fdr.StockListing('KRX')
@@ -190,10 +192,33 @@ with tab2:
                                             mkt2 = str(matched2.iloc[0].get('Market', 'KOSPI')).upper()
                                             suffix2 = ".KS" if "KOSPI" in mkt2 else ".KQ"
                                             tickers_list.append(code2 + suffix2)
+                                            found = True
                                             continue
                                 except:
                                     pass
-                                tickers_list.append(t_clean + ".KS")
+
+                                # 네이버 종목 검색 API 폴백
+                                if not found:
+                                    try:
+                                        import requests
+                                        nv_res = requests.get(
+                                            f"https://ac.finance.naver.com/ac?q={t_clean}&q_enc=UTF-8&t_koreng=1&st=111&r_format=json&r_enc=UTF-8&r_adj=0",
+                                            headers={"User-Agent": "Mozilla/5.0"}, timeout=5
+                                        )
+                                        nv_data = nv_res.json()
+                                        items = nv_data.get("items", [[]])[0]
+                                        for item in items:
+                                            if len(item) >= 2:
+                                                code_candidate = str(item[1]).zfill(6)
+                                                if code_candidate.isdigit() and len(code_candidate) == 6:
+                                                    tickers_list.append(code_candidate + ".KS")
+                                                    found = True
+                                                    break
+                                    except:
+                                        pass
+
+                                if not found:
+                                    tickers_list.append(t_clean + ".KS")
                         else:
                             code_padded = t_clean.zfill(6) if len(t_clean) < 6 else t_clean
                             if df_krx is not None:
