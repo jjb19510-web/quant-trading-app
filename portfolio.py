@@ -236,11 +236,79 @@ def render_portfolio(KIS_AVAILABLE, get_kis_token, get_balance):
 </div>
                 """, unsafe_allow_html=True)
 
+                # ── AI 추천 매도 전략 ──
+                now_time = dt_module.datetime.now().time()
+                time_stop = dt_module.time(14, 30)  # 2시 30분 시간 손절 기준
+
+                # 단계별 익절가 계산
+                stage1_price = int(buy * 1.03)   # +3% 1단계
+                stage2_price = int(buy * 1.05)   # +5% 2단계
+                stage3_price = int(target) if target else int(buy * 1.08)  # 목표가 3단계
+                auto_stop = int(buy * 0.97)       # -3% 자동 손절
+
+                # 현재 상황 판단
+                if curr:
+                    if curr >= stage3_price:
+                        rec_action = "🎯 3단계 전량 매도 추천"
+                        rec_price = stage3_price
+                        rec_color = "#22c55e"
+                        rec_reason = f"목표가({stage3_price:,}원) 도달 — 전량 익절 타이밍"
+                    elif curr >= stage2_price:
+                        rec_action = "📈 2단계 부분 매도 추천"
+                        rec_price = stage2_price
+                        rec_color = "#22c55e"
+                        rec_reason = f"+5% 달성 — 보유량 50% 매도 후 나머지는 목표가까지 홀딩"
+                    elif curr >= stage1_price:
+                        rec_action = "💰 1단계 부분 매도 추천"
+                        rec_price = stage1_price
+                        rec_color = "#f59e0b"
+                        rec_reason = f"+3% 달성 — 보유량 30% 매도로 수익 일부 확보"
+                    elif curr <= auto_stop:
+                        rec_action = "🛑 즉시 손절 권고"
+                        rec_price = int(curr)
+                        rec_color = "#ef4444"
+                        rec_reason = f"-3% 이탈 — 추가 손실 방지를 위해 즉시 매도"
+                    elif now_time >= time_stop:
+                        rec_action = "⏰ 시간 손절 권고"
+                        rec_price = int(curr)
+                        rec_color = "#ef4444"
+                        rec_reason = "14:30 경과 — 목표가 미달성 시 당일 청산 원칙"
+                    else:
+                        to_stage1 = (stage1_price - curr) / curr * 100
+                        rec_action = f"⏳ 홀딩 — 1단계까지 +{to_stage1:.1f}% 남음"
+                        rec_price = stage1_price
+                        rec_color = "#6b7280"
+                        rec_reason = f"1단계({stage1_price:,}원) → 2단계({stage2_price:,}원) → 목표({stage3_price:,}원) 순서로 분할 매도"
+                else:
+                    rec_action = "현재가 조회 필요"
+                    rec_price = buy
+                    rec_color = "#6b7280"
+                    rec_reason = "현재가를 확인할 수 없어요"
+
+                st.markdown(f"""
+<div style='background:#0f1117; border:1px solid {rec_color}40; border-radius:10px; padding:14px 16px; margin-bottom:10px;'>
+    <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;'>
+        <span style='font-size:13px; font-weight:700; color:{rec_color};'>{rec_action}</span>
+        <span style='font-size:14px; font-weight:700; font-family:JetBrains Mono; color:{rec_color};'>{rec_price:,}원</span>
+    </div>
+    <div style='font-size:11px; color:#6b7280; margin-bottom:10px;'>{rec_reason}</div>
+    <div style='display:flex; gap:8px; font-size:11px; color:#6b7280;'>
+        <span>1단계 +3%: <b style='color:#22c55e;'>{stage1_price:,}원</b></span>
+        <span>|</span>
+        <span>2단계 +5%: <b style='color:#22c55e;'>{stage2_price:,}원</b></span>
+        <span>|</span>
+        <span>자동손절 -3%: <b style='color:#ef4444;'>{auto_stop:,}원</b></span>
+        <span>|</span>
+        <span>시간손절: <b style='color:#ef4444;'>14:30</b></span>
+    </div>
+</div>
+                """, unsafe_allow_html=True)
+
                 sc1, sc2, sc3 = st.columns([2, 1, 1])
                 with sc1:
                     sell_price = st.number_input(
-                        "매도가 입력",
-                        value=int(curr) if curr else buy,
+                        "매도가 입력 (AI 추천가 자동 입력)",
+                        value=rec_price,
                         step=100,
                         key=f"sell_{trade['id']}"
                     )
