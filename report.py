@@ -157,7 +157,7 @@ def get_naver_market_data():
 
 
 # ── [전역 함수 3] 하이브리드 시장 지표 취득 연동기 ──
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=60)
 def get_market_data():
     """네이버 금융 우선 매칭 기조의 하이브리드 시장 분석 데이터 연동기"""
     indices = {
@@ -356,6 +356,15 @@ def render_report():
 
 
 def render_daily_report():
+    # 30초마다 자동 새로고침
+    import time
+    col_r, col_t, _ = st.columns([1, 2, 4])
+    with col_r:
+        if st.button("🔄 새로고침", key="report_refresh"):
+            st.cache_data.clear()
+            st.rerun()
+    with col_t:
+        st.markdown(f"<div style='font-size:11px; color:#6b7280; padding-top:8px;'>마지막 업데이트: {dt.datetime.now():%H:%M:%S}</div>", unsafe_allow_html=True)
 
     # ── 1. 시장 현황 ──
     card("🌐 시장 현황", "주요 지수 · 환율 · 원자재 실시간")
