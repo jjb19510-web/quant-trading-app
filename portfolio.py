@@ -120,8 +120,9 @@ def render_portfolio(KIS_AVAILABLE, get_kis_token, get_balance):
 
         if st.button("💾 거래 저장", use_container_width=True, key="dt_save"):
             if dt_name and dt_buy > 0 and dt_qty > 0:
+                import time
                 new_trade = {
-                    "id": len(st.session_state["daytrading"]),
+                    "id": int(time.time() * 1000),
                     "name": dt_name,
                     "code": dt_code.zfill(6) if dt_code else "",
                     "buy_price": dt_buy,
@@ -149,12 +150,20 @@ def render_portfolio(KIS_AVAILABLE, get_kis_token, get_balance):
             st.markdown(f"<div style='font-size:14px; font-weight:700; margin:16px 0 8px;'>📌 보유 중 ({len(holding)}건)</div>", unsafe_allow_html=True)
 
             for trade in holding:
-                # 현재가 조회
+                # 현재가 조회 — KIS API 우선, yfinance 폴백
                 curr = None
-                ticker_ks = trade["code"] + ".KS" if trade["code"] else None
-                if ticker_ks:
+                if trade["code"]:
                     try:
-                        hist = yf.Ticker(ticker_ks).history(period="2d")
+                        from broker import get_access_token, get_current_price as kis_get_price
+                        _token = get_access_token()
+                        _price_data = kis_get_price(trade["code"], _token)
+                        if _price_data:
+                            curr = float(_price_data["current"])
+                    except:
+                        pass
+                if curr is None and trade["code"]:
+                    try:
+                        hist = yf.Ticker(trade["code"] + ".KS").history(period="2d")
                         if not hist.empty:
                             curr = float(hist["Close"].iloc[-1])
                     except:
