@@ -343,8 +343,13 @@ def render_portfolio(KIS_AVAILABLE, get_kis_token, get_balance):
                 total_pnl = sum(t.get("final_pnl", 0) for t in closed)
                 wins = [t for t in closed if t.get("final_pnl", 0) > 0]
                 pnl_color = "#22c55e" if total_pnl >= 0 else "#ef4444"
+                avg_pnl_pct = sum(
+                    (t["sell_price"] - t["buy_price"]) / t["buy_price"] * 100
+                    for t in closed if t.get("sell_price")
+                ) / len(closed)
+
                 st.markdown(f"""
-<div style='display:flex; gap:16px; margin-bottom:12px;'>
+<div style='display:flex; gap:16px; margin-bottom:16px;'>
     <div style='background:#13161f; border-radius:8px; padding:10px 16px;'>
         <div style='font-size:10px; color:#6b7280;'>총 손익</div>
         <div style='font-size:16px; font-weight:700; color:{pnl_color};'>{total_pnl:+,.0f}원</div>
@@ -353,25 +358,37 @@ def render_portfolio(KIS_AVAILABLE, get_kis_token, get_balance):
         <div style='font-size:10px; color:#6b7280;'>승률</div>
         <div style='font-size:16px; font-weight:700;'>{len(wins)}/{len(closed)} ({len(wins)/len(closed)*100:.0f}%)</div>
     </div>
+    <div style='background:#13161f; border-radius:8px; padding:10px 16px;'>
+        <div style='font-size:10px; color:#6b7280;'>평균 수익률</div>
+        <div style='font-size:16px; font-weight:700; color:{"#22c55e" if avg_pnl_pct >= 0 else "#ef4444"};'>{avg_pnl_pct:+.2f}%</div>
+    </div>
 </div>
                 """, unsafe_allow_html=True)
 
-                for t in closed:
+                # 한 줄 테이블 요약
+                closed_rows = []
+                for t in sorted(closed, key=lambda x: x.get("sell_date", ""), reverse=True):
                     pnl = t.get("final_pnl", 0)
-                    c = "#22c55e" if pnl >= 0 else "#ef4444"
                     pp = (t["sell_price"] - t["buy_price"]) / t["buy_price"] * 100 if t.get("sell_price") else 0
-                    st.markdown(f"""
-<div style='background:#13161f; border:0.5px solid #1e2330; border-radius:10px; padding:12px 16px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;'>
-    <div>
-        <span style='font-size:14px; font-weight:600;'>{t["name"]}</span>
-        <span style='font-size:11px; color:#6b7280; margin-left:8px;'>{t["buy_date"]} → {t.get("sell_date","")}</span>
-        <div style='font-size:11px; color:#6b7280; margin-top:2px;'>매수 {t["buy_price"]:,}원 → 매도 {t.get("sell_price",0):,}원 ({t["qty"]}주)</div>
-    </div>
-    <div style='text-align:right;'>
-        <div style='font-size:15px; font-weight:700; color:{c};'>{pnl:+,.0f}원</div>
-        <div style='font-size:12px; color:{c};'>{pp:+.2f}%</div>
-    </div>
-</div>
-                    """, unsafe_allow_html=True)
+                    closed_rows.append({
+                        "종목": t["name"],
+                        "매수일": t["buy_date"][:10],
+                        "매도일": t.get("sell_date", "")[:10],
+                        "매수가": f"{t['buy_price']:,}원",
+                        "매도가": f"{t.get('sell_price',0):,}원",
+                        "수량": f"{t['qty']}주",
+                        "손익": f"{pnl:+,.0f}원",
+                        "수익률": f"{pp:+.2f}%",
+                        "결과": "✅ 승" if pnl >= 0 else "❌ 패"
+                    })
+
+                df_closed = pd.DataFrame(closed_rows)
+                st.dataframe(df_closed, use_container_width=True, hide_index=True)
+
+                # 전체 삭제 버튼
+                if st.button("🗑 종료된 거래 전체 삭제", key="clear_closed"):
+                    st.session_state["daytrading"] = [t for t in st.session_state["daytrading"] if t["status"] == "보유중"]
+                    save_trades(st.session_state["daytrading"], GITHUB_TOKEN)
+                    st.rerun()
     else:
         st.info("저장된 단타 거래가 없어요. 위에서 거래를 추가해보세요!")
