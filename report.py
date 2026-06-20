@@ -667,12 +667,35 @@ def render_daily_report():
         results = []
         for name, ticker in sector_etfs.items():
             try:
-                hist = yf.Ticker(ticker).history(period="5d").dropna(subset=["Close"])
+                hist = yf.Ticker(ticker).history(period="6d").dropna(subset=["Close"])
+                vol_hist = yf.Ticker(ticker).history(period="2d")
                 if len(hist) >= 2:
                     curr = hist["Close"].iloc[-1]
                     prev = hist["Close"].iloc[-2]
                     chg_pct = (curr - prev) / prev * 100
-                    results.append({"업종": name, "등락률": chg_pct})
+                    chg_won = curr - prev
+
+                    # 5일 추세
+                    trend_5d = None
+                    if len(hist) >= 6:
+                        week_ago = hist["Close"].iloc[-6]
+                        trend_5d = (curr - week_ago) / week_ago * 100
+
+                    # 거래대금 (백만원 단위 → 억원)
+                    try:
+                        today_vol = float(vol_hist["Volume"].iloc[-1])
+                        trade_value = today_vol * curr / 1e8  # 억원
+                    except:
+                        trade_value = None
+
+                    results.append({
+                        "업종": name,
+                        "현재가": curr,
+                        "등락률": chg_pct,
+                        "등락폭": chg_won,
+                        "5일추세": trend_5d,
+                        "거래대금": trade_value
+                    })
             except:
                 pass
         return sorted(results, key=lambda x: x["등락률"], reverse=True)
@@ -681,38 +704,91 @@ def render_daily_report():
         sector_data = get_sector_performance()
 
     if sector_data:
+        all_negative = all(item["등락률"] < 0 for item in sector_data)
+        all_positive = all(item["등락률"] > 0 for item in sector_data)
+
+        if all_negative:
+            st.markdown(f"""
+            <div style='background:#3b82f615; border-left:4px solid #3b82f6; padding:10px 16px; border-radius:0 8px 8px 0; margin-bottom:14px; font-size:12px; color:{TEXT};'>
+                📉 오늘은 전 업종이 약세예요. 아래 순위는 <b>"상대적으로 덜 빠진"</b> 업종 기준이에요.
+            </div>
+            """, unsafe_allow_html=True)
+        elif all_positive:
+            st.markdown(f"""
+            <div style='background:#ef444415; border-left:4px solid #ef4444; padding:10px 16px; border-radius:0 8px 8px 0; margin-bottom:14px; font-size:12px; color:{TEXT};'>
+                📈 오늘은 전 업종이 강세예요. 아래 순위는 <b>"상대적으로 더 오른"</b> 업종 기준이에요.
+            </div>
+            """, unsafe_allow_html=True)
+
         top5 = sector_data[:5]
         bottom5 = sector_data[-5:][::-1]
 
+        def render_sector_card(item):
+            pct = item["등락률"]
+            won = item["등락폭"]
+            color = CANDLE_UP if pct >= 0 else CANDLE_DOWN
+            arrow = "▲" if pct >= 0 else "▼"
+
+            trend = item.get("5일추세")
+            if trend is not None:
+                trend_color = CANDLE_UP if trend >= 0 else CANDLE_DOWN
+                trend_arrow = "↗" if trend >= 0 else "↘"
+                trend_html = f"<span style='color:{trend_color}; font-size:11px;'>{trend_arrow} 5일 {trend:+.2f}%</span>"
+            else:
+                trend_html = ""
+
+            trade_val = item.get("거래대금")
+            if trade_val is not None:
+                if trade_val >= 10000:
+                    trade_str = f"{trade_val/10000:.1f}조"
+                else:
+                    trade_str = f"{trade_val:,.0f}억"
+                trade_html = f"<span style='color:{DIM}; font-size:11px;'>거래대금 {trade_str}</span>"
+            else:
+                trade_html = ""
+
+            return f"""
+            <div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:10px; padding:12px 14px; margin-bottom:8px;'>
+                <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;'>
+                    <span style='font-size:13px; font-weight:600; color:{TEXT};'>{item["업종"]}</span>
+                    <span style='font-size:14px; font-weight:700; color:{color}; font-family:JetBrains Mono;'>{arrow} {pct:+.2f}%</span>
+                </div>
+                <div style='display:flex; justify-content:space-between; align-items:center;'>
+                    <span style='font-size:11px; color:{DIM}; font-family:JetBrains Mono;'>{item["현재가"]:,.0f} ({won:+,.0f})</span>
+                    <div style='display:flex; gap:10px;'>{trend_html}{trade_html}</div>
+                </div>
+            </div>
+            """
+
         col_top, col_bottom = st.columns(2)
         with col_top:
-            st.markdown(f"<div style='font-size:13px; font-weight:600; color:#22c55e; margin-bottom:8px;'>🔥 강세 업종 TOP 5</div>", unsafe_allow_html=True)
+            label = "🔥 상대적 강세 업종 TOP 5" if all_negative else "🔥 강세 업종 TOP 5"
+            st.markdown(f"<div style='font-size:13px; font-weight:600; color:#22c55e; margin-bottom:8px;'>{label}</div>", unsafe_allow_html=True)
             for item in top5:
-                pct = item["등락률"]
-                color = CANDLE_UP if pct >= 0 else CANDLE_DOWN
-                arrow = "▲" if pct >= 0 else "▼"
-                st.markdown(f"""
-                <div style='display:flex; justify-content:space-between; align-items:center; background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:8px; padding:10px 14px; margin-bottom:6px;'>
-                    <span style='font-size:13px; color:{TEXT};'>{item["업종"]}</span>
-                    <span style='font-size:13px; font-weight:600; color:{color}; font-family:JetBrains Mono;'>{arrow} {pct:+.2f}%</span>
-                </div>
-                """, unsafe_allow_html=True)
+                st.markdown(render_sector_card(item), unsafe_allow_html=True)
         with col_bottom:
-            st.markdown(f"<div style='font-size:13px; font-weight:600; color:#ef4444; margin-bottom:8px;'>📉 약세 업종 TOP 5</div>", unsafe_allow_html=True)
+            label = "📉 약세 업종 TOP 5" if not all_positive else "📉 상대적 약세 업종 TOP 5"
+            st.markdown(f"<div style='font-size:13px; font-weight:600; color:#ef4444; margin-bottom:8px;'>{label}</div>", unsafe_allow_html=True)
             for item in bottom5:
-                pct = item["등락률"]
-                color = CANDLE_UP if pct >= 0 else CANDLE_DOWN
-                arrow = "▲" if pct >= 0 else "▼"
+                st.markdown(render_sector_card(item), unsafe_allow_html=True)
+
+        # 거래대금 1위 업종 하이라이트
+        try:
+            top_volume_sector = max(sector_data, key=lambda x: x.get("거래대금") or 0)
+            if top_volume_sector.get("거래대금"):
+                tv = top_volume_sector["거래대금"]
+                tv_str = f"{tv/10000:.1f}조원" if tv >= 10000 else f"{tv:,.0f}억원"
                 st.markdown(f"""
-                <div style='display:flex; justify-content:space-between; align-items:center; background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:8px; padding:10px 14px; margin-bottom:6px;'>
-                    <span style='font-size:13px; color:{TEXT};'>{item["업종"]}</span>
-                    <span style='font-size:13px; font-weight:600; color:{color}; font-family:JetBrains Mono;'>{arrow} {pct:+.2f}%</span>
+                <div style='background:{SURFACE_1}; border-radius:8px; padding:10px 16px; margin-top:8px; font-size:12px; color:{TEXT};'>
+                    💰 오늘 가장 거래대금이 많은 업종: <b>{top_volume_sector["업종"]}</b> ({tv_str})
                 </div>
                 """, unsafe_allow_html=True)
+        except:
+            pass
 
         st.markdown(f"""
         <div style='font-size:11px; color:{DIM}; margin-top:10px;'>
-            💡 KODEX 업종 ETF 기준이며, 개별 종목과 업종 분류가 정확히 일치하지 않을 수 있어요.
+            💡 KODEX 업종 ETF 기준이며, 개별 종목과 업종 분류가 정확히 일치하지 않을 수 있어요. 5일 추세는 최근 일주일간 누적 등락률이에요.
         </div>
         """, unsafe_allow_html=True)
     else:
