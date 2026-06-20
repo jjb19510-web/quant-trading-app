@@ -11,7 +11,33 @@ from ui_components import card, ACCENT, CANDLE_UP, CANDLE_DOWN, DIM, TEXT, SURFA
 
 @st.cache_data(ttl=600)
 def load_ticker_data(ticker):
-    return yf.download(ticker, period="1y", progress=False)
+    try:
+        hist = yf.download(ticker, period="1y", progress=False)
+        if not hist.empty:
+            return hist
+    except:
+        pass
+
+    # yfinance 실패 시 FinanceDataReader 폴백 (최근 상장 종목 등)
+    if ticker.endswith(".KS") or ticker.endswith(".KQ"):
+        try:
+            import FinanceDataReader as fdr
+            import datetime as dt_module
+            raw_code = ticker.replace(".KS", "").replace(".KQ", "")
+            end_date = dt_module.datetime.now().strftime("%Y-%m-%d")
+            start_date = (dt_module.datetime.now() - dt_module.timedelta(days=365)).strftime("%Y-%m-%d")
+            df_fdr = fdr.DataReader(raw_code, start_date, end_date)
+            if not df_fdr.empty:
+                # yfinance와 동일한 컬럼 구조로 변환
+                df_fdr = df_fdr.rename(columns={
+                    "Open": "Open", "High": "High", "Low": "Low",
+                    "Close": "Close", "Volume": "Volume"
+                })
+                return df_fdr[["Open", "High", "Low", "Close", "Volume"]]
+        except:
+            pass
+
+    return pd.DataFrame()
 
 
 @st.cache_data(ttl=600)
@@ -874,6 +900,52 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
           <div class="divider">
             <span style="font-weight:600; font-size:13px;">세후 손실</span>
             <span style="color:#ef4444; font-weight:700; font-size:15px; font-family:'JetBrains Mono',monospace;">${{fmt(stop_net)}}원 (${{fmtP(stop_net_pct)}}%)</span>
+          </div>
+        </div>
+      `;
+
+      // 매도 전략 3단계
+      const s1 = Math.round(buy * 1.03);
+      const s2 = Math.round(buy * 1.05);
+      const s3 = target || Math.round(buy * 1.08);
+      const auto_stop = Math.round(buy * 0.97);
+
+      const s1_pnl = ((s1 - buy) * qty * (1 - sell_fee_pct/100) - buy_fee_won).toFixed(0);
+      const s2_pnl = ((s2 - buy) * qty * (1 - sell_fee_pct/100) - buy_fee_won).toFixed(0);
+      const s3_pnl = ((s3 - buy) * qty * (1 - sell_fee_pct/100) - buy_fee_won).toFixed(0);
+
+      document.getElementById('sell_strategy').innerHTML = `
+        <div style='background:#13161f; border:0.5px solid #2d3748; border-radius:12px; padding:16px; margin-top:12px;'>
+          <div style='font-size:12px; font-weight:700; color:#e2e8f0; margin-bottom:12px;'>📋 AI 추천 분할 매도 전략</div>
+          <div style='display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:10px;'>
+            <div style='background:#22c55e15; border:0.5px solid #22c55e40; border-radius:8px; padding:10px; text-align:center;'>
+              <div style='font-size:10px; color:#22c55e; margin-bottom:4px;'>1단계 (+3%)</div>
+              <div style='font-size:14px; font-weight:700; color:#22c55e; font-family:JetBrains Mono;'>${{fmt(s1)}}원</div>
+              <div style='font-size:10px; color:#9ca3af; margin-top:4px;'>30% 매도</div>
+              <div style='font-size:11px; color:#22c55e; margin-top:2px;'>+${{fmt(Math.round(s1_pnl * 0.3))}}원</div>
+            </div>
+            <div style='background:#22c55e15; border:0.5px solid #22c55e40; border-radius:8px; padding:10px; text-align:center;'>
+              <div style='font-size:10px; color:#22c55e; margin-bottom:4px;'>2단계 (+5%)</div>
+              <div style='font-size:14px; font-weight:700; color:#22c55e; font-family:JetBrains Mono;'>${{fmt(s2)}}원</div>
+              <div style='font-size:10px; color:#9ca3af; margin-top:4px;'>50% 매도</div>
+              <div style='font-size:11px; color:#22c55e; margin-top:2px;'>+${{fmt(Math.round(s2_pnl * 0.5))}}원</div>
+            </div>
+            <div style='background:#6366f115; border:0.5px solid #6366f140; border-radius:8px; padding:10px; text-align:center;'>
+              <div style='font-size:10px; color:#818cf8; margin-bottom:4px;'>3단계 (목표가)</div>
+              <div style='font-size:14px; font-weight:700; color:#818cf8; font-family:JetBrains Mono;'>${{fmt(s3)}}원</div>
+              <div style='font-size:10px; color:#9ca3af; margin-top:4px;'>잔여 전량</div>
+              <div style='font-size:11px; color:#818cf8; margin-top:2px;'>+${{fmt(Math.round(s3_pnl * 0.2))}}원</div>
+            </div>
+          </div>
+          <div style='display:flex; gap:8px;'>
+            <div style='flex:1; background:#ef444415; border:0.5px solid #ef444440; border-radius:8px; padding:10px; text-align:center;'>
+              <div style='font-size:10px; color:#ef4444; margin-bottom:4px;'>🛑 자동 손절 (-3%)</div>
+              <div style='font-size:14px; font-weight:700; color:#ef4444; font-family:JetBrains Mono;'>${{fmt(auto_stop)}}원</div>
+            </div>
+            <div style='flex:1; background:#ef444415; border:0.5px solid #ef444440; border-radius:8px; padding:10px; text-align:center;'>
+              <div style='font-size:10px; color:#ef4444; margin-bottom:4px;'>⏰ 시간 손절</div>
+              <div style='font-size:14px; font-weight:700; color:#ef4444; font-family:JetBrains Mono;'>14:30</div>
+            </div>
           </div>
         </div>
       `;
