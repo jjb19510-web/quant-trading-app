@@ -942,6 +942,9 @@ def render_daily_report():
                         prompt = f"""당신은 15년 경력의 국내 주식시장 수석 애널리스트입니다.
 아래 뉴스와 애널리스트 의견을 바탕으로 신한투자증권 Daily Market Digest 스타일의 시장 브리핑을 작성해주세요.
 
+[오늘의 실제 시장 지표]
+{chr(10).join([f"- {idx['name']}: {idx['price']:,.2f} ({'상승' if idx['change'] >= 0 else '하락'} {idx['pct']:+.2f}%)" for idx in market_data]) if market_data else "데이터 없음"}
+
 [오늘의 주요 뉴스 (한국경제·매일경제: 시장/기업, 연합뉴스·조선비즈: 정책/거시)]
 {news_text}
 
@@ -949,6 +952,7 @@ def render_daily_report():
 {anal_text}
 
 [작성 규칙]
+0. 위 "오늘의 실제 시장 지표" 수치를 반드시 정확히 인용하여 작성하고, 코스피/코스닥 상승/하락 방향을 절대 틀리지 않기
 1. 반드시 한국어로만 작성
 2. 각 항목은 "- " 로 시작하는 불릿 형식, 한 줄에 하나의 핵심만
 3. 수치(%, 원, bp 등)를 반드시 포함하여 구체적으로 작성
