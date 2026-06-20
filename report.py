@@ -404,6 +404,7 @@ def render_daily_report():
                     close = hist["Close"].squeeze()
                     high = hist["High"].squeeze()
                     low = hist["Low"].squeeze()
+                    volume = hist["Volume"].squeeze()
 
                     df_w = close.to_frame()
                     df_w.columns = [ticker]
@@ -421,11 +422,57 @@ def render_daily_report():
                     signal_str = "🟢 매수" if last_sig == 1 else "⚪ 관망"
                     rsi_label = "과매도" if rsi_val < 30 else ("과매수" if rsi_val > 70 else "중립")
 
+                    # 거래량 모멘텀
+                    vol_ma20 = volume.rolling(20).mean()
+                    vol_ratio = float(volume.iloc[-1]) / float(vol_ma20.iloc[-1]) if float(vol_ma20.iloc[-1]) > 0 else 1
+
+                    # 추세 (MA20 vs MA60)
+                    ma20 = close.rolling(20).mean()
+                    ma60 = close.rolling(60).mean()
+                    curr_price = float(close.iloc[-1])
+                    is_uptrend = curr_price > float(ma20.iloc[-1]) > float(ma60.iloc[-1])
+
+                    # 외국인/기관 수급 (KIS API)
+                    supply_str = "조회불가"
+                    supply_trend = None
+                    try:
+                        from broker import get_access_token, get_stock_investor
+                        raw_code = item.replace(".KS", "").replace(".KQ", "")
+                        _token = get_access_token()
+                        inv_data = get_stock_investor(raw_code, _token)
+                        if inv_data.get("rt_cd") == "0" and inv_data.get("output"):
+                            recent5 = inv_data["output"][:5]
+                            frgn_sum = sum(int(o.get("frgn_ntby_tr_pbmn", 0) or 0) for o in recent5)
+                            orgn_sum = sum(int(o.get("orgn_ntby_tr_pbmn", 0) or 0) for o in recent5)
+                            total_supply = (frgn_sum + orgn_sum) / 100  # 억원
+                            supply_trend = total_supply
+                            supply_str = f"{'+' if total_supply >= 0 else ''}{total_supply:,.0f}억"
+                    except:
+                        pass
+
+                    # 진입 근거 한 줄 요약
+                    reasons = []
+                    if last_sig == 1:
+                        reasons.append("RSI 매수신호")
+                    if vol_ratio >= 1.3:
+                        reasons.append(f"거래량 {vol_ratio:.1f}배")
+                    if is_uptrend:
+                        reasons.append("상승추세")
+                    if supply_trend is not None and supply_trend > 0:
+                        reasons.append("수급 우호")
+                    elif supply_trend is not None and supply_trend < 0:
+                        reasons.append("수급 부담")
+
+                    basis = " · ".join(reasons) if reasons else "특이사항 없음"
+
                     rows.append({
                         "종목": item,
                         "신호": signal_str,
                         "RSI": f"{rsi_val:.1f} ({rsi_label})",
+                        "거래량": f"{vol_ratio:.1f}배",
+                        "수급(5일)": supply_str,
                         "내일 변동성 목표가": f"{int(vb_target):,}원",
+                        "진입 근거": basis,
                     })
                 except:
                     pass
