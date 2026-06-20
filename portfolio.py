@@ -116,13 +116,16 @@ def render_portfolio(KIS_AVAILABLE, get_kis_token, get_balance):
                     <div style='font-size:22px; font-weight:600; font-family:JetBrains Mono; color:{profit_color};'>{profit_arrow} {total_profit:+,}원</div>
                   </div>
                   <div style='background:#0f1117; border:0.5px solid #1e2330; border-radius:12px; padding:16px 20px;'>
-                    <div style='font-size:11px; color:#9ca3af; margin-bottom:6px;'>💰 예수금</div>
+                    <div style='font-size:11px; color:#9ca3af; margin-bottom:6px;'>💰 예수금 (결제대기 포함)</div>
                     <div style='font-size:22px; font-weight:600; font-family:JetBrains Mono;'>{cash:,}원</div>
                   </div>
                   <div style='background:#0f1117; border:0.5px solid #1e2330; border-radius:12px; padding:16px 20px;'>
-                    <div style='font-size:11px; color:#9ca3af; margin-bottom:6px;'>🏧 출금가능금액</div>
+                    <div style='font-size:11px; color:#9ca3af; margin-bottom:6px;'>🏧 실제 출금가능 (D+2 결제 후)</div>
                     <div style='font-size:22px; font-weight:600; font-family:JetBrains Mono;'>{withdrawable:,}원</div>
                   </div>
+                </div>
+                <div style='font-size:11px; color:#6b7280; margin-bottom:20px;'>
+                    💡 매수 체결 후 실제 대금 결제까지 2영업일(D+2)이 걸려요. 예수금은 결제 전 금액을 포함하므로, 실제 사용 가능한 금액은 '출금가능금액'을 참고하세요.
                 </div>
                 """, unsafe_allow_html=True)
 
