@@ -647,7 +647,80 @@ def render_daily_report():
     else:
         st.info("📊 현재 스마트 머니 인덱스(SMI) 데이터를 수집하고 있습니다.")
 
-# ── 6. 수급 동향 ──
+# ── 5-1. 업종별 등락률 ──
+    card("🏭 업종별 등락률", "KODEX 업종 ETF 기준 · 오늘 가장 강한/약한 업종")
+
+    @st.cache_data(ttl=300)
+    def get_sector_performance():
+        sector_etfs = {
+            "반도체": "091160.KS",
+            "자동차": "091180.KS",
+            "바이오": "244580.KS",
+            "은행/금융": "091170.KS",
+            "2차전지": "305720.KS",
+            "IT": "266410.KS",
+            "헬스케어": "261070.KS",
+            "철강": "139240.KS",
+            "건설": "117700.KS",
+            "에너지화학": "117460.KS",
+        }
+        results = []
+        for name, ticker in sector_etfs.items():
+            try:
+                hist = yf.Ticker(ticker).history(period="5d").dropna(subset=["Close"])
+                if len(hist) >= 2:
+                    curr = hist["Close"].iloc[-1]
+                    prev = hist["Close"].iloc[-2]
+                    chg_pct = (curr - prev) / prev * 100
+                    results.append({"업종": name, "등락률": chg_pct})
+            except:
+                pass
+        return sorted(results, key=lambda x: x["등락률"], reverse=True)
+
+    with st.spinner("업종별 등락률 불러오는 중..."):
+        sector_data = get_sector_performance()
+
+    if sector_data:
+        top5 = sector_data[:5]
+        bottom5 = sector_data[-5:][::-1]
+
+        col_top, col_bottom = st.columns(2)
+        with col_top:
+            st.markdown(f"<div style='font-size:13px; font-weight:600; color:#22c55e; margin-bottom:8px;'>🔥 강세 업종 TOP 5</div>", unsafe_allow_html=True)
+            for item in top5:
+                pct = item["등락률"]
+                color = CANDLE_UP if pct >= 0 else CANDLE_DOWN
+                arrow = "▲" if pct >= 0 else "▼"
+                st.markdown(f"""
+                <div style='display:flex; justify-content:space-between; align-items:center; background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:8px; padding:10px 14px; margin-bottom:6px;'>
+                    <span style='font-size:13px; color:{TEXT};'>{item["업종"]}</span>
+                    <span style='font-size:13px; font-weight:600; color:{color}; font-family:JetBrains Mono;'>{arrow} {pct:+.2f}%</span>
+                </div>
+                """, unsafe_allow_html=True)
+        with col_bottom:
+            st.markdown(f"<div style='font-size:13px; font-weight:600; color:#ef4444; margin-bottom:8px;'>📉 약세 업종 TOP 5</div>", unsafe_allow_html=True)
+            for item in bottom5:
+                pct = item["등락률"]
+                color = CANDLE_UP if pct >= 0 else CANDLE_DOWN
+                arrow = "▲" if pct >= 0 else "▼"
+                st.markdown(f"""
+                <div style='display:flex; justify-content:space-between; align-items:center; background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:8px; padding:10px 14px; margin-bottom:6px;'>
+                    <span style='font-size:13px; color:{TEXT};'>{item["업종"]}</span>
+                    <span style='font-size:13px; font-weight:600; color:{color}; font-family:JetBrains Mono;'>{arrow} {pct:+.2f}%</span>
+                </div>
+                """, unsafe_allow_html=True)
+
+        st.markdown(f"""
+        <div style='font-size:11px; color:{DIM}; margin-top:10px;'>
+            💡 KODEX 업종 ETF 기준이며, 개별 종목과 업종 분류가 정확히 일치하지 않을 수 있어요.
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.info("업종별 데이터를 불러오지 못했어요.")
+
+    st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
+
+    # ── 6. 수급 동향 ──
     card("💰 수급 동향", "외국인 · 기관 순매수 상위 종목")
     st.info("🔧 수급 동향 데이터 연동을 준비 중입니다. 곧 추가될 예정입니다.")
 
