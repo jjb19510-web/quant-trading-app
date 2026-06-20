@@ -2,10 +2,90 @@ import streamlit as st
 import pandas as pd
 import yfinance as yf
 import datetime as dt_module
+import json
+import requests as req
 from ui_components import card, SURFACE_2, LINE, DIM, TEXT, CANDLE_UP, CANDLE_DOWN, ACCENT
+
+GIST_FILENAME = "quantfolio_trades.json"
+
+
+def get_gist_id(token, debug=False):
+    try:
+        headers = {"Authorization": f"token {token}"}
+        res = req.get("https://api.github.com/gists", headers=headers, timeout=5)
+        if res.status_code != 200:
+            if debug:
+                st.error(f"🔧 Gist 목록 조회 실패: {res.status_code} - {res.text[:300]}")
+            return None
+        for gist in res.json():
+            if GIST_FILENAME in gist.get("files", {}):
+                return gist["id"]
+        # 없으면 새로 생성
+        create_res = req.post(
+            "https://api.github.com/gists",
+            headers=headers,
+            json={
+                "description": "Quantfolio 단타 거래 기록",
+                "public": False,
+                "files": {GIST_FILENAME: {"content": "[]"}}
+            },
+            timeout=5
+        )
+        if create_res.status_code != 201:
+            if debug:
+                st.error(f"🔧 Gist 생성 실패: {create_res.status_code} - {create_res.text[:300]}")
+            return None
+        return create_res.json().get("id")
+    except Exception as e:
+        if debug:
+            st.error(f"🔧 Gist 연결 오류: {e}")
+        return None
+
+
+def save_trades(trades, token):
+    if not token:
+        st.error("🔧 GITHUB_TOKEN이 비어있어요. Streamlit Secrets를 확인해주세요.")
+        return False
+    try:
+        gist_id = get_gist_id(token, debug=True)
+        if gist_id:
+            headers = {"Authorization": f"token {token}"}
+            res = req.patch(
+                f"https://api.github.com/gists/{gist_id}",
+                headers=headers,
+                json={"files": {GIST_FILENAME: {"content": json.dumps(trades, ensure_ascii=False, indent=2)}}},
+                timeout=5
+            )
+            if res.status_code != 200:
+                st.error(f"🔧 Gist 저장 실패: {res.status_code} - {res.text[:300]}")
+                return False
+            return True
+        else:
+            st.error("🔧 Gist ID를 가져오지 못했어요.")
+            return False
+    except Exception as e:
+        st.error(f"🔧 저장 중 오류: {e}")
+        return False
+
+
+def load_trades(token):
+    if not token:
+        return []
+    try:
+        gist_id = get_gist_id(token, debug=False)
+        if gist_id:
+            headers = {"Authorization": f"token {token}"}
+            res = req.get(f"https://api.github.com/gists/{gist_id}", headers=headers, timeout=5)
+            content = res.json()["files"][GIST_FILENAME]["content"]
+            return json.loads(content)
+    except:
+        pass
+    return []
 
 
 def render_portfolio(KIS_AVAILABLE, get_kis_token, get_balance):
+
+    GITHUB_TOKEN = st.secrets.get("GITHUB_TOKEN", "")
 
     if KIS_AVAILABLE:
         col_refresh, _ = st.columns([1, 5])
@@ -98,10 +178,17 @@ def render_portfolio(KIS_AVAILABLE, get_kis_token, get_balance):
     # ⚡ 단타 거래 관리
     # ══════════════════════════════════════════
     st.markdown("<div style='margin-top:32px;'></div>", unsafe_allow_html=True)
-    card("⚡ 단타 거래 관리", "매수 내역 저장 · 실시간 손익 모니터링 · 목표가/손절가 도달 알림")
+    card("⚡ 단타 거래 관리", "매수 내역 저장 · 실시간 손익 모니터링 · AI 매도 전략")
+
+    # 토큰 상태 표시 (디버그)
+    if GITHUB_TOKEN:
+        st.caption(f"🔑 GitHub Token 연결됨 ({GITHUB_TOKEN[:8]}...)")
+    else:
+        st.error("🔑 GITHUB_TOKEN이 설정되지 않았어요. Streamlit Secrets를 확인해주세요.")
 
     if "daytrading" not in st.session_state:
-        st.session_state["daytrading"] = []
+        with st.spinner("거래 기록 불러오는 중..."):
+            st.session_state["daytrading"] = load_trades(GITHUB_TOKEN)
 
     # 새 거래 추가
     with st.expander("➕ 새 단타 거래 추가", expanded=len(st.session_state["daytrading"]) == 0):
@@ -136,8 +223,11 @@ def render_portfolio(KIS_AVAILABLE, get_kis_token, get_balance):
                     "sell_date": None,
                 }
                 st.session_state["daytrading"].append(new_trade)
-                st.success(f"✅ {dt_name} 거래가 저장됐어요!")
-                st.rerun()
+                with st.spinner("저장 중..."):
+                    success = save_trades(st.session_state["daytrading"], GITHUB_TOKEN)
+                if success:
+                    st.success(f"✅ {dt_name} 거래가 저장됐어요!")
+                    st.rerun()
             else:
                 st.warning("종목명, 매수가, 수량은 필수예요.")
 
@@ -150,7 +240,6 @@ def render_portfolio(KIS_AVAILABLE, get_kis_token, get_balance):
             st.markdown(f"<div style='font-size:14px; font-weight:700; margin:16px 0 8px;'>📌 보유 중 ({len(holding)}건)</div>", unsafe_allow_html=True)
 
             for trade in holding:
-                # 현재가 조회 — KIS API 우선, yfinance 폴백
                 curr = None
                 if trade["code"]:
                     try:
@@ -245,17 +334,13 @@ def render_portfolio(KIS_AVAILABLE, get_kis_token, get_balance):
 </div>
                 """, unsafe_allow_html=True)
 
-                # ── AI 추천 매도 전략 ──
                 now_time = dt_module.datetime.now().time()
-                time_stop = dt_module.time(14, 30)  # 2시 30분 시간 손절 기준
+                time_stop = dt_module.time(14, 30)
+                stage1_price = int(buy * 1.03)
+                stage2_price = int(buy * 1.05)
+                stage3_price = int(target) if target else int(buy * 1.08)
+                auto_stop = int(buy * 0.97)
 
-                # 단계별 익절가 계산
-                stage1_price = int(buy * 1.03)   # +3% 1단계
-                stage2_price = int(buy * 1.05)   # +5% 2단계
-                stage3_price = int(target) if target else int(buy * 1.08)  # 목표가 3단계
-                auto_stop = int(buy * 0.97)       # -3% 자동 손절
-
-                # 현재 상황 판단
                 if curr:
                     if curr >= stage3_price:
                         rec_action = "🎯 3단계 전량 매도 추천"
@@ -266,7 +351,7 @@ def render_portfolio(KIS_AVAILABLE, get_kis_token, get_balance):
                         rec_action = "📈 2단계 부분 매도 추천"
                         rec_price = stage2_price
                         rec_color = "#22c55e"
-                        rec_reason = f"+5% 달성 — 보유량 50% 매도 후 나머지는 목표가까지 홀딩"
+                        rec_reason = f"+5% 달성 — 보유량 50% 매도 후 나머지 홀딩"
                     elif curr >= stage1_price:
                         rec_action = "💰 1단계 부분 매도 추천"
                         rec_price = stage1_price
@@ -276,15 +361,15 @@ def render_portfolio(KIS_AVAILABLE, get_kis_token, get_balance):
                         rec_action = "🛑 즉시 손절 권고"
                         rec_price = int(curr)
                         rec_color = "#ef4444"
-                        rec_reason = f"-3% 이탈 — 추가 손실 방지를 위해 즉시 매도"
+                        rec_reason = "-3% 이탈 — 추가 손실 방지를 위해 즉시 매도"
                     elif now_time >= time_stop:
                         rec_action = "⏰ 시간 손절 권고"
                         rec_price = int(curr)
                         rec_color = "#ef4444"
                         rec_reason = "14:30 경과 — 목표가 미달성 시 당일 청산 원칙"
                     else:
-                        to_stage1 = (stage1_price - curr) / curr * 100
-                        rec_action = f"⏳ 홀딩 — 1단계까지 +{to_stage1:.1f}% 남음"
+                        to_s1 = (stage1_price - curr) / curr * 100
+                        rec_action = f"⏳ 홀딩 — 1단계까지 +{to_s1:.1f}% 남음"
                         rec_price = stage1_price
                         rec_color = "#6b7280"
                         rec_reason = f"1단계({stage1_price:,}원) → 2단계({stage2_price:,}원) → 목표({stage3_price:,}원) 순서로 분할 매도"
@@ -301,7 +386,7 @@ def render_portfolio(KIS_AVAILABLE, get_kis_token, get_balance):
         <span style='font-size:14px; font-weight:700; font-family:JetBrains Mono; color:{rec_color};'>{rec_price:,}원</span>
     </div>
     <div style='font-size:11px; color:#6b7280; margin-bottom:10px;'>{rec_reason}</div>
-    <div style='display:flex; gap:8px; font-size:11px; color:#6b7280;'>
+    <div style='display:flex; gap:8px; font-size:11px; color:#6b7280; flex-wrap:wrap;'>
         <span>1단계 +3%: <b style='color:#22c55e;'>{stage1_price:,}원</b></span>
         <span>|</span>
         <span>2단계 +5%: <b style='color:#22c55e;'>{stage2_price:,}원</b></span>
@@ -331,11 +416,13 @@ def render_portfolio(KIS_AVAILABLE, get_kis_token, get_balance):
                                 t["sell_date"] = dt_module.datetime.now().strftime("%Y-%m-%d %H:%M")
                                 t["final_pnl"] = (sell_price - buy) * qty
                                 break
+                        save_trades(st.session_state["daytrading"], GITHUB_TOKEN)
                         st.rerun()
                 with sc3:
                     st.markdown("<div style='margin-top:28px;'></div>", unsafe_allow_html=True)
                     if st.button("🗑 삭제", key=f"del_{trade['id']}", use_container_width=True):
                         st.session_state["daytrading"] = [t for t in st.session_state["daytrading"] if t["id"] != trade["id"]]
+                        save_trades(st.session_state["daytrading"], GITHUB_TOKEN)
                         st.rerun()
 
         if closed:
@@ -365,7 +452,6 @@ def render_portfolio(KIS_AVAILABLE, get_kis_token, get_balance):
 </div>
                 """, unsafe_allow_html=True)
 
-                # 한 줄 테이블 요약
                 closed_rows = []
                 for t in sorted(closed, key=lambda x: x.get("sell_date", ""), reverse=True):
                     pnl = t.get("final_pnl", 0)
@@ -385,7 +471,6 @@ def render_portfolio(KIS_AVAILABLE, get_kis_token, get_balance):
                 df_closed = pd.DataFrame(closed_rows)
                 st.dataframe(df_closed, use_container_width=True, hide_index=True)
 
-                # 전체 삭제 버튼
                 if st.button("🗑 종료된 거래 전체 삭제", key="clear_closed"):
                     st.session_state["daytrading"] = [t for t in st.session_state["daytrading"] if t["status"] == "보유중"]
                     save_trades(st.session_state["daytrading"], GITHUB_TOKEN)
