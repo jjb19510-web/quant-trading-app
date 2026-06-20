@@ -471,6 +471,20 @@ def render_portfolio(KIS_AVAILABLE, get_kis_token, get_balance):
                 df_closed = pd.DataFrame(closed_rows)
                 st.dataframe(df_closed, use_container_width=True, hide_index=True)
 
+                st.markdown("<div style='margin-top:8px;'></div>", unsafe_allow_html=True)
+                for t in sorted(closed, key=lambda x: x.get("sell_date", ""), reverse=True):
+                    dcol1, dcol2 = st.columns([5, 1])
+                    with dcol1:
+                        pnl = t.get("final_pnl", 0)
+                        c = "#22c55e" if pnl >= 0 else "#ef4444"
+                        st.markdown(f"<div style='font-size:12px; color:#9ca3af; padding-top:6px;'>{t['name']} ({t['buy_date'][:10]} → {t.get('sell_date','')[:10]}) · <span style='color:{c};'>{pnl:+,.0f}원</span></div>", unsafe_allow_html=True)
+                    with dcol2:
+                        if st.button("🗑 삭제", key=f"del_closed_{t['id']}", use_container_width=True):
+                            st.session_state["daytrading"] = [x for x in st.session_state["daytrading"] if x["id"] != t["id"]]
+                            save_trades(st.session_state["daytrading"], GITHUB_TOKEN)
+                            st.rerun()
+
+                st.markdown("<div style='margin-top:12px;'></div>", unsafe_allow_html=True)
                 if st.button("🗑 종료된 거래 전체 삭제", key="clear_closed"):
                     st.session_state["daytrading"] = [t for t in st.session_state["daytrading"] if t["status"] == "보유중"]
                     save_trades(st.session_state["daytrading"], GITHUB_TOKEN)
