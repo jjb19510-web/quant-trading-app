@@ -406,6 +406,69 @@ def render_daily_report():
                 </div>
                 """, unsafe_allow_html=True)
 
+        # ── 글로벌 시장 → 국내 영향 AI 한줄 해석 ──
+        @st.cache_data(ttl=300)
+        def get_global_market_comment(market_data_tuple):
+            try:
+                market_dict = {name: (price, change, pct) for name, price, change, pct in market_data_tuple}
+                nasdaq = market_dict.get("나스닥")
+                kospi = market_dict.get("코스피")
+                kosdaq = market_dict.get("코스닥")
+                usdkrw = market_dict.get("원/달러")
+                wti = market_dict.get("WTI유")
+
+                data_text = ""
+                if nasdaq:
+                    data_text += f"나스닥 {nasdaq[2]:+.2f}%, "
+                if kospi:
+                    data_text += f"코스피 {kospi[2]:+.2f}%, "
+                if kosdaq:
+                    data_text += f"코스닥 {kosdaq[2]:+.2f}%, "
+                if usdkrw:
+                    data_text += f"원/달러 환율 {usdkrw[2]:+.2f}%, "
+                if wti:
+                    data_text += f"WTI유 {wti[2]:+.2f}%"
+
+                if not data_text:
+                    return None
+
+                prompt = f"""아래 오늘의 실제 시장 지표를 보고, 미국 증시가 한국 증시에 미칠 영향을 1문장으로 간결하게 요약해주세요.
+
+[지표]
+{data_text}
+
+[규칙]
+- 반드시 한국어로 1문장만 작성 (40자 이내)
+- "~가능성이 있습니다" 같은 추측 어조로 작성
+- 미국 시장 흐름 → 국내 영향 순서로 작성
+- 예시: "나스닥 약세로 국내 반도체·IT주 약세 출발 가능성"
+- 다른 설명 없이 문장 하나만 출력"""
+
+                openai_key = st.secrets.get("OPENAI_API_KEY", "")
+                res = requests.post(
+                    "https://api.openai.com/v1/chat/completions",
+                    headers={"Content-Type": "application/json", "Authorization": f"Bearer {openai_key}"},
+                    json={"model": "gpt-4o-mini", "messages": [{"role": "user", "content": prompt}], "max_tokens": 100}
+                )
+                data = res.json()
+                if "choices" in data:
+                    return data["choices"][0]["message"]["content"].strip()
+            except:
+                pass
+            return None
+
+        try:
+            market_tuple = tuple((idx["name"], idx["price"], idx["change"], idx["pct"]) for idx in market_data)
+            comment = get_global_market_comment(market_tuple)
+            if comment:
+                st.markdown(f"""
+                <div style='background:{SURFACE_1}; border-left:4px solid {ACCENT}; padding:10px 16px; border-radius:0 8px 8px 0; margin-bottom:14px; font-size:13px; color:{TEXT};'>
+                    💬 {comment}
+                </div>
+                """, unsafe_allow_html=True)
+        except:
+            pass
+
     st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
 
     # ── 2. 관심종목 신호 리포트 ──
