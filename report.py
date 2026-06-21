@@ -942,13 +942,14 @@ def render_daily_report():
             trade_val = item.get("거래대금")
             trade_str = f"{trade_val/10000:.1f}조" if trade_val and trade_val >= 10000 else f"{trade_val:,.0f}억" if trade_val else ""
 
-            label = f"{item['업종']}   {arrow} {pct:+.2f}%   |   {item['현재가']:,.0f}원 ({won:+,.0f})"
-            if trend is not None:
-                label += f"   |   5일 {trend:+.2f}%"
-            if trade_str:
-                label += f"   |   거래대금 {trade_str}"
+            label = f"{item['업종']}   {arrow} {pct:+.2f}%"
 
             with st.expander(label, expanded=False):
+                st.markdown(f"""
+                <div style='font-size:12px; color:{DIM}; margin-bottom:10px;'>
+                    {item["현재가"]:,.0f}원 ({won:+,.0f}) &nbsp;·&nbsp; {f"5일 {trend:+.2f}%" if trend is not None else ""} &nbsp;·&nbsp; {f"거래대금 {trade_str}" if trade_str else ""}
+                </div>
+                """, unsafe_allow_html=True)
                 stocks = sector_top_stocks.get(item["업종"], [])
                 if stocks:
                     st.markdown(f"<div style='font-size:11px; color:{DIM}; margin-bottom:6px;'>구성 대표종목 TOP 3</div>", unsafe_allow_html=True)
