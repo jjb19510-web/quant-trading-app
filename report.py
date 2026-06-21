@@ -934,52 +934,93 @@ def render_daily_report():
                 pass
             return None, None
 
-        def render_sector_with_expander(item, color_label):
+        if "selected_sector_card" not in st.session_state:
+            st.session_state["selected_sector_card"] = None
+
+        def render_sector_card_clickable(item, key_prefix):
             pct = item["등락률"]
             won = item["등락폭"]
+            color = CANDLE_UP if pct >= 0 else CANDLE_DOWN
             arrow = "▲" if pct >= 0 else "▼"
             trend = item.get("5일추세")
             trade_val = item.get("거래대금")
-            trade_str = f"{trade_val/10000:.1f}조" if trade_val and trade_val >= 10000 else f"{trade_val:,.0f}억" if trade_val else ""
 
-            label = f"{item['업종']}   {arrow} {pct:+.2f}%"
+            trend_html = ""
+            if trend is not None:
+                trend_color = CANDLE_UP if trend >= 0 else CANDLE_DOWN
+                trend_arrow = "↗" if trend >= 0 else "↘"
+                trend_html = f"<span style='color:{trend_color}; font-size:11px;'>{trend_arrow} 5일 {trend:+.2f}%</span>"
 
-            with st.expander(label, expanded=False):
-                st.markdown(f"""
-                <div style='font-size:12px; color:{DIM}; margin-bottom:10px;'>
-                    {item["현재가"]:,.0f}원 ({won:+,.0f}) &nbsp;·&nbsp; {f"5일 {trend:+.2f}%" if trend is not None else ""} &nbsp;·&nbsp; {f"거래대금 {trade_str}" if trade_str else ""}
+            trade_html = ""
+            if trade_val is not None:
+                trade_str = f"{trade_val/10000:.1f}조" if trade_val >= 10000 else f"{trade_val:,.0f}억"
+                trade_html = f"<span style='color:{DIM}; font-size:11px;'>거래대금 {trade_str}</span>"
+
+            sector_name = item["업종"]
+            is_selected = st.session_state["selected_sector_card"] == sector_name
+
+            # 카드 본체 (예쁜 디자인)
+            border_color = ACCENT if is_selected else LINE
+            st.markdown(f"""
+            <div style='background:{SURFACE_2}; border:{"1.5px solid "+ACCENT if is_selected else "0.5px solid "+LINE}; border-radius:10px; padding:12px 14px; margin-bottom:4px;'>
+                <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;'>
+                    <span style='font-size:13px; font-weight:600; color:{TEXT};'>{sector_name}</span>
+                    <span style='font-size:14px; font-weight:700; color:{color}; font-family:JetBrains Mono;'>{arrow} {pct:+.2f}%</span>
                 </div>
-                """, unsafe_allow_html=True)
-                stocks = sector_top_stocks.get(item["업종"], [])
+                <div style='display:flex; justify-content:space-between; align-items:center;'>
+                    <span style='font-size:11px; color:{DIM}; font-family:JetBrains Mono;'>{item["현재가"]:,.0f} ({won:+,.0f})</span>
+                    <div style='display:flex; gap:10px;'>{trend_html}{trade_html}</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # 클릭 버튼 (카드 바로 아래, 작고 눈에 덜 띄게)
+            btn_label = "▲ 구성종목 닫기" if is_selected else "▼ 구성종목 보기"
+            if st.button(btn_label, key=f"{key_prefix}_{sector_name}", use_container_width=True):
+                st.session_state["selected_sector_card"] = None if is_selected else sector_name
+                st.rerun()
+
+            # 펼쳐진 구성종목
+            if is_selected:
+                stocks = sector_top_stocks.get(sector_name, [])
                 if stocks:
-                    st.markdown(f"<div style='font-size:11px; color:{DIM}; margin-bottom:6px;'>구성 대표종목 TOP 3</div>", unsafe_allow_html=True)
+                    rows_html = ""
                     for name, ticker in stocks:
                         price, s_pct = get_stock_quick_quote(ticker)
                         if price is not None:
                             s_color = CANDLE_UP if s_pct >= 0 else CANDLE_DOWN
                             s_arrow = "▲" if s_pct >= 0 else "▼"
-                            st.markdown(f"""
-                            <div style='display:flex; justify-content:space-between; padding:6px 0; border-bottom:0.5px solid {LINE};'>
+                            rows_html += f"""
+                            <div style='display:flex; justify-content:space-between; padding:8px 0; border-bottom:0.5px solid {LINE};'>
                                 <span style='font-size:12px; color:{TEXT};'>{name}</span>
                                 <span style='font-size:12px; font-family:JetBrains Mono;'>{price:,.0f}원 <span style='color:{s_color};'>{s_arrow} {s_pct:+.2f}%</span></span>
                             </div>
-                            """, unsafe_allow_html=True)
+                            """
                         else:
-                            st.markdown(f"<div style='font-size:12px; color:{DIM}; padding:6px 0;'>{name} — 조회 실패</div>", unsafe_allow_html=True)
+                            rows_html += f"<div style='font-size:12px; color:{DIM}; padding:8px 0;'>{name} — 조회 실패</div>"
+
+                    st.markdown(f"""
+                    <div style='background:{SURFACE_1}; border:0.5px solid {ACCENT}40; border-radius:0 0 10px 10px; padding:12px 14px; margin-top:-4px; margin-bottom:10px;'>
+                        <div style='font-size:11px; color:{DIM}; margin-bottom:6px;'>📊 구성 대표종목 TOP 3</div>
+                        {rows_html}
+                    </div>
+                    """, unsafe_allow_html=True)
                 else:
                     st.caption("대표종목 정보가 없어요.")
+            else:
+                st.markdown("<div style='margin-bottom:8px;'></div>", unsafe_allow_html=True)
 
         col_top, col_bottom = st.columns(2)
         with col_top:
             label = "🔥 상대적 강세 업종 TOP 5" if all_negative else "🔥 강세 업종 TOP 5"
             st.markdown(f"<div style='font-size:13px; font-weight:600; color:#22c55e; margin-bottom:8px;'>{label}</div>", unsafe_allow_html=True)
             for item in top5:
-                render_sector_with_expander(item, "#22c55e")
+                render_sector_card_clickable(item, "top")
         with col_bottom:
             label = "📉 약세 업종 TOP 5" if not all_positive else "📉 상대적 약세 업종 TOP 5"
             st.markdown(f"<div style='font-size:13px; font-weight:600; color:#ef4444; margin-bottom:8px;'>{label}</div>", unsafe_allow_html=True)
             for item in bottom5:
-                render_sector_with_expander(item, "#ef4444")
+                render_sector_card_clickable(item, "bottom")
 
         # 거래대금 1위 업종 하이라이트
         try:
