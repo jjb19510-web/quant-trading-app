@@ -990,21 +990,11 @@ def render_daily_report():
                         if price is not None:
                             s_color = CANDLE_UP if s_pct >= 0 else CANDLE_DOWN
                             s_arrow = "▲" if s_pct >= 0 else "▼"
-                            rows_html += f"""
-                            <div style='display:flex; justify-content:space-between; padding:8px 0; border-bottom:0.5px solid {LINE};'>
-                                <span style='font-size:12px; color:{TEXT};'>{name}</span>
-                                <span style='font-size:12px; font-family:JetBrains Mono;'>{price:,.0f}원 <span style='color:{s_color};'>{s_arrow} {s_pct:+.2f}%</span></span>
-                            </div>
-                            """
+                            rows_html += f"<div style='display:flex; justify-content:space-between; padding:8px 0; border-bottom:0.5px solid {LINE};'><span style='font-size:12px; color:{TEXT};'>{name}</span><span style='font-size:12px; font-family:JetBrains Mono;'>{price:,.0f}원 <span style='color:{s_color};'>{s_arrow} {s_pct:+.2f}%</span></span></div>"
                         else:
                             rows_html += f"<div style='font-size:12px; color:{DIM}; padding:8px 0;'>{name} — 조회 실패</div>"
 
-                    st.markdown(f"""
-                    <div style='background:{SURFACE_1}; border:0.5px solid {ACCENT}40; border-radius:0 0 10px 10px; padding:12px 14px; margin-top:-4px; margin-bottom:10px;'>
-                        <div style='font-size:11px; color:{DIM}; margin-bottom:6px;'>📊 구성 대표종목 TOP 3</div>
-                        {rows_html}
-                    </div>
-                    """, unsafe_allow_html=True)
+                    st.markdown(f"<div style='background:{SURFACE_1}; border:0.5px solid {ACCENT}40; border-radius:0 0 10px 10px; padding:12px 14px; margin-top:-4px; margin-bottom:10px;'><div style='font-size:11px; color:{DIM}; margin-bottom:6px;'>📊 구성 대표종목 TOP 3</div>{rows_html}</div>", unsafe_allow_html=True)
                 else:
                     st.caption("대표종목 정보가 없어요.")
             else:
