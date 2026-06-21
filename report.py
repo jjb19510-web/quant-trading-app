@@ -863,25 +863,32 @@ def render_daily_report():
             return None, None
 
         def render_sector_with_expander(item, color_label):
-            with st.expander(f"{item['업종']}  {('▲' if item['등락률']>=0 else '▼')} {item['등락률']:+.2f}%", expanded=False):
-                st.markdown(f"""
-                <div style='font-size:11px; color:{DIM}; margin-bottom:8px;'>
-                    {item["현재가"]:,.0f} ({item["등락폭"]:+,.0f}) · 거래대금 {f"{item['거래대금']/10000:.1f}조" if item.get('거래대금') and item['거래대금']>=10000 else f"{item.get('거래대금',0):,.0f}억"}
-                </div>
-                """, unsafe_allow_html=True)
+            pct = item["등락률"]
+            won = item["등락폭"]
+            arrow = "▲" if pct >= 0 else "▼"
+            trend = item.get("5일추세")
+            trade_val = item.get("거래대금")
+            trade_str = f"{trade_val/10000:.1f}조" if trade_val and trade_val >= 10000 else f"{trade_val:,.0f}억" if trade_val else ""
 
+            label = f"{item['업종']}   {arrow} {pct:+.2f}%   |   {item['현재가']:,.0f}원 ({won:+,.0f})"
+            if trend is not None:
+                label += f"   |   5일 {trend:+.2f}%"
+            if trade_str:
+                label += f"   |   거래대금 {trade_str}"
+
+            with st.expander(label, expanded=False):
                 stocks = sector_top_stocks.get(item["업종"], [])
                 if stocks:
                     st.markdown(f"<div style='font-size:11px; color:{DIM}; margin-bottom:6px;'>구성 대표종목 TOP 3</div>", unsafe_allow_html=True)
                     for name, ticker in stocks:
-                        price, pct = get_stock_quick_quote(ticker)
+                        price, s_pct = get_stock_quick_quote(ticker)
                         if price is not None:
-                            s_color = CANDLE_UP if pct >= 0 else CANDLE_DOWN
-                            s_arrow = "▲" if pct >= 0 else "▼"
+                            s_color = CANDLE_UP if s_pct >= 0 else CANDLE_DOWN
+                            s_arrow = "▲" if s_pct >= 0 else "▼"
                             st.markdown(f"""
                             <div style='display:flex; justify-content:space-between; padding:6px 0; border-bottom:0.5px solid {LINE};'>
                                 <span style='font-size:12px; color:{TEXT};'>{name}</span>
-                                <span style='font-size:12px; font-family:JetBrains Mono;'>{price:,.0f}원 <span style='color:{s_color};'>{s_arrow} {pct:+.2f}%</span></span>
+                                <span style='font-size:12px; font-family:JetBrains Mono;'>{price:,.0f}원 <span style='color:{s_color};'>{s_arrow} {s_pct:+.2f}%</span></span>
                             </div>
                             """, unsafe_allow_html=True)
                         else:
