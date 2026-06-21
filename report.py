@@ -730,6 +730,10 @@ def render_daily_report():
             "철강": "139240.KS",
             "건설": "117700.KS",
             "에너지화학": "117460.KS",
+            "방산": "449450.KS",
+            "조선": "494670.KS",
+            "원자력": "464950.KS",
+            "AI전력인프라": "461910.KS",
         }
         results = []
         for name, ticker in sector_etfs.items():
@@ -827,17 +831,75 @@ def render_daily_report():
             </div>
             """
 
+        # 업종별 대표 종목 매핑 (yfinance 티커)
+        sector_top_stocks = {
+            "반도체": [("삼성전자", "005930.KS"), ("SK하이닉스", "000660.KS"), ("한미반도체", "042700.KS")],
+            "자동차": [("현대차", "005380.KS"), ("기아", "000270.KS"), ("현대모비스", "012330.KS")],
+            "바이오": [("삼성바이오로직스", "207940.KS"), ("셀트리온", "068270.KS"), ("유한양행", "000100.KS")],
+            "은행/금융": [("KB금융", "105560.KS"), ("신한지주", "055550.KS"), ("하나금융지주", "086790.KS")],
+            "2차전지": [("LG에너지솔루션", "373220.KS"), ("삼성SDI", "006400.KS"), ("에코프로비엠", "247540.KQ")],
+            "IT": [("NAVER", "035420.KS"), ("카카오", "035720.KS"), ("크래프톤", "259960.KS")],
+            "헬스케어": [("한미약품", "128940.KS"), ("유한양행", "000100.KS"), ("종근당", "185750.KS")],
+            "철강": [("POSCO홀딩스", "005490.KS"), ("현대제철", "004020.KS"), ("동국제강", "001230.KS")],
+            "건설": [("현대건설", "000720.KS"), ("삼성물산", "028260.KS"), ("GS건설", "006360.KS")],
+            "에너지화학": [("LG화학", "051910.KS"), ("S-Oil", "010950.KS"), ("롯데케미칼", "011170.KS")],
+            "방산": [("한화에어로스페이스", "012450.KS"), ("LIG넥스원", "079550.KS"), ("현대로템", "064350.KS")],
+            "조선": [("HD현대중공업", "329180.KS"), ("삼성중공업", "010140.KS"), ("한화오션", "042660.KS")],
+            "원자력": [("한국전력", "015760.KS"), ("두산에너빌리티", "034020.KS"), ("한전기술", "052690.KS")],
+            "AI전력인프라": [("LS ELECTRIC", "010120.KS"), ("HD현대일렉트릭", "267260.KS"), ("효성중공업", "298040.KS")],
+        }
+
+        @st.cache_data(ttl=300)
+        def get_stock_quick_quote(ticker):
+            try:
+                hist = yf.Ticker(ticker).history(period="2d")
+                if len(hist) >= 2:
+                    curr = hist["Close"].iloc[-1]
+                    prev = hist["Close"].iloc[-2]
+                    pct = (curr - prev) / prev * 100
+                    return curr, pct
+            except:
+                pass
+            return None, None
+
+        def render_sector_with_expander(item, color_label):
+            with st.expander(f"{item['업종']}  {('▲' if item['등락률']>=0 else '▼')} {item['등락률']:+.2f}%", expanded=False):
+                st.markdown(f"""
+                <div style='font-size:11px; color:{DIM}; margin-bottom:8px;'>
+                    {item["현재가"]:,.0f} ({item["등락폭"]:+,.0f}) · 거래대금 {f"{item['거래대금']/10000:.1f}조" if item.get('거래대금') and item['거래대금']>=10000 else f"{item.get('거래대금',0):,.0f}억"}
+                </div>
+                """, unsafe_allow_html=True)
+
+                stocks = sector_top_stocks.get(item["업종"], [])
+                if stocks:
+                    st.markdown(f"<div style='font-size:11px; color:{DIM}; margin-bottom:6px;'>구성 대표종목 TOP 3</div>", unsafe_allow_html=True)
+                    for name, ticker in stocks:
+                        price, pct = get_stock_quick_quote(ticker)
+                        if price is not None:
+                            s_color = CANDLE_UP if pct >= 0 else CANDLE_DOWN
+                            s_arrow = "▲" if pct >= 0 else "▼"
+                            st.markdown(f"""
+                            <div style='display:flex; justify-content:space-between; padding:6px 0; border-bottom:0.5px solid {LINE};'>
+                                <span style='font-size:12px; color:{TEXT};'>{name}</span>
+                                <span style='font-size:12px; font-family:JetBrains Mono;'>{price:,.0f}원 <span style='color:{s_color};'>{s_arrow} {pct:+.2f}%</span></span>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        else:
+                            st.markdown(f"<div style='font-size:12px; color:{DIM}; padding:6px 0;'>{name} — 조회 실패</div>", unsafe_allow_html=True)
+                else:
+                    st.caption("대표종목 정보가 없어요.")
+
         col_top, col_bottom = st.columns(2)
         with col_top:
             label = "🔥 상대적 강세 업종 TOP 5" if all_negative else "🔥 강세 업종 TOP 5"
             st.markdown(f"<div style='font-size:13px; font-weight:600; color:#22c55e; margin-bottom:8px;'>{label}</div>", unsafe_allow_html=True)
             for item in top5:
-                st.markdown(render_sector_card(item), unsafe_allow_html=True)
+                render_sector_with_expander(item, "#22c55e")
         with col_bottom:
             label = "📉 약세 업종 TOP 5" if not all_positive else "📉 상대적 약세 업종 TOP 5"
             st.markdown(f"<div style='font-size:13px; font-weight:600; color:#ef4444; margin-bottom:8px;'>{label}</div>", unsafe_allow_html=True)
             for item in bottom5:
-                st.markdown(render_sector_card(item), unsafe_allow_html=True)
+                render_sector_with_expander(item, "#ef4444")
 
         # 거래대금 1위 업종 하이라이트
         try:
