@@ -1424,6 +1424,38 @@ def render_daily_report():
                 story.append(t3)
                 story.append(Spacer(1, 14))
 
+            # 🏭 업종별 등락률 (PDF 신규 추가)
+            if sector_data:
+                story.append(Paragraph("🏭 업종별 등락률 TOP 5 / BOTTOM 5", h2_style))
+                sector_top5 = sector_data[:5]
+                sector_bottom5 = sector_data[-5:][::-1]
+                sec_table_data = [["순위", "강세 업종", "등락률", "약세 업종", "등락률"]]
+                for i in range(5):
+                    top_item = sector_top5[i] if i < len(sector_top5) else None
+                    bot_item = sector_bottom5[i] if i < len(sector_bottom5) else None
+                    sec_table_data.append([
+                        str(i+1),
+                        top_item["업종"] if top_item else "-",
+                        f"{top_item['등락률']:+.2f}%" if top_item else "-",
+                        bot_item["업종"] if bot_item else "-",
+                        f"{bot_item['등락률']:+.2f}%" if bot_item else "-",
+                    ])
+                t_sec = Table(sec_table_data, colWidths=[40, 130, 70, 130, 70])
+                t_sec.setStyle(TableStyle([
+                    ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#0f172a")),
+                    ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+                    ('FONTNAME', (0,0), (-1,-1), 'NanumGothic'),
+                    ('FONTSIZE', (0,0), (-1,-1), 9),
+                    ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                    ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                    ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+                    ('TOPPADDING', (0,0), (-1,-1), 6),
+                    ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor("#f8fafc")]),
+                    ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#e2e8f0")),
+                ]))
+                story.append(t_sec)
+                story.append(Spacer(1, 14))
+
             # 🏦 [신규 통합] 4. 증권사 컨센서스(공통) 추천주 (네이티브 마크다운 표 자동 파싱 인쇄)
             consensus_markdown = st.session_state.get("broker_consensus_table", "")
             if consensus_markdown:
