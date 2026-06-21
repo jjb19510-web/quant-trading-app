@@ -661,11 +661,20 @@ def render_daily_report():
             advice_text = "시장 주도 세력들도 방향성을 고민하며 관망하는 상태입니다. 무리한 진입을 피하고 차분하게 시장 흐름을 주시할 필요가 있습니다."
             gauge_status = "관망 및 숨고르기 ⚖️"
 
+        smi_base_date = last_row["날짜"] if "날짜" in last_row else "N/A"
+        st.markdown(f"""
+        <div style='text-align:center; margin-bottom:10px;'>
+            <span style='font-size:11px; color:{DIM}; background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:12px; padding:4px 12px;'>
+                📅 기준일: {smi_base_date} 장마감(15:30) 데이터
+            </span>
+        </div>
+        """, unsafe_allow_html=True)
+
         c1, c2 = st.columns(2)
         with c1:
             st.markdown(f"""
             <div style='background:{SURFACE_2}; border:1px solid {LINE}; border-radius:12px; padding:16px; text-align:center;'>
-                <div style='font-size:12px; color:#9ca3af; margin-bottom:6px;'>오늘의 시장 주도 자금 (외국인·기관)</div>
+                <div style='font-size:12px; color:#9ca3af; margin-bottom:6px;'>{smi_base_date} 시장 주도 자금 (외국인·기관)</div>
                 <div style='font-size:15px; font-weight:800; color:{lead_color}; margin-top:4px;'>{leadership}</div>
             </div>
             """, unsafe_allow_html=True)
@@ -673,7 +682,7 @@ def render_daily_report():
             direction_icon = "📈" if smi_diff > 0 else "📉"
             st.markdown(f"""
             <div style='background:{SURFACE_2}; border:1px solid {LINE}; border-radius:12px; padding:16px; text-align:center;'>
-                <div style='font-size:12px; color:#9ca3af; margin-bottom:6px;'>외국인·기관 종가 매수집중도 (전일 대비)</div>
+                <div style='font-size:12px; color:#9ca3af; margin-bottom:6px;'>{smi_base_date} 종가 매수집중도 (전일 대비)</div>
                 <div style='font-size:15px; font-weight:800; color:{ACCENT}; margin-top:4px;'>{direction_icon} {abs(smi_diff):+.1f}포인트 상승</div>
             </div>
             """, unsafe_allow_html=True)
