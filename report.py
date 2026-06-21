@@ -284,7 +284,16 @@ def get_top_volume():
                     name = name_tag.text.strip()
                     price = cols[2].text.strip()
                     raw_amount = cols[6].text.strip() # 백만 원 단위 거래대금 취득
-                    
+
+                    # 등락률 추출 (cols[3] = 전일비, cols[4] = 등락률)
+                    chg_pct_str = "0"
+                    try:
+                        chg_pct_raw = cols[4].text.strip().replace("%", "").replace("+", "")
+                        chg_pct_str = chg_pct_raw
+                        is_down = "_down" in str(cols[4]) or "하락" in str(row) or chg_pct_raw.startswith("-")
+                    except:
+                        is_down = False
+
                     if not name:
                         continue
                     
@@ -300,10 +309,16 @@ def get_top_volume():
                             amount_val = 0
                             
                         price_formatted = f"{price}원" if price and not price.endswith("원") else price
+
+                        try:
+                            chg_pct_val = float(chg_pct_str)
+                        except:
+                            chg_pct_val = 0.0
                         
                         unsorted_result.append({
                             "종목": name, 
                             "현재가": price_formatted, 
+                            "등락률": chg_pct_val,
                             "amount_val": amount_val, # 정렬 지표 키 등록
                             "raw_amount": raw_amount
                         })
@@ -326,9 +341,14 @@ def get_top_volume():
             else:
                 amount_formatted = f"{amount_in_hundred_million:,.0f}억 원"
             
+            chg_pct = item.get("등락률", 0.0)
+            chg_arrow = "▲" if chg_pct >= 0 else "▼"
+            chg_str = f"{chg_arrow} {chg_pct:+.2f}%"
+
             final_top_10.append({
                 "종목": item["종목"],
                 "현재가": item["현재가"],
+                "등락률": chg_str,
                 "거래대금": amount_formatted
             })
         return final_top_10
