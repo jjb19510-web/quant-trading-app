@@ -1331,6 +1331,34 @@ def render_daily_report():
             doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=36, rightMargin=36, topMargin=40, bottomMargin=40)
             story = []
 
+            # 🛡 안전 기본값 (장 마감 등 일부 섹션 미실행 시 PDF 생성 실패 방지)
+            try:
+                foreign_rows
+            except NameError:
+                foreign_rows = []
+            try:
+                institution_rows
+            except NameError:
+                institution_rows = []
+            try:
+                sector_data
+            except NameError:
+                sector_data = []
+
+            # 🛡 안전 기본값 (위에서 정의 안 됐을 경우 PDF 생성 실패 방지)
+            if "foreign_rows" not in dir():
+                foreign_rows = []
+            if "institution_rows" not in dir():
+                institution_rows = []
+            if "sector_data" not in dir():
+                sector_data = []
+            if "volume_data" not in dir():
+                volume_data = []
+            if "signal_rows" not in dir():
+                signal_rows = []
+            if "smi_df" not in dir():
+                smi_df = None
+
             # 💎 기관 리포트 규격 전용 스타일셋 정의 (글자 겹침 방지 leading 정밀 보정)
             title_style = ParagraphStyle('title', fontSize=22, fontName='NanumGothic', leading=28, spaceAfter=10, textColor=colors.HexColor("#0f172a"))
             meta_style = ParagraphStyle('meta', fontSize=10, fontName='NanumGothic', leading=14, spaceAfter=14, textColor=colors.HexColor("#64748b"))
