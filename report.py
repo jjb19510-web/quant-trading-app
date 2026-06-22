@@ -12,68 +12,58 @@ from ui_components import (
 
 # ── [전역 함수 1] 네이버 금융 수급동향 실시간 '억 원'대금 가공 크롤러 ──
 @st.cache_data(ttl=300)
-def get_naver_supply_deal(investor_gubun="9000"):
-    """pykrx 기반 투자자별 순매수 상위 종목 (코스피)
+def get_naver_supply_deal(investor_gubun="9000", market_sosok="01"):
+    """네이버 금융 iframe URL 직접 호출로 투자자별 순매수 상위 종목 수집
     investor_gubun: "9000"=외국인, "1000"=기관
+    market_sosok: "01"=코스피, "02"=코스닥
     """
     try:
-        from pykrx import stock
-        import datetime as dt_module
-
-        # 오늘 날짜 (주말이면 최근 영업일로 보정)
-        today = dt_module.date.today()
-        date_str = today.strftime("%Y%m%d")
-
-        # 투자자 코드 매핑
-        investor_map = {"9000": "외국인", "1000": "기관합계"}
-        investor_name = investor_map.get(investor_gubun, "외국인")
-
-        # 최근 영업일 찾기 (최대 5일 전까지)
-        for i in range(5):
-            try_date = (today - dt.timedelta(days=i)).strftime("%Y%m%d")
-            df = stock.get_market_net_purchases_of_equities(try_date, try_date, "KOSPI", investor_name)
-            st.write(f"🔧 {try_date} / {investor_name}: shape={df.shape if df is not None else None}")
-            if df is not None and not df.empty:
-                date_str = try_date
-                break
-        else:
-            return []
-
-        if df.empty:
-            return []
+        from bs4 import BeautifulSoup
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Referer": "https://finance.naver.com/sise/sise_deal_rank.naver"
+        }
+        # 🎯 iframe 전용 URL (일반 페이지가 빈 껍데기일 때 실데이터가 있는 곳)
+        url = f"https://finance.naver.com/sise/sise_deal_rank_iframe.naver?sosok={market_sosok}&investor_gubun={investor_gubun}&type=buy"
+        res = requests.get(url, headers=headers, timeout=10)
+        res.encoding = "euc-kr"
+        soup = BeautifulSoup(res.text, "html.parser")
 
         etf_keywords = ["KODEX", "TIGER", "KBSTAR", "ARIRANG", "HANARO", "KOSEF", "PLUS",
                         "ACE", "SOL", "TIMEFOLIO", "ETF", "ETN", "인버스", "레버리지", "선물", "RISE", "WOORI"]
 
-        # 순매수거래대금 컬럼 기준 내림차순 (이미 정렬되어 있을 수 있으나 안전하게)
-        amount_col = "순매수거래대금" if "순매수거래대금" in df.columns else df.columns[-1]
-        df_sorted = df.sort_values(amount_col, ascending=False)
-
         rows = []
-        for name, row in df_sorted.iterrows():
-            if any(k in str(name) for k in etf_keywords):
+        for tr in soup.select("table tr"):
+            tds = tr.select("td")
+            if len(tds) < 3:
                 continue
+            name_tag = tr.select_one("a")
+            if not name_tag:
+                continue
+            name = name_tag.text.strip()
+            if not name or any(k in name for k in etf_keywords):
+                continue
+            # 순매수 거래대금은 보통 마지막 또는 3번째 컬럼 (백만원 단위)
+            amount_raw = tds[-1].text.strip().replace(",", "")
             try:
-                amount_won = int(row[amount_col])  # 원 단위
-                if amount_won <= 0:
+                amount_mil = float(amount_raw)  # 백만원
+                amount_100m = amount_mil / 100  # 억원
+                if amount_100m <= 0:
                     continue
-                amount_100m = amount_won / 1e8  # 억원 단위
                 if amount_100m >= 10000:
                     t_won = int(amount_100m // 10000)
                     b_won = int(amount_100m % 10000)
                     amount_str = f"{t_won}조 {b_won:,}억원" if b_won > 0 else f"{t_won}조원"
                 else:
                     amount_str = f"{amount_100m:,.0f}억원"
-                rows.append({"종목": str(name), "순매수": amount_str})
             except:
                 continue
+            rows.append({"종목": name, "순매수": amount_str})
             if len(rows) >= 5:
                 break
-
         return rows
-
     except Exception as e:
-        st.error(f"🔧 pykrx 오류: {type(e).__name__}: {e}")
+        print(f"네이버 iframe 수급 크롤링 오류: {e}")
         return []
 
 
