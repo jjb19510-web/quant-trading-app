@@ -150,12 +150,85 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
     elif ticker.isdigit():
         ticker = ticker.zfill(6) + ".KS"
 
+    # ── 종목명/코드 → 정식 티커 변환 (분석 탭과 동일 로직) ──
     if ticker.endswith(".KS") or ticker.endswith(".KQ"):
-        raw_ticker = ticker.replace(".KS","").replace(".KQ","")
+        raw_ticker = ticker.replace(".KS", "").replace(".KQ", "")
         is_korean = True
+    elif ticker.isdigit():
+        # 숫자 코드만 입력된 경우 → 한국 종목
+        raw_ticker = ticker.zfill(6)
+        is_korean = True
+        suffix = ".KS"
+        if df_krx is not None:
+            code_col = next((c for c in ['Symbol', 'Code', 'code'] if c in df_krx.columns), None)
+            if code_col:
+                try:
+                    matched = df_krx[df_krx[code_col].astype(str).str.split('.').str[0].str.zfill(6) == raw_ticker]
+                    if not matched.empty:
+                        mkt = str(matched.iloc[0].get('Market', 'KOSPI')).upper()
+                        suffix = ".KS" if "KOSPI" in mkt else ".KQ"
+                except:
+                    pass
+        ticker = raw_ticker + suffix
     else:
-        raw_ticker = ticker
-        is_korean = False
+        # 종목명(한글/영문) 입력 → KRX 리스트에서 검색
+        matched_code = None
+        matched_suffix = ".KS"
+
+        # 1. 수동 매핑 우선 확인 (대소문자 무관)
+        try:
+            from data_utils import MANUAL_STOCK_MAP
+            for map_name, (map_code, map_mkt) in MANUAL_STOCK_MAP.items():
+                if map_name.upper() == ticker.upper():
+                    matched_code = map_code
+                    matched_suffix = ".KS" if "KOSPI" in map_mkt.upper() else ".KQ"
+                    break
+        except:
+            pass
+
+        # 2. KRX 리스트에서 검색
+        if matched_code is None and df_krx is not None:
+            name_col = next((c for c in ['Name'] if c in df_krx.columns), None)
+            code_col = next((c for c in ['Symbol', 'Code', 'code'] if c in df_krx.columns), None)
+            if name_col and code_col:
+                # 정확히 일치 (대소문자 무관)
+                m = df_krx[df_krx[name_col].astype(str).str.upper() == ticker.upper()]
+                if m.empty:
+                    # 부분 일치
+                    m = df_krx[df_krx[name_col].astype(str).str.upper().str.contains(ticker.upper(), na=False)]
+                if not m.empty:
+                    raw_code = str(m.iloc[0][code_col]).split('.')[0].zfill(6)
+                    matched_code = raw_code
+                    mkt = str(m.iloc[0].get('Market', 'KOSPI')).upper()
+                    matched_suffix = ".KS" if "KOSPI" in mkt else ".KQ"
+
+        # 3. FinanceDataReader 폴백
+        if matched_code is None:
+            try:
+                import FinanceDataReader as fdr
+                krx_all = fdr.StockListing('KRX')
+                name_col2 = next((c for c in ['Name'] if c in krx_all.columns), None)
+                code_col2 = next((c for c in ['Symbol', 'Code'] if c in krx_all.columns), None)
+                if name_col2 and code_col2:
+                    m2 = krx_all[krx_all[name_col2].astype(str).str.upper() == ticker.upper()]
+                    if m2.empty:
+                        m2 = krx_all[krx_all[name_col2].astype(str).str.upper().str.contains(ticker.upper(), na=False)]
+                    if not m2.empty:
+                        raw_code2 = str(m2.iloc[0][code_col2]).split('.')[0].zfill(6)
+                        matched_code = raw_code2
+                        mkt2 = str(m2.iloc[0].get('Market', 'KOSPI')).upper()
+                        matched_suffix = ".KS" if "KOSPI" in mkt2 else ".KQ"
+            except:
+                pass
+
+        if matched_code:
+            raw_ticker = matched_code
+            ticker = matched_code + matched_suffix
+            is_korean = True
+        else:
+            # 한국 종목으로 못 찾으면 미국 주식(영문 티커)으로 간주
+            raw_ticker = ticker
+            is_korean = False
 
     display_name = name_map.get(raw_ticker, ticker_input)
 
