@@ -1027,8 +1027,29 @@ def render_daily_report():
     st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
 
     # ── 6. 수급 동향 ──
-    card("💰 수급 동향", "외국인 · 기관 순매수 상위 종목")
-    st.info("🔧 수급 동향 데이터 연동을 준비 중입니다. 곧 추가될 예정입니다.")
+    card("💰 수급 동향", "외국인 · 기관 순매수 상위 종목 (네이버 금융 기준)")
+
+    with st.spinner("수급 데이터 불러오는 중..."):
+        foreign_rows = get_naver_supply_deal("9000")   # 외국인
+        institution_rows = get_naver_supply_deal("1000")  # 기관
+
+    if foreign_rows or institution_rows:
+        col_f, col_i = st.columns(2)
+        with col_f:
+            st.markdown(f"<div style='font-size:13px; font-weight:600; color:#9ca3af; margin-bottom:8px;'>🌍 외국인 순매수 TOP 5</div>", unsafe_allow_html=True)
+            if foreign_rows:
+                st.dataframe(pd.DataFrame(foreign_rows), use_container_width=True, hide_index=True)
+            else:
+                st.info("외국인 수급 데이터 없음")
+        with col_i:
+            st.markdown(f"<div style='font-size:13px; font-weight:600; color:#9ca3af; margin-bottom:8px;'>🏦 기관 순매수 TOP 5</div>", unsafe_allow_html=True)
+            if institution_rows:
+                st.dataframe(pd.DataFrame(institution_rows), use_container_width=True, hide_index=True)
+            else:
+                st.info("기관 수급 데이터 없음")
+        st.markdown(f"<div style='font-size:11px; color:{DIM}; margin-top:8px;'>💡 네이버 금융 당일 가집계 기준이며, 장 마감 후 확정치로 갱신됩니다.</div>", unsafe_allow_html=True)
+    else:
+        st.info("📊 수급 데이터를 불러오지 못했어요. (장 시작 전이거나 네이버 일시 차단일 수 있어요)")
 
     # ── 7. 거래대금 상위 ──
     card("📊 거래대금 상위 TOP 10", "오늘 가장 많이 거래된 종목")
