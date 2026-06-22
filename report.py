@@ -43,11 +43,14 @@ def get_naver_supply_deal(investor_gubun="9000", market_sosok="01"):
             name = name_tag.text.strip()
             if not name or any(k in name for k in etf_keywords):
                 continue
-            # 순매수 거래대금은 보통 마지막 또는 3번째 컬럼 (백만원 단위)
-            amount_raw = tds[-1].text.strip().replace(",", "")
+            # 네이버 표 구조: 종목명 | 수량(천주) | 금액(백만원) | 당일거래량
+            # → 금액은 3번째 컬럼(tds[2]). 종목명 셀에 a태그가 있으므로 tds[1]=수량, tds[2]=금액
+            if len(tds) < 3:
+                continue
+            amount_raw = tds[2].text.strip().replace(",", "")
             try:
-                amount_mil = float(amount_raw)  # 백만원
-                amount_100m = amount_mil / 100  # 억원
+                amount_mil = float(amount_raw)  # 백만원 단위
+                amount_100m = amount_mil / 100  # 백만원 → 억원 (1억원 = 100백만원)
                 if amount_100m <= 0:
                     continue
                 if amount_100m >= 10000:
