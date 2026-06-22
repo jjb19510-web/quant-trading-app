@@ -58,9 +58,11 @@ def get_naver_supply_deal(investor_gubun="9000", market_sosok="01"):
                     amount_str = f"{amount_100m:,.0f}억원"
             except:
                 continue
-            rows.append({"종목": name, "순매수": amount_str})
-            if len(rows) >= 5:
-                break
+            rows.append({"종목": name, "순매수": amount_str, "_sort": amount_100m})
+
+        # 순매수 금액 기준 내림차순 정렬 후 TOP 5
+        rows = sorted(rows, key=lambda x: x["_sort"], reverse=True)[:5]
+        rows = [{"종목": r["종목"], "순매수": r["순매수"]} for r in rows]
         return rows
     except Exception as e:
         print(f"네이버 iframe 수급 크롤링 오류: {e}")
