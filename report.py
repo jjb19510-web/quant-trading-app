@@ -33,16 +33,24 @@ def get_naver_supply_deal(investor_gubun="9000", market_sosok="01"):
                         "ACE", "SOL", "TIMEFOLIO", "ETF", "ETN", "인버스", "레버리지", "선물", "RISE", "WOORI"]
 
         rows = []
+        seen_names = set()  # 중복 종목 방지 (네이버 표는 좌우 두 날짜가 함께 있음)
+        _debug_printed = False
         for tr in soup.select("table tr"):
             tds = tr.select("td")
             if len(tds) < 3:
                 continue
+            if not _debug_printed:
+                print(f"🔧 수급 컬럼 개수: {len(tds)}, 내용: {[t.text.strip() for t in tds]}")
+                _debug_printed = True
             name_tag = tr.select_one("a")
             if not name_tag:
                 continue
             name = name_tag.text.strip()
             if not name or any(k in name for k in etf_keywords):
                 continue
+            if name in seen_names:  # 이미 수집한 종목이면 건너뛰기
+                continue
+            seen_names.add(name)
             # 네이버 표 구조: 종목명 | 수량(천주) | 금액(백만원) | 당일거래량
             # → 금액은 3번째 컬럼(tds[2]). 종목명 셀에 a태그가 있으므로 tds[1]=수량, tds[2]=금액
             if len(tds) < 3:
