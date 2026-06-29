@@ -3,6 +3,7 @@ import json
 import streamlit as st
 import os
 import datetime as dt
+import pandas as pd
 
 # ── [전역 보안키 자동 정화 엔진] 대소문자 및 접두사 구분 없이 보안키 자동 수색 및 유니코드 공백 원천 박멸 ──
 try:
@@ -201,6 +202,47 @@ def sell_order(ticker, qty, token):
     }
     res = requests.post(url, headers=headers, data=json.dumps(body))
     return res.json()
+
+
+def get_minute_chart(ticker, token, interval="5"):
+    """분봉 데이터 조회 (장중 실시간 기술적 분석용)
+    interval: "1"=1분봉, "5"=5분봉, "15"=15분봉, "30"=30분봉, "60"=60분봉
+    """
+    url = f"{BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-time-itemchartprice"
+    headers = {
+        "content-type": "application/json",
+        "authorization": f"Bearer {token}",
+        "appkey": APP_KEY,
+        "appsecret": APP_SECRET,
+        "tr_id": "FHKST03010200"
+    }
+    params = {
+        "FID_ETC_CLS_CODE": "",
+        "FID_COND_MRKT_DIV_CODE": "J",
+        "FID_INPUT_ISCD": ticker,
+        "FID_INPUT_HOUR_1": dt.datetime.now().strftime("%H%M%S"),
+        "FID_PW_DATA_INCU_YN": "Y",
+        "FID_HOUR_CLS_CODE": interval
+    }
+    res = requests.get(url, headers=headers, params=params)
+    data = res.json()
+    if data.get("rt_cd") == "0":
+        rows = data.get("output2", [])
+        records = []
+        for r in rows:
+            try:
+                records.append({
+                    "time": r.get("stck_bsop_date", "") + r.get("stck_cntg_hour", ""),
+                    "open": int(r.get("stck_oprc", 0)),
+                    "high": int(r.get("stck_hgpr", 0)),
+                    "low": int(r.get("stck_lwpr", 0)),
+                    "close": int(r.get("stck_prpr", 0)),
+                    "volume": int(r.get("cntg_vol", 0))
+                })
+            except:
+                continue
+        return pd.DataFrame(records)
+    return None
 
 
 def get_foreign_institution_trade(token, div_cls="0", market="J"):
