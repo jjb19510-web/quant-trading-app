@@ -258,8 +258,10 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
             kis_token = get_kis_token()
             if kis_token:
                 minute_hist = get_minute_chart(raw_ticker, kis_token, interval="5")
-        except:
-            pass
+                if minute_hist is None or minute_hist.empty:
+                    st.warning(f"⚠️ 분봉 데이터 없음 (종목코드: {raw_ticker}) — 일봉으로 대체")
+        except Exception as e:
+            st.warning(f"⚠️ 분봉 조회 실패: {e} — 일봉으로 대체")
 
     # 장중이면 분봉 데이터로 기술적 분석, 아니면 일봉 유지
     if minute_hist is not None and not minute_hist.empty and len(minute_hist) >= 20:
