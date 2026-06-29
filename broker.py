@@ -220,7 +220,7 @@ def get_minute_chart(ticker, token, interval="5"):
         "FID_ETC_CLS_CODE": "",
         "FID_COND_MRKT_DIV_CODE": "J",
         "FID_INPUT_ISCD": ticker,
-        "FID_INPUT_HOUR_1": dt.datetime.now().strftime("%H%M%S"),
+        "FID_INPUT_HOUR_1": "153000",  # 당일 15:30까지 전체 데이터 요청
         "FID_PW_DATA_INCU_YN": "Y",
         "FID_HOUR_CLS_CODE": interval
     }
@@ -228,11 +228,16 @@ def get_minute_chart(ticker, token, interval="5"):
     data = res.json()
     if data.get("rt_cd") == "0":
         rows = data.get("output2", [])
+        today_str = dt.datetime.now().strftime("%Y%m%d")
         records = []
         for r in rows:
             try:
+                bsop_date = r.get("stck_bsop_date", "")
+                # 오늘 날짜 데이터만 필터링
+                if bsop_date != today_str:
+                    continue
                 records.append({
-                    "time": r.get("stck_bsop_date", "") + r.get("stck_cntg_hour", ""),
+                    "time": bsop_date + r.get("stck_cntg_hour", ""),
                     "open": int(r.get("stck_oprc", 0)),
                     "high": int(r.get("stck_hgpr", 0)),
                     "low": int(r.get("stck_lwpr", 0)),
@@ -241,7 +246,7 @@ def get_minute_chart(ticker, token, interval="5"):
                 })
             except:
                 continue
-        return pd.DataFrame(records)
+        return pd.DataFrame(records) if records else None
     return None
 
 
