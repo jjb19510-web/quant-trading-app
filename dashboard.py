@@ -105,6 +105,55 @@ def render_dashboard():
             display_df = pd.DataFrame([{k: v for k, v in d.items() if k != "_ret"} for d in wl_data])
             st.dataframe(display_df, use_container_width=True, hide_index=True)
 
+    # ── 거래량 급증 감지 ──
+    if st.session_state.watchlist:
+        @st.cache_data(ttl=300)
+        def get_volume_spike(watchlist):
+            name_map = get_krx_name_map()
+            result = []
+            for item in watchlist:
+                ticker = item + ".KS" if not item.endswith(".KS") else item
+                try:
+                    hist = yf.Ticker(ticker).history(period="2mo").dropna(subset=["Close"])
+                    if len(hist) < 22:
+                        continue
+                    vol_today = float(hist["Volume"].iloc[-1])
+                    vol_ma20 = float(hist["Volume"].iloc[-21:-1].mean())
+                    if vol_ma20 == 0:
+                        continue
+                    ratio = vol_today / vol_ma20
+                    curr = float(hist["Close"].iloc[-1])
+                    prev = float(hist["Close"].iloc[-2])
+                    chg_pct = (curr - prev) / prev * 100
+                    display = name_map.get(item, item)
+
+                    if ratio >= 2.0:
+                        result.append({
+                            "종목": display,
+                            "현재가": f"{int(curr):,}원",
+                            "등락률": chg_pct,
+                            "거래량 배수": ratio,
+                            "_ratio": ratio
+                        })
+                except:
+                    pass
+            return sorted(result, key=lambda x: x["_ratio"], reverse=True)
+
+        with st.spinner("거래량 급증 감지 중..."):
+            spike_data = get_volume_spike(tuple(st.session_state.watchlist))
+
+        if spike_data:
+            card("🚨 거래량 급증 감지", "관심종목 중 20일 평균 대비 2배 이상 거래량 종목")
+            for item in spike_data:
+                ratio = item["_ratio"]
+                badge = "🚨 폭발" if ratio >= 3 else "🔥 급증"
+                color = CANDLE_UP if item["등락률"] >= 0 else CANDLE_DOWN
+                arrow = "▲" if item["등락률"] >= 0 else "▼"
+                st.markdown(f"<div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:10px; padding:12px 16px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;'><div><span style='font-size:14px; font-weight:700; color:#e2e8f0;'>{item['종목']}</span> <span style='font-size:12px; background:#ef444420; color:#ef4444; border-radius:6px; padding:2px 8px; margin-left:8px;'>{badge} {ratio:.1f}배</span></div><div style='text-align:right;'><div style='font-size:14px; font-family:JetBrains Mono;'>{item['현재가']}</div><div style='font-size:12px; color:{color}; font-family:JetBrains Mono;'>{arrow} {item['등락률']:+.2f}%</div></div></div>", unsafe_allow_html=True)
+        else:
+            if st.session_state.watchlist:
+                st.caption("관심종목 중 거래량 급증 종목이 없어요. (20일 평균 대비 2배 미만)")
+
     # ── 섹터별 수익률 비교 ──
     if st.session_state.sectors:
         @st.cache_data(ttl=300)
