@@ -243,6 +243,37 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
         volume = hist["Volume"].squeeze()
         open_p = hist["Open"].squeeze()
 
+    # ── 장중 분봉 데이터 자동 전환 ──
+    import datetime as dt_now
+    kst_now = dt_now.datetime.now(dt_now.timezone(dt_now.timedelta(hours=9)))
+    market_open = kst_now.replace(hour=9, minute=0, second=0, microsecond=0)
+    market_close = kst_now.replace(hour=15, minute=30, second=0, microsecond=0)
+    is_market_open = kst_now.weekday() < 5 and market_open <= kst_now <= market_close
+
+    minute_hist = None
+    if is_market_open and is_korean and KIS_AVAILABLE:
+        try:
+            from broker import get_access_token, get_minute_chart
+            import pandas as pd
+            kis_token = get_kis_token()
+            if kis_token:
+                minute_hist = get_minute_chart(raw_ticker, kis_token, interval="5")
+        except:
+            pass
+
+    # 장중이면 분봉 데이터로 기술적 분석, 아니면 일봉 유지
+    if minute_hist is not None and not minute_hist.empty and len(minute_hist) >= 20:
+        import pandas as pd
+        minute_hist = minute_hist.sort_values("time").reset_index(drop=True)
+        close = pd.Series(minute_hist["close"].values, name="Close")
+        high = pd.Series(minute_hist["high"].values, name="High")
+        low = pd.Series(minute_hist["low"].values, name="Low")
+        volume = pd.Series(minute_hist["volume"].values, name="Volume")
+        open_p = pd.Series(minute_hist["open"].values, name="Open")
+        data_label = "📡 장중 5분봉 기준 (실시간)"
+    else:
+        data_label = "📅 전일 종가 기준"
+
     curr_price = float(close.iloc[-1])
     prev_price = float(close.iloc[-2])
     chg = curr_price - prev_price
