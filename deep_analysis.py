@@ -267,11 +267,24 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
     if minute_hist is not None and not minute_hist.empty and len(minute_hist) >= 20:
         import pandas as pd
         minute_hist = minute_hist.sort_values("time").reset_index(drop=True)
-        close = pd.Series(minute_hist["close"].values, name="Close")
-        high = pd.Series(minute_hist["high"].values, name="High")
-        low = pd.Series(minute_hist["low"].values, name="Low")
-        volume = pd.Series(minute_hist["volume"].values, name="Volume")
-        open_p = pd.Series(minute_hist["open"].values, name="Open")
+        # X축 시간 라벨 생성 (YYYYMMDDHHMMSS → HH:MM)
+        def parse_time_label(t):
+            try:
+                t = str(t)
+                if len(t) >= 12:
+                    return t[8:10] + ":" + t[10:12]
+                elif len(t) >= 6:
+                    return t[:2] + ":" + t[2:4]
+                return t
+            except:
+                return str(t)
+        time_labels = [parse_time_label(t) for t in minute_hist["time"]]
+        import pandas as pd
+        close = pd.Series(minute_hist["close"].values, index=time_labels, name="Close")
+        high = pd.Series(minute_hist["high"].values, index=time_labels, name="High")
+        low = pd.Series(minute_hist["low"].values, index=time_labels, name="Low")
+        volume = pd.Series(minute_hist["volume"].values, index=time_labels, name="Volume")
+        open_p = pd.Series(minute_hist["open"].values, index=time_labels, name="Open")
         data_label = "📡 장중 5분봉 기준 (실시간)"
     else:
         data_label = "📅 전일 종가 기준"
