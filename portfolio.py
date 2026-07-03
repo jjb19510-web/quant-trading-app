@@ -550,28 +550,121 @@ def render_portfolio(KIS_AVAILABLE, get_kis_token, get_balance):
             border_c = "#ef4444" if emoji == "🔴" else "#f59e0b" if emoji == "⚠️" else "#22c55e"
             st.markdown(f"<div style='background:{SURFACE_1}; border-left:4px solid {border_c}; padding:10px 16px; border-radius:0 8px 8px 0; margin-bottom:8px; font-size:13px; color:{TEXT};'>{emoji} {msg}</div>", unsafe_allow_html=True)
 
-        # 월별 손익 차트
-        if len(all_closed) >= 3:
+        # 상세 매매 분석
+        st.markdown("<div style='margin-top:16px;'></div>", unsafe_allow_html=True)
+
+        col_a, col_b = st.columns(2)
+        with col_a:
+            st.markdown(f"""
+            <div style='background:{SURFACE_2}; border-radius:12px; padding:16px; margin-bottom:12px;'>
+                <div style='font-size:12px; color:{DIM}; margin-bottom:10px; font-weight:600;'>📈 수익 거래 분석</div>
+                <div style='display:flex; justify-content:space-between; margin-bottom:6px;'>
+                    <span style='font-size:12px; color:{DIM};'>총 승리</span>
+                    <span style='font-size:12px; font-weight:600; color:#22c55e;'>{len(wins)}건</span>
+                </div>
+                <div style='display:flex; justify-content:space-between; margin-bottom:6px;'>
+                    <span style='font-size:12px; color:{DIM};'>평균 수익</span>
+                    <span style='font-size:12px; font-weight:600; color:#22c55e;'>+{avg_win:,.0f}원</span>
+                </div>
+                <div style='display:flex; justify-content:space-between;'>
+                    <span style='font-size:12px; color:{DIM};'>최대 단일 수익</span>
+                    <span style='font-size:12px; font-weight:600; color:#22c55e;'>+{max((t.get("final_pnl",0) for t in wins), default=0):,.0f}원</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with col_b:
+            st.markdown(f"""
+            <div style='background:{SURFACE_2}; border-radius:12px; padding:16px; margin-bottom:12px;'>
+                <div style='font-size:12px; color:{DIM}; margin-bottom:10px; font-weight:600;'>📉 손실 거래 분석</div>
+                <div style='display:flex; justify-content:space-between; margin-bottom:6px;'>
+                    <span style='font-size:12px; color:{DIM};'>총 패배</span>
+                    <span style='font-size:12px; font-weight:600; color:#ef4444;'>{len(losses)}건</span>
+                </div>
+                <div style='display:flex; justify-content:space-between; margin-bottom:6px;'>
+                    <span style='font-size:12px; color:{DIM};'>평균 손실</span>
+                    <span style='font-size:12px; font-weight:600; color:#ef4444;'>{avg_loss:,.0f}원</span>
+                </div>
+                <div style='display:flex; justify-content:space-between;'>
+                    <span style='font-size:12px; color:{DIM};'>최대 단일 손실</span>
+                    <span style='font-size:12px; font-weight:600; color:#ef4444;'>{min((t.get("final_pnl",0) for t in losses), default=0):,.0f}원</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # 월별 손익 차트 (X축 문자열로 고정)
+        if len(all_closed) >= 2:
             import plotly.graph_objects as go
             monthly = {}
             for t in all_closed:
-                month = t.get("sell_date", "")[:7]
-                if month:
+                raw_date = t.get("sell_date", "")
+                if raw_date and len(raw_date) >= 7:
+                    month = raw_date[:7]  # "2026-06" 형식
                     monthly[month] = monthly.get(month, 0) + t.get("final_pnl", 0)
             if monthly:
                 months = sorted(monthly.keys())
                 values = [monthly[m] for m in months]
                 colors = ["#22c55e" if v >= 0 else "#ef4444" for v in values]
-                fig = go.Figure(go.Bar(x=months, y=values, marker_color=colors))
+                text_labels = [f"+{v/10000:.1f}만" if v >= 0 else f"{v/10000:.1f}만" for v in values]
+
+                fig = go.Figure(go.Bar(
+                    x=months,
+                    y=values,
+                    marker_color=colors,
+                    text=text_labels,
+                    textposition="outside",
+                    textfont=dict(color="#e2e8f0", size=11)
+                ))
                 fig.update_layout(
-                    title="월별 손익",
-                    plot_bgcolor="#0f1117", paper_bgcolor="#0f1117",
+                    title=dict(text="📅 월별 손익", font=dict(size=13, color="#e2e8f0")),
+                    plot_bgcolor="#0f1117",
+                    paper_bgcolor="#0f1117",
                     font=dict(color="#e2e8f0"),
-                    height=250,
-                    margin=dict(l=20, r=20, t=40, b=20),
-                    yaxis=dict(gridcolor="#1e2330"),
-                    xaxis=dict(gridcolor="#1e2330"),
+                    height=280,
+                    margin=dict(l=20, r=20, t=50, b=40),
+                    yaxis=dict(gridcolor="#1e2330", tickformat=",d", title="손익 (원)"),
+                    xaxis=dict(
+                        gridcolor="#1e2330",
+                        type="category",  # 문자열로 강제 처리
+                        tickangle=0
+                    ),
                 )
                 st.plotly_chart(fig, use_container_width=True)
+
+        # 누적 손익 추이
+        if len(all_closed) >= 2:
+            sorted_trades = sorted(all_closed, key=lambda x: x.get("sell_date", ""))
+            cumulative = []
+            running = 0
+            labels = []
+            for t in sorted_trades:
+                running += t.get("final_pnl", 0)
+                cumulative.append(running)
+                labels.append(f"{t['name']} ({t.get('sell_date','')[:10]})")
+
+            line_color = "#22c55e" if running >= 0 else "#ef4444"
+            fig2 = go.Figure(go.Scatter(
+                x=list(range(1, len(cumulative)+1)),
+                y=cumulative,
+                mode="lines+markers",
+                line=dict(color=line_color, width=2),
+                marker=dict(size=6, color=line_color),
+                hovertext=labels,
+                hoverinfo="text+y",
+                fill="tozeroy",
+                fillcolor=f"{line_color}20"
+            ))
+            fig2.add_hline(y=0, line_dash="dash", line_color="#6b7280", line_width=1)
+            fig2.update_layout(
+                title=dict(text="📈 누적 손익 추이", font=dict(size=13, color="#e2e8f0")),
+                plot_bgcolor="#0f1117",
+                paper_bgcolor="#0f1117",
+                font=dict(color="#e2e8f0"),
+                height=280,
+                margin=dict(l=20, r=20, t=50, b=40),
+                yaxis=dict(gridcolor="#1e2330", tickformat=",d", title="누적 손익 (원)"),
+                xaxis=dict(gridcolor="#1e2330", title="매매 횟수"),
+            )
+            st.plotly_chart(fig2, use_container_width=True)
     else:
         st.info("아직 완료된 단타 거래가 없어요. 매매를 기록하고 복기해보세요!")
