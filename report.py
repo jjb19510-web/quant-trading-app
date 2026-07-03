@@ -1696,12 +1696,26 @@ def render_daily_report():
 
 
 def render_weekly_report():
+    timezone_kst = dt.timezone(dt.timedelta(hours=9))
+    now_kst = dt.datetime.now(timezone_kst)
+
+    # 이번 주 월~금 날짜 계산
+    weekday = now_kst.weekday()
+    monday = now_kst - dt.timedelta(days=weekday)
+    friday = monday + dt.timedelta(days=4)
     st.markdown(
-        f"<div style='font-size:15px; color:{DIM}; margin-bottom:20px;'>주간 리포트 — {dt.datetime.now():%Y년 %m월} 기준</div>",
+        f"<div style='font-size:15px; color:{DIM}; margin-bottom:20px;'>주간 리포트 — {monday:%m/%d}(월) ~ {friday:%m/%d}(금) 기준</div>",
         unsafe_allow_html=True
     )
 
-    card("📊 주간 시장 요약", "코스피/코스닥/나스닥 주간 등락")
+    col_refresh, _ = st.columns([1, 5])
+    with col_refresh:
+        if st.button("🔄 새로고침", key="weekly_refresh"):
+            st.cache_data.clear()
+            st.rerun()
+
+    # ── 1. 주간 시장 요약 ──
+    card("📊 주간 시장 요약", "코스피/코스닥/나스닥/S&P500 주간 등락")
 
     @st.cache_data(ttl=3600)
     def get_weekly_market():
@@ -1762,5 +1776,233 @@ def render_weekly_report():
 
     st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
 
-    card("📅 다음 주 경제 캘린더", "주요 경제 지표 발표 일정")
-    st.info("🔧 경제 캘린더는 investing.com 연동으로 곧 추가돼요!")
+    # ── 3. 이번 주 업종별 성과 ──
+    card("🏭 이번 주 업종별 성과", "KODEX ETF 기준 주간 등락률")
+
+    @st.cache_data(ttl=3600)
+    def get_weekly_sector():
+        sector_etfs = {
+            "반도체": "091160.KS", "자동차": "091180.KS", "바이오": "244580.KS",
+            "은행/금융": "091170.KS", "2차전지": "305720.KS", "IT": "266410.KS",
+            "방산": "449450.KS", "조선": "494670.KS", "원자력": "464950.KS",
+            "AI전력인프라": "461910.KS",
+        }
+        results = []
+        for name, ticker in sector_etfs.items():
+            try:
+                hist = yf.Ticker(ticker).history(period="1mo").dropna(subset=["Close"])
+                if len(hist) >= 6:
+                    curr = float(hist["Close"].iloc[-1])
+                    week_ago = float(hist["Close"].iloc[-6])
+                    chg_pct = (curr - week_ago) / week_ago * 100
+                    results.append({"업종": name, "주간 등락률": chg_pct})
+            except:
+                pass
+        return sorted(results, key=lambda x: x["주간 등락률"], reverse=True)
+
+    weekly_sectors = get_weekly_sector()
+    if weekly_sectors:
+        col_top, col_bot = st.columns(2)
+        with col_top:
+            st.markdown(f"<div style='font-size:13px; font-weight:600; color:#22c55e; margin-bottom:8px;'>🔥 이번 주 강세 업종</div>", unsafe_allow_html=True)
+            for s in weekly_sectors[:5]:
+                color = CANDLE_UP if s["주간 등락률"] >= 0 else CANDLE_DOWN
+                arrow = "▲" if s["주간 등락률"] >= 0 else "▼"
+                st.markdown(f"<div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:8px; padding:10px 14px; margin-bottom:6px; display:flex; justify-content:space-between;'><span style='font-size:13px; color:{TEXT};'>{s['업종']}</span><span style='font-size:13px; font-weight:600; color:{color}; font-family:JetBrains Mono;'>{arrow} {s['주간 등락률']:+.2f}%</span></div>", unsafe_allow_html=True)
+        with col_bot:
+            st.markdown(f"<div style='font-size:13px; font-weight:600; color:#ef4444; margin-bottom:8px;'>📉 이번 주 약세 업종</div>", unsafe_allow_html=True)
+            for s in weekly_sectors[-5:][::-1]:
+                color = CANDLE_UP if s["주간 등락률"] >= 0 else CANDLE_DOWN
+                arrow = "▲" if s["주간 등락률"] >= 0 else "▼"
+                st.markdown(f"<div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:8px; padding:10px 14px; margin-bottom:6px; display:flex; justify-content:space-between;'><span style='font-size:13px; color:{TEXT};'>{s['업종']}</span><span style='font-size:13px; font-weight:600; color:{color}; font-family:JetBrains Mono;'>{arrow} {s['주간 등락률']:+.2f}%</span></div>", unsafe_allow_html=True)
+
+    st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
+
+    # ── 4. 이번 주 단타 복기 ──
+    card("📝 이번 주 단타 복기", "이번 주 매매 결과 자동 집계")
+
+    try:
+        GITHUB_TOKEN = st.secrets.get("GITHUB_TOKEN", "")
+        if GITHUB_TOKEN:
+            from portfolio import load_trades
+            all_trades = load_trades(GITHUB_TOKEN)
+            closed = [t for t in all_trades if t.get("status") == "매도완료"]
+
+            # 이번 주 매매만 필터링
+            week_start = monday.strftime("%Y-%m-%d")
+            week_trades = [t for t in closed if t.get("sell_date", "") >= week_start]
+
+            if week_trades:
+                total_pnl = sum(t.get("final_pnl", 0) for t in week_trades)
+                wins = [t for t in week_trades if t.get("final_pnl", 0) > 0]
+                losses = [t for t in week_trades if t.get("final_pnl", 0) <= 0]
+                win_rate = len(wins) / len(week_trades) * 100
+                avg_win = sum(t.get("final_pnl", 0) for t in wins) / len(wins) if wins else 0
+                avg_loss = sum(t.get("final_pnl", 0) for t in losses) / len(losses) if losses else 0
+                profit_factor = abs(avg_win / avg_loss) if avg_loss != 0 else 0
+
+                pnl_color = "#22c55e" if total_pnl >= 0 else "#ef4444"
+
+                c1, c2, c3, c4 = st.columns(4)
+                with c1:
+                    st.markdown(f"<div style='background:{SURFACE_2}; border-radius:10px; padding:12px 16px; text-align:center;'><div style='font-size:11px; color:{DIM}; margin-bottom:4px;'>총 매매</div><div style='font-size:20px; font-weight:700;'>{len(week_trades)}건</div></div>", unsafe_allow_html=True)
+                with c2:
+                    st.markdown(f"<div style='background:{SURFACE_2}; border-radius:10px; padding:12px 16px; text-align:center;'><div style='font-size:11px; color:{DIM}; margin-bottom:4px;'>승률</div><div style='font-size:20px; font-weight:700; color:{"#22c55e" if win_rate >= 50 else "#ef4444"};'>{win_rate:.0f}%</div></div>", unsafe_allow_html=True)
+                with c3:
+                    st.markdown(f"<div style='background:{SURFACE_2}; border-radius:10px; padding:12px 16px; text-align:center;'><div style='font-size:11px; color:{DIM}; margin-bottom:4px;'>손익비</div><div style='font-size:20px; font-weight:700; color:{"#22c55e" if profit_factor >= 1 else "#ef4444"};'>{profit_factor:.2f}</div></div>", unsafe_allow_html=True)
+                with c4:
+                    st.markdown(f"<div style='background:{SURFACE_2}; border-radius:10px; padding:12px 16px; text-align:center;'><div style='font-size:11px; color:{DIM}; margin-bottom:4px;'>총 손익</div><div style='font-size:20px; font-weight:700; color:{pnl_color};'>{total_pnl:+,.0f}원</div></div>", unsafe_allow_html=True)
+
+                st.markdown("<div style='margin-top:12px;'></div>", unsafe_allow_html=True)
+
+                # 이번 주 매매 상세
+                rows = []
+                for t in sorted(week_trades, key=lambda x: x.get("sell_date", ""), reverse=True):
+                    pnl = t.get("final_pnl", 0)
+                    pp = (t["sell_price"] - t["buy_price"]) / t["buy_price"] * 100 if t.get("sell_price") else 0
+                    rows.append({
+                        "종목": t["name"],
+                        "매수가": f"{t['buy_price']:,}원",
+                        "매도가": f"{t.get('sell_price', 0):,}원",
+                        "손익": f"{pnl:+,.0f}원",
+                        "수익률": f"{pp:+.2f}%",
+                        "결과": "✅ 승" if pnl >= 0 else "❌ 패",
+                        "메모": t.get("memo", "")
+                    })
+                st.dataframe(rows, use_container_width=True, hide_index=True)
+
+                # 복기 인사이트
+                if profit_factor < 1:
+                    st.warning("⚠️ 손익비가 1 미만이에요. 수익은 작고 손실은 크다는 의미예요. 손절을 더 빠르게, 익절을 더 느리게 해보세요.")
+                if win_rate < 40:
+                    st.error("🔴 승률이 40% 미만이에요. 진입 기준을 더 엄격하게 적용해보세요.")
+                if win_rate >= 60 and profit_factor >= 1.5:
+                    st.success("🎯 이번 주 훌륭한 매매였어요! 같은 패턴을 유지하세요.")
+            else:
+                st.info("이번 주 완료된 단타 거래가 없어요.")
+        else:
+            st.info("포트폴리오 데이터를 불러오려면 GitHub Token이 필요해요.")
+    except Exception as e:
+        st.info(f"단타 복기 데이터 로드 실패: {e}")
+
+    st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
+
+    # ── 5. 다음 주 주요 일정 ──
+    card("📅 다음 주 주요 일정", "경제지표 · FOMC · 실적발표 예정")
+
+    # 다음 주 날짜 계산
+    next_monday = monday + dt.timedelta(days=7)
+    next_friday = next_monday + dt.timedelta(days=4)
+
+    st.markdown(f"<div style='font-size:12px; color:{DIM}; margin-bottom:12px;'>{next_monday:%m/%d}(월) ~ {next_friday:%m/%d}(금)</div>", unsafe_allow_html=True)
+
+    # AI로 다음 주 일정 생성
+    if st.button("🤖 AI로 다음 주 일정 생성", use_container_width=True, key="weekly_calendar_btn"):
+        with st.spinner("AI가 다음 주 주요 일정을 정리하는 중..."):
+            try:
+                prompt = f"""다음 주({next_monday:%Y년 %m월 %d일} ~ {next_friday:%m월 %d일}) 한국/미국 주식 투자자가 주목해야 할 주요 일정을 정리해주세요.
+
+[포함할 내용]
+- 미국 주요 경제지표 발표 (CPI, PPI, 고용지표, PCE, ISM 등)
+- FOMC 회의 또는 연준 의원 발언 일정
+- 한국 주요 경제지표
+- 주요 기업 실적발표 (미국 빅테크, 한국 삼성/SK하이닉스 등)
+- 한국/미국 휴장일
+
+[작성 규칙]
+1. 반드시 한국어로 작성
+2. 요일별로 정리 (월~금)
+3. 각 일정이 주식시장에 미치는 영향 한 줄 추가
+4. 모르는 일정은 쓰지 말고 아는 것만 작성
+5. 형식: 📅 월요일({next_monday:%m/%d}) → 일정 · 영향
+
+형식 예시:
+📅 월요일({next_monday:%m/%d})
+- 없음 또는 해당 일정
+
+📅 화요일({(next_monday+dt.timedelta(days=1)):%m/%d})
+- 미국 CPI 발표 → 인플레이션 확인, 금리 방향에 영향"""
+
+                openai_key = st.secrets.get("OPENAI_API_KEY", "")
+                res = requests.post(
+                    "https://api.openai.com/v1/chat/completions",
+                    headers={"Content-Type": "application/json", "Authorization": f"Bearer {openai_key}"},
+                    json={"model": "gpt-4o-mini", "messages": [{"role": "user", "content": prompt}], "max_tokens": 600}
+                )
+                data = res.json()
+                if "choices" not in data:
+                    raise Exception(str(data))
+                calendar_text = data["choices"][0]["message"]["content"]
+                st.session_state["weekly_calendar"] = calendar_text
+            except Exception as e:
+                st.error(f"일정 생성 실패: {e}")
+
+    if st.session_state.get("weekly_calendar"):
+        st.markdown(f"<div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:12px; padding:20px; margin-top:12px;'><div style='font-size:13px; line-height:2.0; white-space:pre-line; color:{TEXT};'>{st.session_state['weekly_calendar']}</div></div>", unsafe_allow_html=True)
+    else:
+        st.caption("버튼을 눌러 AI가 다음 주 주요 일정을 정리해드려요.")
+
+    st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
+
+    # ── 6. AI 주간 총평 ──
+    card("🤖 AI 주간 총평", "이번 주 시장 흐름 총정리 + 다음 주 전략")
+
+    if st.button("📋 AI 주간 총평 생성", use_container_width=True, key="weekly_ai_btn"):
+        with st.spinner("AI 주간 총평 생성 중..."):
+            try:
+                weekly_market_text = ""
+                if weekly_data:
+                    for d in weekly_data:
+                        weekly_market_text += f"- {d['지수']}: {d['현재가']} ({d['주간 등락']})\n"
+
+                sector_text = ""
+                if weekly_sectors:
+                    top3 = weekly_sectors[:3]
+                    bot3 = weekly_sectors[-3:]
+                    sector_text = "강세: " + ", ".join([f"{s['업종']} {s['주간 등락률']:+.2f}%" for s in top3])
+                    sector_text += "\n약세: " + ", ".join([f"{s['업종']} {s['주간 등락률']:+.2f}%" for s in bot3])
+
+                prompt = f"""당신은 국내 주식 전문 애널리스트입니다. 아래 이번 주 시장 데이터를 바탕으로 주간 총평을 작성해주세요.
+
+[이번 주 시장 ({monday:%m/%d}~{friday:%m/%d})]
+{weekly_market_text}
+
+[업종별 등락률]
+{sector_text}
+
+[작성 규칙]
+1. 반드시 한국어로만 작성
+2. 실제 수치 반드시 인용
+3. 단타 투자자 관점으로 작성
+4. 각 섹션 3줄 이내
+
+아래 형식으로 작성:
+
+📊 이번 주 시장 총평
+(코스피/코스닥/나스닥 주간 흐름 요약)
+
+🏆 이번 주 주도 섹터
+(강세 업종과 이유)
+
+⚠️ 이번 주 리스크
+(약세 업종과 주의 사항)
+
+🔮 다음 주 전략
+(다음 주 시장 전망과 단타 투자자 대응 전략)"""
+
+                openai_key = st.secrets.get("OPENAI_API_KEY", "")
+                res = requests.post(
+                    "https://api.openai.com/v1/chat/completions",
+                    headers={"Content-Type": "application/json", "Authorization": f"Bearer {openai_key}"},
+                    json={"model": "gpt-4o-mini", "messages": [{"role": "user", "content": prompt}], "max_tokens": 600}
+                )
+                data = res.json()
+                if "choices" not in data:
+                    raise Exception(str(data))
+                weekly_summary = data["choices"][0]["message"]["content"]
+                st.session_state["weekly_ai_summary"] = weekly_summary
+            except Exception as e:
+                st.error(f"AI 총평 생성 실패: {e}")
+
+    if st.session_state.get("weekly_ai_summary"):
+        st.markdown(f"<div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:12px; padding:20px; margin-top:12px;'><div style='font-size:13px; font-weight:700; color:{DIM}; margin-bottom:16px;'>🤖 AI 주간 총평</div><div style='font-size:13px; line-height:2.0; white-space:pre-line; color:{TEXT};'>{st.session_state['weekly_ai_summary']}</div></div>", unsafe_allow_html=True)
