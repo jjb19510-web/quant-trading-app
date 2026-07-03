@@ -19,16 +19,15 @@ def _get_gist_token():
 
 def _get_watchlist_gist_id(token):
     try:
-        import requests as req
         headers = {"Authorization": f"token {token}"}
-        res = req.get("https://api.github.com/gists", headers=headers, timeout=5)
+        res = requests.get("https://api.github.com/gists", headers=headers, timeout=5)
         if res.status_code != 200:
             return None
         for gist in res.json():
             if GIST_WATCHLIST_FILENAME in gist.get("files", {}):
                 return gist["id"]
         # 없으면 새로 생성
-        create_res = req.post(
+        create_res = requests.post(
             "https://api.github.com/gists",
             headers=headers,
             json={
@@ -49,11 +48,10 @@ def load_watchlist():
     token = _get_gist_token()
     if token:
         try:
-            import requests as req
             gist_id = _get_watchlist_gist_id(token)
             if gist_id:
                 headers = {"Authorization": f"token {token}"}
-                res = req.get(f"https://api.github.com/gists/{gist_id}", headers=headers, timeout=5)
+                res = requests.get(f"https://api.github.com/gists/{gist_id}", headers=headers, timeout=5)
                 content = res.json()["files"][GIST_WATCHLIST_FILENAME]["content"]
                 return json.loads(content)
         except:
@@ -69,11 +67,10 @@ def save_watchlist(wl):
     token = _get_gist_token()
     if token:
         try:
-            import requests as req
             gist_id = _get_watchlist_gist_id(token)
             if gist_id:
                 headers = {"Authorization": f"token {token}"}
-                req.patch(
+                requests.patch(
                     f"https://api.github.com/gists/{gist_id}",
                     headers=headers,
                     json={"files": {GIST_WATCHLIST_FILENAME: {"content": json.dumps(wl, ensure_ascii=False)}}},
