@@ -652,7 +652,7 @@ def render_portfolio(KIS_AVAILABLE, get_kis_token, get_balance):
                 hovertext=labels,
                 hoverinfo="text+y",
                 fill="tozeroy",
-                fillcolor=f"{line_color}20"
+                fillcolor="rgba(34,197,94,0.1)" if running >= 0 else "rgba(239,68,68,0.1)"
             ))
             fig2.add_hline(y=0, line_dash="dash", line_color="#6b7280", line_width=1)
             fig2.update_layout(
