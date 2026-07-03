@@ -4,7 +4,7 @@ import yfinance as yf
 import datetime as dt_module
 import json
 import requests as req
-from ui_components import card, SURFACE_2, LINE, DIM, TEXT, CANDLE_UP, CANDLE_DOWN, ACCENT
+from ui_components import card, SURFACE_1, SURFACE_2, LINE, DIM, TEXT, CANDLE_UP, CANDLE_DOWN, ACCENT
 
 GIST_FILENAME = "quantfolio_trades.json"
 
