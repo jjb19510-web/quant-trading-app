@@ -547,7 +547,8 @@ def render_portfolio(KIS_AVAILABLE, get_kis_token, get_balance):
             insights.append(("💡", "아직 데이터가 부족해요. 매매를 계속 기록하면 더 정확한 분석이 가능해요."))
 
         for emoji, msg in insights:
-            st.markdown(f"<div style='background:{SURFACE_1}; border-left:4px solid {"#ef4444" if emoji == "🔴" else "#f59e0b" if emoji == "⚠️" else "#22c55e"}; padding:10px 16px; border-radius:0 8px 8px 0; margin-bottom:8px; font-size:13px; color:{TEXT};'>{emoji} {msg}</div>", unsafe_allow_html=True)
+            border_c = "#ef4444" if emoji == "🔴" else "#f59e0b" if emoji == "⚠️" else "#22c55e"
+            st.markdown(f"<div style='background:{SURFACE_1}; border-left:4px solid {border_c}; padding:10px 16px; border-radius:0 8px 8px 0; margin-bottom:8px; font-size:13px; color:{TEXT};'>{emoji} {msg}</div>", unsafe_allow_html=True)
 
         # 월별 손익 차트
         if len(all_closed) >= 3:
