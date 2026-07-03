@@ -575,5 +575,3 @@ def render_portfolio(KIS_AVAILABLE, get_kis_token, get_balance):
                 st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("아직 완료된 단타 거래가 없어요. 매매를 기록하고 복기해보세요!")
-    else:
-        st.info("저장된 단타 거래가 없어요. 위에서 거래를 추가해보세요!")
