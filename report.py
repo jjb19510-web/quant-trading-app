@@ -365,16 +365,28 @@ def render_report():
     timezone_kst = dt.timezone(dt.timedelta(hours=9))
     now_kst = dt.datetime.now(timezone_kst)
     st.markdown(
-        "<div style='font-size:22px; font-weight:700; margin-bottom:4px;'>📋 Daily Quantfolio Report</div>"
-        f"<div style='font-size:12px; color:{DIM}; margin-bottom:24px;'>{now_kst:%Y년 %m월 %d일 %H:%M} 기준</div>",
+        "<div style='font-size:22px; font-weight:700; margin-bottom:4px;'>📋 Quantfolio Report</div>"
+        f"<div style='font-size:12px; color:{DIM}; margin-bottom:24px;'>{now_kst:%Y년 %m월 %d일 %H:%M} KST</div>",
         unsafe_allow_html=True
     )
 
-    report_type = st.radio("리포트 유형", ["📅 일간 리포트", "📆 주간 리포트"], horizontal=True)
+    tab_morning, tab_evening, tab_weekly = st.tabs([
+        "🌅 아침 브리핑",
+        "📊 저녁 리포트",
+        "📅 주간 리포트"
+    ])
 
-    if report_type == "📅 일간 리포트":
+    with tab_morning:
+        try:
+            from Morining_report import render_morning
+            render_morning()
+        except Exception as e:
+            st.error(f"아침 브리핑 로드 실패: {e}")
+
+    with tab_evening:
         render_daily_report()
-    else:
+
+    with tab_weekly:
         render_weekly_report()
 
 
