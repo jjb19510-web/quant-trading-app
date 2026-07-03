@@ -65,7 +65,13 @@ def init_session_state():
 def load_market_data(tickers, start_date, end_date, market):
     try:
         ohlc = yf.download(tickers, start=str(start_date), end=str(end_date), progress=False)
-        df = ohlc["Close"] if isinstance(ohlc, pd.DataFrame) and "Close" in ohlc else pd.DataFrame()
+        # 이중 구조(MultiIndex) 여부를 감지하여 데이터프레임을 일관성 있게 추출합니다.
+        if isinstance(ohlc.columns, pd.MultiIndex):
+            df = ohlc["Close"] if "Close" in ohlc.columns.levels[0] else pd.DataFrame()
+        else:
+            df = ohlc[["Close"]] if "Close" in ohlc.columns else pd.DataFrame()
+            if not df.empty and len(tickers) == 1:
+                df.columns = [tickers[0]]
     except:
         df = pd.DataFrame()
         ohlc = pd.DataFrame()
@@ -104,20 +110,39 @@ def load_market_data(tickers, start_date, end_date, market):
             pass
 
     if not df.empty:
+        # 단독 Series 타입 반환을 사전에 보완하기 위해 명시적으로 DataFrame 캐스팅 처리를 보장합니다.
+        if isinstance(df, pd.Series):
+            df = df.to_frame()
         df.columns = [str(c) for c in df.columns]
         chart_col = df.columns[0]
-        if len(tickers) == 1:
-            open_p = ohlc["Open"].squeeze() if "Open" in ohlc else pd.Series()
-            high_p = ohlc["High"].squeeze() if "High" in ohlc else pd.Series()
-            low_p = ohlc["Low"].squeeze() if "Low" in ohlc else pd.Series()
-            close_p = ohlc["Close"].squeeze() if "Close" in ohlc else pd.Series()
-            volume = ohlc["Volume"].squeeze() if "Volume" in ohlc else pd.Series()
-        else:
-            open_p = ohlc["Open"][chart_col] if isinstance(ohlc["Open"], pd.DataFrame) else ohlc["Open"]
-            high_p = ohlc["High"][chart_col] if isinstance(ohlc["High"], pd.DataFrame) else ohlc["High"]
-            low_p = ohlc["Low"][chart_col] if isinstance(ohlc["Low"], pd.DataFrame) else ohlc["Low"]
-            close_p = df[chart_col]
-            volume = ohlc["Volume"][chart_col] if isinstance(ohlc["Volume"], pd.DataFrame) else ohlc["Volume"]
+        
+        # MultiIndex 와 SingleIndex 환경 모두에서 OHLC 개별 요소를 안전하게 Series 구조로 정규화하여 추출합니다.
+        def extract_series(metric):
+            try:
+                if isinstance(ohlc.columns, pd.MultiIndex):
+                    if metric in ohlc.columns.get_level_values(0):
+                        series_data = ohlc[metric]
+                        if isinstance(series_data, pd.DataFrame):
+                            if chart_col in series_data.columns:
+                                return series_data[chart_col]
+                            return series_data.iloc[:, 0]
+                        return series_data
+                else:
+                    if metric in ohlc.columns:
+                        series_data = ohlc[metric]
+                        if isinstance(series_data, pd.DataFrame):
+                            return series_data.squeeze()
+                        return series_data
+            except:
+                pass
+            return pd.Series(dtype='float64')
+
+        open_p = extract_series("Open")
+        high_p = extract_series("High")
+        low_p = extract_series("Low")
+        close_p = extract_series("Close")
+        volume = extract_series("Volume")
+        
         return df, open_p, high_p, low_p, close_p, volume
 
     return pd.DataFrame(), pd.Series(), pd.Series(), pd.Series(), pd.Series(), pd.Series()
