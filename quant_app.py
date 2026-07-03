@@ -356,11 +356,16 @@ with tab2:
     analyzed = st.session_state.get("analyzed") and bool(tickers)
 
     if analyzed:
-        with st.spinner("데이터 분석 준비 중..."):
-            df, open_p, high_p, low_p, close_p, volume = load_market_data(tuple(tickers), start_date, end_date, market)
+        try:
+            with st.spinner("데이터 분석 준비 중..."):
+                df, open_p, high_p, low_p, close_p, volume = load_market_data(tuple(tickers), start_date, end_date, market)
 
-        if df.empty or close_p.empty:
-            st.error("❌ 주가 데이터를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.")
+            if df.empty or close_p.empty:
+                st.error("❌ 주가 데이터를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.")
+                st.stop()
+        except Exception as e:
+            st.error(f"❌ 데이터 분석 중 에러가 발생했습니다: {e}")
+            st.exception(e)
             st.stop()
 
         chart_col = df.columns[0]
