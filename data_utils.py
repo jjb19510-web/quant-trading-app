@@ -60,28 +60,111 @@ def init_session_state():
         st.session_state.backtest_results = load_backtest()
 
 
-# ── [고성능 캐싱 기반 듀얼 주가 수집 엔진] ──
+# ── [고성능 캐싱 기반 듀얼 주가 수집 엔진 + 크롤링 백업 피더] ──
 @st.cache_data(ttl=600)
 def load_market_data(tickers, start_date, end_date, market):
+    import pandas as pd
+    import numpy as np
+    
+    # 0. 입력값 안전화 (tuple/list 정규화)
+    tickers = list(tickers) if isinstance(tickers, (list, tuple)) else [tickers]
+    
+    # 1. 야후 파이낸스 기본 다운로드 시도
     try:
         ohlc = yf.download(tickers, start=str(start_date), end=str(end_date), progress=False)
-        # 이중 구조(MultiIndex) 여부를 감지하여 데이터프레임을 일관성 있게 추출합니다.
         if isinstance(ohlc.columns, pd.MultiIndex):
             df = ohlc["Close"] if "Close" in ohlc.columns.levels[0] else pd.DataFrame()
         else:
             df = ohlc[["Close"]] if "Close" in ohlc.columns else pd.DataFrame()
             if not df.empty and len(tickers) == 1:
                 df.columns = [tickers[0]]
-    except:
+    except Exception as e:
         df = pd.DataFrame()
         ohlc = pd.DataFrame()
 
+    # 2. 야후 파이낸스 실패 및 한국 주식인 경우 자체 초정밀 Naver Sise XML 파서 구동 (강력한 폴백)
+    if (df.empty or df.isna().all().all()) and market == "한국주식 (KS)":
+        try:
+            import requests
+            import re
+            from datetime import datetime
+            
+            # 단일 종목 및 다중 종목 구분을 위한 Naver Sise 개별 다운로더 정의
+            def fetch_naver_sise(symbol):
+                raw_sym = symbol.replace(".KS", "").replace(".KQ", "")
+                try:
+                    delta = datetime.combine(end_date, datetime.min.time()) - datetime.combine(start_date, datetime.min.time())
+                    count_days = max(delta.days, 100)
+                except:
+                    count_days = 1000
+                
+                url = f"https://fchart.stock.naver.com/sise.nhn?symbol={raw_sym}&timeframe=day&count={count_days}&requestType=0"
+                try:
+                    res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=8)
+                    if res.status_code == 200:
+                        matches = re.findall(r'<item\s+data="([^"]+)"\s*/>', res.text)
+                        records = []
+                        for m in matches:
+                            parts = m.split('|')
+                            if len(parts) >= 6:
+                                records.append({
+                                    "Date": datetime.strptime(parts[0], "%Y%m%d"),
+                                    "Open": float(parts[1]),
+                                    "High": float(parts[2]),
+                                    "Low": float(parts[3]),
+                                    "Close": float(parts[4]),
+                                    "Volume": float(parts[5])
+                                })
+                        if records:
+                            temp_df = pd.DataFrame(records).set_index("Date")
+                            start_dt = pd.to_datetime(start_date)
+                            end_dt = pd.to_datetime(end_date)
+                            return temp_df.loc[start_dt:end_dt]
+                except:
+                    pass
+                return pd.DataFrame()
+
+            # 개별 다운로더 실행
+            if len(tickers) == 1:
+                single_df = fetch_naver_sise(tickers[0])
+                if not single_df.empty:
+                    df = pd.DataFrame({tickers[0]: single_df["Close"]})
+                    open_p = single_df["Open"]
+                    high_p = single_df["High"]
+                    low_p = single_df["Low"]
+                    close_p = single_df["Close"]
+                    volume = single_df["Volume"]
+                    return df, open_p, high_p, low_p, close_p, volume
+            else:
+                dfs = []
+                for t in tickers:
+                    t_df = fetch_naver_sise(t)
+                    if not t_df.empty:
+                        dfs.append(t_df[["Close"]].rename(columns={"Close": t}))
+                if dfs:
+                    df = pd.concat(dfs, axis=1).dropna()
+                    chart_col = df.columns[0]
+                    # 메인 차트 종목의 풀 OHLCV 재다운로드 및 매핑
+                    single_df = fetch_naver_sise(chart_col)
+                    if not single_df.empty:
+                        # 공통 인덱스 동기화
+                        single_df = single_df.reindex(df.index).ffill()
+                        open_p = single_df["Open"]
+                        high_p = single_df["High"]
+                        low_p = single_df["Low"]
+                        close_p = single_df["Close"]
+                        volume = single_df["Volume"]
+                        return df, open_p, high_p, low_p, close_p, volume
+        except Exception as ex:
+            pass
+
+    # 3. 야후 파이낸스 실패 및 한국 주식인 경우 FinanceDataReader 2차 폴백 (기존 유지)
     if (df.empty or df.isna().all().all()) and market == "한국주식 (KS)":
         try:
             import FinanceDataReader as fdr
             clean_tickers = [t.replace(".KS", "").replace(".KQ", "") for t in tickers]
             if len(clean_tickers) == 1:
-                df_fdr = fdr.DataReader(clean_tickers[0], start_date, end_date)
+                df_fdr = fdr.DataReader(clean_tickers[0], str(start_date), str(end_date))
                 if not df_fdr.empty:
                     df = pd.DataFrame({tickers[0]: df_fdr["Close"]})
                     open_p = df_fdr["Open"]
@@ -93,13 +176,13 @@ def load_market_data(tickers, start_date, end_date, market):
             else:
                 dfs = []
                 for ct, t in zip(clean_tickers, tickers):
-                    temp_df = fdr.DataReader(ct, start_date, end_date)[["Close"]]
+                    temp_df = fdr.DataReader(ct, str(start_date), str(end_date))[["Close"]]
                     temp_df.columns = [t]
                     dfs.append(temp_df)
                 df = pd.concat(dfs, axis=1).dropna()
                 chart_col = df.columns[0]
                 chart_raw = chart_col.replace(".KS", "").replace(".KQ", "")
-                df_fdr_single = fdr.DataReader(chart_raw, start_date, end_date)
+                df_fdr_single = fdr.DataReader(chart_raw, str(start_date), str(end_date))
                 open_p = df_fdr_single["Open"]
                 high_p = df_fdr_single["High"]
                 low_p = df_fdr_single["Low"]
@@ -109,14 +192,13 @@ def load_market_data(tickers, start_date, end_date, market):
         except:
             pass
 
+    # 4. 성공적인 데이터 확보 시 규격 매핑 및 Series 추출
     if not df.empty:
-        # 단독 Series 타입 반환을 사전에 보완하기 위해 명시적으로 DataFrame 캐스팅 처리를 보장합니다.
         if isinstance(df, pd.Series):
             df = df.to_frame()
         df.columns = [str(c) for c in df.columns]
         chart_col = df.columns[0]
         
-        # MultiIndex 와 SingleIndex 환경 모두에서 OHLC 개별 요소를 안전하게 Series 구조로 정규화하여 추출합니다.
         def extract_series(metric):
             try:
                 if isinstance(ohlc.columns, pd.MultiIndex):
