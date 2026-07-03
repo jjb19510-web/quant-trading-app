@@ -492,5 +492,87 @@ def render_portfolio(KIS_AVAILABLE, get_kis_token, get_balance):
                     st.session_state["daytrading"] = [t for t in st.session_state["daytrading"] if t["status"] == "보유중"]
                     save_trades(st.session_state["daytrading"], GITHUB_TOKEN)
                     st.rerun()
+
+    # ── 단타 복기 통계 ──
+    st.markdown("<div style='margin-top:32px;'></div>", unsafe_allow_html=True)
+    card("📊 단타 복기 통계", "누적 매매 성과 분석")
+
+    all_closed = [t for t in st.session_state.get("daytrading", []) if t.get("status") == "매도완료"]
+
+    if all_closed:
+        total = len(all_closed)
+        wins = [t for t in all_closed if t.get("final_pnl", 0) > 0]
+        losses = [t for t in all_closed if t.get("final_pnl", 0) <= 0]
+        win_rate = len(wins) / total * 100
+        total_pnl = sum(t.get("final_pnl", 0) for t in all_closed)
+        avg_win = sum(t.get("final_pnl", 0) for t in wins) / len(wins) if wins else 0
+        avg_loss = sum(t.get("final_pnl", 0) for t in losses) / len(losses) if losses else 0
+        profit_factor = abs(avg_win / avg_loss) if avg_loss != 0 else 0
+
+        # 최대 연속 손실 계산
+        max_streak = 0
+        curr_streak = 0
+        for t in sorted(all_closed, key=lambda x: x.get("sell_date", "")):
+            if t.get("final_pnl", 0) <= 0:
+                curr_streak += 1
+                max_streak = max(max_streak, curr_streak)
+            else:
+                curr_streak = 0
+
+        # 핵심 지표 카드
+        c1, c2, c3, c4, c5 = st.columns(5)
+        metrics = [
+            (c1, "총 매매", f"{total}건", None),
+            (c2, "승률", f"{win_rate:.0f}%", win_rate >= 50),
+            (c3, "손익비", f"{profit_factor:.2f}", profit_factor >= 1),
+            (c4, "총 손익", f"{total_pnl:+,.0f}원", total_pnl >= 0),
+            (c5, "최대연속손실", f"{max_streak}연패", max_streak <= 2),
+        ]
+        for col, label, value, is_good in metrics:
+            color = "#22c55e" if is_good else "#ef4444" if is_good is not None else TEXT
+            with col:
+                st.markdown(f"<div style='background:{SURFACE_2}; border-radius:10px; padding:12px 16px; text-align:center; margin-bottom:12px;'><div style='font-size:11px; color:{DIM}; margin-bottom:4px;'>{label}</div><div style='font-size:18px; font-weight:700; color:{color};'>{value}</div></div>", unsafe_allow_html=True)
+
+        # 복기 인사이트
+        insights = []
+        if win_rate < 40:
+            insights.append(("🔴", "승률이 40% 미만이에요. 진입 기준을 더 엄격하게 적용해보세요."))
+        if profit_factor < 1:
+            insights.append(("🔴", "손익비가 1 미만이에요. 수익은 작고 손실이 크다는 의미예요. 익절을 더 길게, 손절을 더 빠르게 하세요."))
+        if max_streak >= 3:
+            insights.append(("⚠️", f"최대 {max_streak}연패를 기록했어요. 연속 손실 시 하루 매매를 중단하는 규칙을 만들어보세요."))
+        if win_rate >= 60 and profit_factor >= 1.5:
+            insights.append(("✅", "훌륭한 매매 패턴이에요! 지금 전략을 유지하세요."))
+        if not insights:
+            insights.append(("💡", "아직 데이터가 부족해요. 매매를 계속 기록하면 더 정확한 분석이 가능해요."))
+
+        for emoji, msg in insights:
+            st.markdown(f"<div style='background:{SURFACE_1}; border-left:4px solid {"#ef4444" if emoji == "🔴" else "#f59e0b" if emoji == "⚠️" else "#22c55e"}; padding:10px 16px; border-radius:0 8px 8px 0; margin-bottom:8px; font-size:13px; color:{TEXT};'>{emoji} {msg}</div>", unsafe_allow_html=True)
+
+        # 월별 손익 차트
+        if len(all_closed) >= 3:
+            import plotly.graph_objects as go
+            monthly = {}
+            for t in all_closed:
+                month = t.get("sell_date", "")[:7]
+                if month:
+                    monthly[month] = monthly.get(month, 0) + t.get("final_pnl", 0)
+            if monthly:
+                months = sorted(monthly.keys())
+                values = [monthly[m] for m in months]
+                colors = ["#22c55e" if v >= 0 else "#ef4444" for v in values]
+                fig = go.Figure(go.Bar(x=months, y=values, marker_color=colors))
+                fig.update_layout(
+                    title="월별 손익",
+                    plot_bgcolor="#0f1117", paper_bgcolor="#0f1117",
+                    font=dict(color="#e2e8f0"),
+                    height=250,
+                    margin=dict(l=20, r=20, t=40, b=20),
+                    yaxis=dict(gridcolor="#1e2330"),
+                    xaxis=dict(gridcolor="#1e2330"),
+                )
+                st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("아직 완료된 단타 거래가 없어요. 매매를 기록하고 복기해보세요!")
     else:
         st.info("저장된 단타 거래가 없어요. 위에서 거래를 추가해보세요!")
