@@ -9,14 +9,80 @@ WATCHLIST_FILE = "watchlist.json"
 NOTES_FILE = "investment_notes.json"
 SECTORS_FILE = "sectors.json"
 BACKTEST_FILE = "backtest_results.json"
+GIST_WATCHLIST_FILENAME = "quantfolio_watchlist.json"
+
+def _get_gist_token():
+    try:
+        return st.secrets.get("GITHUB_TOKEN", "")
+    except:
+        return ""
+
+def _get_watchlist_gist_id(token):
+    try:
+        import requests as req
+        headers = {"Authorization": f"token {token}"}
+        res = req.get("https://api.github.com/gists", headers=headers, timeout=5)
+        if res.status_code != 200:
+            return None
+        for gist in res.json():
+            if GIST_WATCHLIST_FILENAME in gist.get("files", {}):
+                return gist["id"]
+        # 없으면 새로 생성
+        create_res = req.post(
+            "https://api.github.com/gists",
+            headers=headers,
+            json={
+                "description": "Quantfolio 관심종목",
+                "public": False,
+                "files": {GIST_WATCHLIST_FILENAME: {"content": "[]"}}
+            },
+            timeout=5
+        )
+        if create_res.status_code == 201:
+            return create_res.json().get("id")
+    except:
+        pass
+    return None
 
 def load_watchlist():
+    # 1. Gist에서 불러오기 시도
+    token = _get_gist_token()
+    if token:
+        try:
+            import requests as req
+            gist_id = _get_watchlist_gist_id(token)
+            if gist_id:
+                headers = {"Authorization": f"token {token}"}
+                res = req.get(f"https://api.github.com/gists/{gist_id}", headers=headers, timeout=5)
+                content = res.json()["files"][GIST_WATCHLIST_FILENAME]["content"]
+                return json.loads(content)
+        except:
+            pass
+    # 2. 로컬 파일 fallback
     if os.path.exists(WATCHLIST_FILE):
         with open(WATCHLIST_FILE, "r") as f:
             return json.load(f)
     return []
 
 def save_watchlist(wl):
+    # 1. Gist에 저장
+    token = _get_gist_token()
+    if token:
+        try:
+            import requests as req
+            gist_id = _get_watchlist_gist_id(token)
+            if gist_id:
+                headers = {"Authorization": f"token {token}"}
+                req.patch(
+                    f"https://api.github.com/gists/{gist_id}",
+                    headers=headers,
+                    json={"files": {GIST_WATCHLIST_FILENAME: {"content": json.dumps(wl, ensure_ascii=False)}}},
+                    timeout=5
+                )
+                return
+        except:
+            pass
+    # 2. 로컬 파일 fallback
     with open(WATCHLIST_FILE, "w") as f:
         json.dump(wl, f)
 
@@ -130,6 +196,9 @@ MANUAL_STOCK_MAP = {
     "삼양컴텍": ("484590", "KOSPI"),
     "에이피알": ("278470", "KOSPI"),
     "시프트업": ("462870", "KOSPI"),
+    "LG CNS": ("064400", "KOSPI"),
+    "엘지씨엔에스": ("064400", "KOSPI"),
+    "LG씨엔에스": ("064400", "KOSPI"),
 }
     
 @st.cache_data(ttl=86400)
