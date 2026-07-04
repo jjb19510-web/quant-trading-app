@@ -267,7 +267,29 @@ MANUAL_STOCK_MAP = {
     
 @st.cache_data(ttl=86400)
 def load_krx_listing():
-    # 1. FinanceDataReader 시도
+    # 1. pykrx 시도 (전체 KRX 종목)
+    try:
+        from pykrx import stock
+        import datetime as dt_mod
+        today = dt_mod.date.today().strftime("%Y%m%d")
+        kospi_tickers = stock.get_market_ticker_list(today, market="KOSPI")
+        kosdaq_tickers = stock.get_market_ticker_list(today, market="KOSDAQ")
+        rows = []
+        for ticker in kospi_tickers:
+            name = stock.get_market_ticker_name(ticker)
+            rows.append({"Name": name, "Symbol": ticker, "Market": "KOSPI"})
+        for ticker in kosdaq_tickers:
+            name = stock.get_market_ticker_name(ticker)
+            rows.append({"Name": name, "Symbol": ticker, "Market": "KOSDAQ"})
+        if rows:
+            df = pd.DataFrame(rows)
+            manual_rows = [{"Name": n, "Symbol": c, "Market": m} for n, (c, m) in MANUAL_STOCK_MAP.items()]
+            manual_df = pd.DataFrame(manual_rows)
+            df = pd.concat([df, manual_df], ignore_index=True)
+            return df
+    except:
+        pass
+    # 2. FinanceDataReader 시도
     try:
         import FinanceDataReader as fdr
         df = fdr.StockListing('KRX')
