@@ -136,31 +136,28 @@ MANUAL_STOCK_MAP = {
     
 @st.cache_data(ttl=86400)
 def load_krx_listing():
+    # 1. GitHub CSV 우선 (가장 안정적)
+    try:
+        base_df = pd.read_csv("https://raw.githubusercontent.com/corazzon/finance-data-analysis/main/krx.csv")
+        if not base_df.empty:
+            manual_rows = [{'Name': n, 'Symbol': c, 'Market': m} for n, (c, m) in MANUAL_STOCK_MAP.items()]
+            manual_df = pd.DataFrame(manual_rows)
+            return pd.concat([base_df, manual_df], ignore_index=True)
+    except:
+        pass
+    # 2. FinanceDataReader 폴백
     try:
         import FinanceDataReader as fdr
         df = fdr.StockListing('KRX')
         if df is not None and not df.empty:
-            manual_rows = []
-            for name, (code, market) in MANUAL_STOCK_MAP.items():
-                if not (df['Name'].str.upper() == name.upper()).any():
-                    manual_rows.append({'Name': name, 'Symbol': code, 'Market': market})
-            if manual_rows:
-                import pandas as pd
-                manual_df = pd.DataFrame(manual_rows)
-                df = pd.concat([df, manual_df], ignore_index=True)
-            return df
+            manual_rows = [{'Name': n, 'Symbol': c, 'Market': m} for n, (c, m) in MANUAL_STOCK_MAP.items()]
+            manual_df = pd.DataFrame(manual_rows)
+            return pd.concat([df, manual_df], ignore_index=True)
     except:
         pass
-    try:
-        import pandas as pd
-        base_df = pd.read_csv("https://raw.githubusercontent.com/corazzon/finance-data-analysis/main/krx.csv")
-        manual_rows = [{'Name': n, 'Symbol': c, 'Market': m} for n, (c, m) in MANUAL_STOCK_MAP.items()]
-        manual_df = pd.DataFrame(manual_rows)
-        return pd.concat([base_df, manual_df], ignore_index=True)
-    except:
-        import pandas as pd
-        manual_rows = [{'Name': n, 'Symbol': c, 'Market': m} for n, (c, m) in MANUAL_STOCK_MAP.items()]
-        return pd.DataFrame(manual_rows)
+    # 3. MANUAL_STOCK_MAP만 반환
+    manual_rows = [{'Name': n, 'Symbol': c, 'Market': m} for n, (c, m) in MANUAL_STOCK_MAP.items()]
+    return pd.DataFrame(manual_rows)
 
 # ── [상장사 이름 매핑 맵 수집 엔진] ──
 @st.cache_data(ttl=86400)
