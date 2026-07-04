@@ -282,7 +282,41 @@ def load_krx_listing():
             return df
     except:
         pass
-    # 2. GitHub CSV 폴백
+    # 2. KRX 공식 데이터 직접 크롤링
+    try:
+        import io
+        kospi_res = requests.post(
+            "https://kind.krx.co.kr/corpgeneral/corpList.do",
+            data={"method": "download", "marketType": "stockMkt"},
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=10
+        )
+        kospi_res.encoding = "euc-kr"
+        kospi_df = pd.read_html(io.StringIO(kospi_res.text))[0]
+        kospi_df = kospi_df[["회사명", "종목코드"]].rename(columns={"회사명": "Name", "종목코드": "Symbol"})
+        kospi_df["Symbol"] = kospi_df["Symbol"].astype(str).str.zfill(6)
+        kospi_df["Market"] = "KOSPI"
+
+        kosdaq_res = requests.post(
+            "https://kind.krx.co.kr/corpgeneral/corpList.do",
+            data={"method": "download", "marketType": "kosdaqMkt"},
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=10
+        )
+        kosdaq_res.encoding = "euc-kr"
+        kosdaq_df = pd.read_html(io.StringIO(kosdaq_res.text))[0]
+        kosdaq_df = kosdaq_df[["회사명", "종목코드"]].rename(columns={"회사명": "Name", "종목코드": "Symbol"})
+        kosdaq_df["Symbol"] = kosdaq_df["Symbol"].astype(str).str.zfill(6)
+        kosdaq_df["Market"] = "KOSDAQ"
+
+        df = pd.concat([kospi_df, kosdaq_df], ignore_index=True)
+        manual_rows = [{'Name': n, 'Symbol': c, 'Market': m} for n, (c, m) in MANUAL_STOCK_MAP.items()]
+        manual_df = pd.DataFrame(manual_rows)
+        df = pd.concat([df, manual_df], ignore_index=True)
+        return df
+    except:
+        pass
+    # 3. GitHub CSV 폴백
     try:
         base_df = pd.read_csv("https://raw.githubusercontent.com/corazzon/finance-data-analysis/main/krx.csv")
         manual_rows = [{'Name': n, 'Symbol': c, 'Market': m} for n, (c, m) in MANUAL_STOCK_MAP.items()]
@@ -290,7 +324,7 @@ def load_krx_listing():
         return pd.concat([base_df, manual_df], ignore_index=True)
     except:
         pass
-    # 3. MANUAL_STOCK_MAP만 반환
+    # 4. MANUAL_STOCK_MAP만 반환
     manual_rows = [{'Name': n, 'Symbol': c, 'Market': m} for n, (c, m) in MANUAL_STOCK_MAP.items()]
     return pd.DataFrame(manual_rows)
 
