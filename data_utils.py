@@ -60,27 +60,51 @@ def init_session_state():
         st.session_state.backtest_results = load_backtest()
 
 
-# ── [고성능 캐싱 기반 듀얼 주가 수집 엔진 + 크롤링 백업 피더] ──
 @st.cache_data(ttl=600)
 def load_market_data(tickers, start_date, end_date, market):
-    import pandas as pd
-    import numpy as np
-    
-    # 0. 입력값 안전화 (tuple/list 정규화)
-    tickers = list(tickers) if isinstance(tickers, (list, tuple)) else [tickers]
-    
-    # 1. 야후 파이낸스 기본 다운로드 시도
     try:
         ohlc = yf.download(tickers, start=str(start_date), end=str(end_date), progress=False)
-        if isinstance(ohlc.columns, pd.MultiIndex):
-            df = ohlc["Close"] if "Close" in ohlc.columns.levels[0] else pd.DataFrame()
-        else:
-            df = ohlc[["Close"]] if "Close" in ohlc.columns else pd.DataFrame()
-            if not df.empty and len(tickers) == 1:
-                df.columns = [tickers[0]]
-    except Exception as e:
+        df = ohlc["Close"] if isinstance(ohlc, pd.DataFrame) and "Close" in ohlc else pd.DataFrame()
+    except:
         df = pd.DataFrame()
         ohlc = pd.DataFrame()
+
+    if (df.empty or df.isna().all().all()) and market == "한국주식 (KS)":
+        try:
+            import FinanceDataReader as fdr
+            clean_tickers = [t.replace(".KS", "").replace(".KQ", "") for t in tickers]
+            if len(clean_tickers) == 1:
+                df_fdr = fdr.DataReader(clean_tickers[0], start_date, end_date)
+                if not df_fdr.empty:
+                    df = pd.DataFrame({tickers[0]: df_fdr["Close"]})
+                    return df, df_fdr["Open"], df_fdr["High"], df_fdr["Low"], df_fdr["Close"], df_fdr["Volume"]
+            else:
+                dfs = []
+                for ct, t in zip(clean_tickers, tickers):
+                    temp_df = fdr.DataReader(ct, start_date, end_date)[["Close"]]
+                    temp_df.columns = [t]
+                    dfs.append(temp_df)
+                df = pd.concat(dfs, axis=1).dropna()
+                chart_raw = df.columns[0].replace(".KS", "").replace(".KQ", "")
+                df_fdr_single = fdr.DataReader(chart_raw, start_date, end_date)
+                return df, df_fdr_single["Open"], df_fdr_single["High"], df_fdr_single["Low"], df_fdr_single["Close"], df_fdr_single["Volume"]
+        except:
+            pass
+
+    if not df.empty:
+        chart_col = df.columns[0] if hasattr(df.columns, '__iter__') else tickers[0]
+        chart_raw = str(chart_col).replace(".KS", "").replace(".KQ", "")
+        try:
+            close_p = df[chart_col]
+            open_p = ohlc["Open"][chart_col] if "Open" in ohlc else close_p
+            high_p = ohlc["High"][chart_col] if "High" in ohlc else close_p
+            low_p = ohlc["Low"][chart_col] if "Low" in ohlc else close_p
+            volume = ohlc["Volume"][chart_col] if "Volume" in ohlc else pd.Series(dtype=float)
+            return df, open_p, high_p, low_p, close_p, volume
+        except:
+            pass
+
+    return pd.DataFrame(), pd.Series(dtype=float), pd.Series(dtype=float), pd.Series(dtype=float), pd.Series(dtype=float), pd.Series(dtype=float)
 
     # 2. 야후 파이낸스 실패 및 한국 주식인 경우 자체 초정밀 Naver Sise XML 파서 구동 (강력한 폴백)
     if (df.empty or df.isna().all().all()) and market == "한국주식 (KS)":
