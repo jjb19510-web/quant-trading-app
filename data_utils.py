@@ -267,6 +267,7 @@ MANUAL_STOCK_MAP = {
     
 @st.cache_data(ttl=86400)
 def load_krx_listing():
+    # 1. FinanceDataReader 시도
     try:
         import FinanceDataReader as fdr
         df = fdr.StockListing('KRX')
@@ -276,22 +277,42 @@ def load_krx_listing():
                 if not (df['Name'].str.upper() == name.upper()).any():
                     manual_rows.append({'Name': name, 'Symbol': code, 'Market': market})
             if manual_rows:
-                import pandas as pd
                 manual_df = pd.DataFrame(manual_rows)
                 df = pd.concat([df, manual_df], ignore_index=True)
             return df
     except:
         pass
+    # 2. GitHub CSV 폴백
     try:
-        import pandas as pd
         base_df = pd.read_csv("https://raw.githubusercontent.com/corazzon/finance-data-analysis/main/krx.csv")
         manual_rows = [{'Name': n, 'Symbol': c, 'Market': m} for n, (c, m) in MANUAL_STOCK_MAP.items()]
         manual_df = pd.DataFrame(manual_rows)
         return pd.concat([base_df, manual_df], ignore_index=True)
     except:
-        import pandas as pd
-        manual_rows = [{'Name': n, 'Symbol': c, 'Market': m} for n, (c, m) in MANUAL_STOCK_MAP.items()]
-        return pd.DataFrame(manual_rows)
+        pass
+    # 3. MANUAL_STOCK_MAP만 반환
+    manual_rows = [{'Name': n, 'Symbol': c, 'Market': m} for n, (c, m) in MANUAL_STOCK_MAP.items()]
+    return pd.DataFrame(manual_rows)
+
+
+def search_ticker_by_name(name):
+    """네이버 자동완성 API로 종목명 → 코드 변환 (FDR 실패 시 폴백)"""
+    try:
+        res = requests.get(
+            f"https://ac.finance.naver.com/ac?q={name}&q_enc=UTF-8&t_koreng=1&st=111&r_format=json&r_enc=UTF-8&r_adj=0",
+            headers={"User-Agent": "Mozilla/5.0"}, timeout=5
+        )
+        data = res.json()
+        items = data.get("items", [[]])[0]
+        for item in items:
+            if len(item) >= 2:
+                code = str(item[1]).zfill(6)
+                if code.isdigit() and len(code) == 6:
+                    item_name = str(item[0])
+                    return code, item_name
+    except:
+        pass
+    return None, None
 
 # ── [상장사 이름 매핑 맵 수집 엔진] ──
 @st.cache_data(ttl=86400)

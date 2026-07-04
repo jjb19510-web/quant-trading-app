@@ -177,23 +177,15 @@ with tab2:
                                 else:
                                     tickers_list.append(t_clean + ".KS")
                             else:
-                                # 네이버 검색 API로 종목코드 검색
                                 found = False
+                                # 네이버 자동완성 API로 종목코드 검색
                                 try:
-                                    import FinanceDataReader as fdr
-                                    krx_all = fdr.StockListing('KRX')
-                                    name_col = next((c for c in ['Name'] if c in krx_all.columns), None)
-                                    code_col2 = next((c for c in ['Symbol', 'Code'] if c in krx_all.columns), None)
-                                    if name_col and code_col2:
-                                        matched2 = krx_all[krx_all[name_col].str.upper() == t_clean.upper()]
-                                        if not matched2.empty:
-                                            raw_code2 = matched2.iloc[0][code_col2]
-                                            code2 = str(raw_code2).split('.')[0].zfill(6)
-                                            mkt2 = str(matched2.iloc[0].get('Market', 'KOSPI')).upper()
-                                            suffix2 = ".KS" if "KOSPI" in mkt2 else ".KQ"
-                                            tickers_list.append(code2 + suffix2)
-                                            found = True
-                                            continue
+                                    from data_utils import search_ticker_by_name
+                                    code_found, name_found = search_ticker_by_name(t_clean)
+                                    if code_found:
+                                        tickers_list.append(code_found + ".KS")
+                                        found = True
+                                        continue
                                 except:
                                     pass
 
