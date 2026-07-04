@@ -106,7 +106,7 @@ def get_kis_token():
     except:
         return None
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 대시보드", "🔍 분석", "💼 포트폴리오", "📋 리포트", "🔬 심층분석"])
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📊 대시보드", "🔍 분석", "💼 포트폴리오", "📋 리포트", "🔬 심층분석", "⚙️ 전략 설정"])
 
 with tab1:
     render_dashboard()
@@ -1131,3 +1131,148 @@ with tab4:
 with tab5:
     from deep_analysis import render_deep_analysis
     render_deep_analysis(KIS_AVAILABLE, get_kis_token)
+
+with tab6:
+    st.markdown("<div style='font-size:22px; font-weight:700; margin-bottom:4px;'>⚙️ 내 전략</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='font-size:12px; color:#6b7280; margin-bottom:24px;'>나만의 매매 원칙을 설정하고 심층분석 체크리스트에 자동 반영돼요</div>", unsafe_allow_html=True)
+
+    st.subheader("⚡ 토스 단타 전략")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.session_state["strategy_vol_ratio"] = st.slider(
+            "거래량 기준 (20일 평균 대비 배수)",
+            min_value=1.0, max_value=5.0,
+            value=st.session_state.get("strategy_vol_ratio", 2.0),
+            step=0.5,
+            help="거래량이 이 배수 이상일 때 조건 충족"
+        )
+        st.session_state["strategy_stop_loss"] = st.slider(
+            "손절 기준 (%)",
+            min_value=-10.0, max_value=-1.0,
+            value=st.session_state.get("strategy_stop_loss", -3.0),
+            step=0.5,
+            help="매수가 대비 이 % 이하로 떨어지면 손절"
+        )
+    with col2:
+        st.session_state["strategy_rsi_min"] = st.slider(
+            "RSI 진입 최솟값",
+            min_value=10, max_value=50,
+            value=st.session_state.get("strategy_rsi_min", 30),
+            step=5,
+            help="RSI가 이 값 이상일 때 진입 고려"
+        )
+        st.session_state["strategy_rsi_max"] = st.slider(
+            "RSI 진입 최댓값",
+            min_value=50, max_value=90,
+            value=st.session_state.get("strategy_rsi_max", 65),
+            step=5,
+            help="RSI가 이 값 이하일 때 진입 고려"
+        )
+
+    st.markdown("**⏰ 시간 손절 설정**")
+    col3, col4 = st.columns(2)
+    with col3:
+        st.session_state["strategy_time_stop"] = st.selectbox(
+            "시간 손절 기준",
+            ["13:00", "13:30", "14:00", "14:30", "15:00"],
+            index=["13:00", "13:30", "14:00", "14:30", "15:00"].index(
+                st.session_state.get("strategy_time_stop", "14:30")
+            ),
+            help="이 시각까지 목표가 미달성 시 청산"
+        )
+    with col4:
+        st.session_state["strategy_max_invest"] = st.slider(
+            "1회 최대 투입 비율 (%)",
+            min_value=5, max_value=30,
+            value=st.session_state.get("strategy_max_invest", 15),
+            step=5,
+            help="총 자산 대비 1회 최대 투입 비율"
+        )
+
+    st.markdown("**💰 분할 매도 설정**")
+    col5, col6, col7 = st.columns(3)
+    with col5:
+        st.session_state["strategy_stage1"] = st.slider(
+            "1단계 익절 (%)",
+            min_value=1.0, max_value=10.0,
+            value=st.session_state.get("strategy_stage1", 3.0),
+            step=0.5
+        )
+    with col6:
+        st.session_state["strategy_stage2"] = st.slider(
+            "2단계 익절 (%)",
+            min_value=2.0, max_value=15.0,
+            value=st.session_state.get("strategy_stage2", 5.0),
+            step=0.5
+        )
+    with col7:
+        st.session_state["strategy_stage1_ratio"] = st.slider(
+            "1단계 매도 비율 (%)",
+            min_value=10, max_value=50,
+            value=st.session_state.get("strategy_stage1_ratio", 30),
+            step=10
+        )
+
+    st.divider()
+    st.subheader("📈 미래에셋 장기 전략")
+    col8, col9 = st.columns(2)
+    with col8:
+        st.session_state["strategy_long_target"] = st.slider(
+            "목표 수익률 (%)",
+            min_value=10, max_value=50,
+            value=st.session_state.get("strategy_long_target", 20),
+            step=5
+        )
+    with col9:
+        st.session_state["strategy_long_stop"] = st.slider(
+            "손절 기준 (%)",
+            min_value=-20, max_value=-5,
+            value=st.session_state.get("strategy_long_stop", -10),
+            step=5
+        )
+
+    st.divider()
+    st.subheader("🏦 한투 안정형 전략")
+    col10, col11 = st.columns(2)
+    with col10:
+        st.session_state["strategy_div_yield"] = st.slider(
+            "최소 배당수익률 (%)",
+            min_value=1.0, max_value=8.0,
+            value=st.session_state.get("strategy_div_yield", 3.0),
+            step=0.5
+        )
+    with col11:
+        st.session_state["strategy_stable_stop"] = st.slider(
+            "손절 기준 (%)",
+            min_value=-15, max_value=-3,
+            value=st.session_state.get("strategy_stable_stop", -7),
+            step=1
+        )
+
+    st.divider()
+    st.subheader("📝 매매 원칙 메모")
+    default_memo = """[진입 원칙]
+1. 거래량 20일 평균 2배 이상 급증
+2. 변동성 돌파 기준가 돌파 확인
+3. 상승 업종 또는 당일 테마 뉴스 확인
+
+[손절 원칙]
+- 매수가 -3% 무조건 손절
+- 14:30까지 목표가 미달성 시 청산
+- 3연패 시 당일 매매 중단
+
+[익절 원칙]
+- +3%: 30% 매도
+- +5%: 50% 매도
+- 목표가: 나머지 전량 매도"""
+
+    strategy_memo = st.text_area(
+        "나만의 매매 원칙",
+        value=st.session_state.get("strategy_memo", default_memo),
+        height=250,
+        help="장 시작 전 매일 읽어보세요"
+    )
+    st.session_state["strategy_memo"] = strategy_memo
+
+    if st.button("💾 전략 저장", use_container_width=True):
+        st.success("✅ 전략이 저장됐어요! 심층분석 체크리스트에 자동 반영돼요.")
