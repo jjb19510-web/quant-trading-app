@@ -9,7 +9,7 @@ import os
 from ui_components import (
     card, CANDLE_UP, CANDLE_DOWN, DIM, TEXT, SURFACE_1, SURFACE_2, LINE, BG, ACCENT
 )
-from design.components import kpi_card, ai_insight_card
+from design.components import kpi_card, ai_insight_card, status_badge
 
 # ── [전역 함수 1] 네이버 금융 수급동향 실시간 '억 원'대금 가공 크롤러 ──
 @st.cache_data(ttl=300)
@@ -669,16 +669,19 @@ def render_daily_report():
             lead_color = "#22c55e" # 그린
             advice_text = "외국인 투자자들과 국내 대형 기관들이 주식을 대량으로 사 모으고 있습니다. 우리도 우량한 주식을 함께 모아가기 매우 좋은 타이밍입니다."
             gauge_status = "강력 매수 신호 🔥"
+            smi_status = "strong_buy"
         elif smi_diff < -80:
             leadership = "🔴 개인 투자자 매수 우위 (기관·외인 관망)"
             lead_color = "#ef4444" # 레드
             advice_text = "외국인 투자자들과 대형 기관들이 시장에서 자금을 회수하고 있습니다. 지금은 무리하게 매수하기보다는 현금을 확보하고 한 걸음 물러나 관망하는 편이 안전합니다."
             gauge_status = "리스크 관리 권고 ⚠️"
+            smi_status = "risk"
         else:
             leadership = "🟡 수급 혼조세 (방향성 탐색 중)"
             lead_color = "#f59e0b" # 주황
             advice_text = "시장 주도 세력들도 방향성을 고민하며 관망하는 상태입니다. 무리한 진입을 피하고 차분하게 시장 흐름을 주시할 필요가 있습니다."
             gauge_status = "관망 및 숨고르기 ⚖️"
+            smi_status = "neutral"
 
         smi_base_date = last_row["날짜"] if "날짜" in last_row else "N/A"
         st.markdown(f"""
@@ -695,6 +698,7 @@ def render_daily_report():
             <div style='background:{SURFACE_2}; border:1px solid {LINE}; border-radius:12px; padding:16px; text-align:center;'>
                 <div style='font-size:12px; color:#9ca3af; margin-bottom:6px;'>{smi_base_date} 시장 주도 자금 (외국인·기관)</div>
                 <div style='font-size:15px; font-weight:800; color:{lead_color}; margin-top:4px;'>{leadership}</div>
+                <div style='margin-top:8px;'>{status_badge(smi_status)}</div>
             </div>
             """, unsafe_allow_html=True)
         with c2:
