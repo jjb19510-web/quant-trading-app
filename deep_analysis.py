@@ -7,7 +7,7 @@ import requests
 import datetime as dt
 from data_utils import load_krx_listing, get_krx_name_map
 from ui_components import card, ACCENT, CANDLE_UP, CANDLE_DOWN, DIM, TEXT, SURFACE_1, SURFACE_2, LINE, BG
-from design.components import hero_card
+from design.components import hero_card, ai_insight_card, kpi_card, status_badge
 
 
 @st.cache_data(ttl=600)
@@ -551,6 +551,14 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
         </div>
         """, unsafe_allow_html=True)
 
+        def _tech_status(c):
+            if c in (CANDLE_UP, "#22c55e"):
+                return "buy"
+            elif c in (CANDLE_DOWN, "#ef4444"):
+                return "warning"
+            else:
+                return "neutral"
+
         r1c1, r1c2, r1c3 = st.columns(3)
         r2c1, r2c2, r2c3 = st.columns(3)
         for col, label, value, sub, color in [
@@ -562,13 +570,8 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
             (r2c3, "지지/저항", f"{support:,.0f} / {resistance:,.0f}", "최근 60일 기준", "#6b7280"),
         ]:
             with col:
-                st.markdown(f"""
-                <div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:10px; padding:12px; margin-bottom:8px;'>
-                    <div style='font-size:10px; color:{DIM}; margin-bottom:4px;'>{label}</div>
-                    <div style='font-size:13px; font-weight:700; color:{color};'>{value}</div>
-                    <div style='font-size:10px; color:{DIM}; margin-top:3px;'>{sub}</div>
-                </div>
-                """, unsafe_allow_html=True)
+                value_html = f"<span style='color:{color}; font-size:15px; font-weight:600;'>{value}</span>"
+                st.markdown(kpi_card(title=label, value=value_html, delta=sub, status=_tech_status(color)), unsafe_allow_html=True)
 
         fig_tech = go.Figure()
         fig_tech.add_trace(go.Scatter(x=close.index[-60:], y=bb_upper.iloc[-60:], name="BB상단", line=dict(color="#ef4444", width=1, dash="dash"), opacity=0.5))
@@ -636,27 +639,7 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
                         json={"model": "gpt-4o-mini", "messages": [{"role": "user", "content": tech_prompt}], "max_tokens": 600}
                     )
                     tech_opinion = ai_res.json()["choices"][0]["message"]["content"]
-
-                    # 판단 배지 색상
-                    if "매수" in tech_opinion[:50]:
-                        t_badge_color = CANDLE_UP
-                        t_badge_text = "매수 📈"
-                    elif "매도" in tech_opinion[:50]:
-                        t_badge_color = CANDLE_DOWN
-                        t_badge_text = "매도 📉"
-                    else:
-                        t_badge_color = "#f59e0b"
-                        t_badge_text = "중립 ⚖️"
-
-                    st.markdown(f"""
-                    <div style='background:{SURFACE_2}; border:1px solid {t_badge_color}40; border-radius:12px; padding:20px; margin-top:16px;'>
-                        <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;'>
-                            <div style='font-size:14px; font-weight:700;'>🤖 AI 기술적 종합 판단</div>
-                            <span style='background:{t_badge_color}22; border:1px solid {t_badge_color}; border-radius:20px; padding:5px 16px; font-size:14px; font-weight:800; color:{t_badge_color};'>{t_badge_text}</span>
-                        </div>
-                        <div style='font-size:13px; line-height:1.9; white-space:pre-line; color:{TEXT};'>{tech_opinion}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                    st.markdown(ai_insight_card(title="AI Technical Insight", content=f"<div style='white-space:pre-line;'>{tech_opinion}</div>", confidence=None, status="neutral"), unsafe_allow_html=True)
         except Exception as e:
             pass
 
@@ -845,18 +828,22 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
             verdict_desc = "대부분의 단타 조건을 충족하지 못했어요. 이 종목은 오늘 단타를 피하세요."
 
         # 종합 판단 배너
-        st.markdown(f"""
-        <div style='background:{verdict_bg}; border:1px solid {verdict_border}; border-radius:12px; padding:16px 20px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center;'>
-            <div>
-                <div style='font-size:11px; color:{verdict_color}; margin-bottom:4px;'>단타 종합 판단 ({passed}/{total} 충족)</div>
-                <div style='font-size:18px; font-weight:700; color:{verdict_color};'>{verdict_icon} {verdict}</div>
-                <div style='font-size:12px; color:{DIM}; margin-top:6px;'>{verdict_desc}</div>
-            </div>
-            <div style='text-align:right;'>
-                <div style='font-size:36px; font-weight:700; color:{verdict_color};'>{passed}<span style='font-size:18px; color:{DIM};'>/{total}</span></div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        verdict_status_map = {
+            "진입 추천": "buy",
+            "조건부 진입": "neutral",
+            "보류 권장": "warning",
+            "진입 위험": "risk",
+        }
+        verdict_value_html = f"<span style='color:{verdict_color}; font-size:20px;'>{verdict_icon} {verdict}</span>"
+        st.markdown(
+            hero_card(
+                title=f"단타 종합 판단 ({passed}/{total} 충족)",
+                value=verdict_value_html,
+                subtitle=verdict_desc,
+                status=verdict_status_map.get(verdict, "neutral")
+            ),
+            unsafe_allow_html=True
+        )
 
         # 체크리스트 항목
         for i in range(0, len(checks), 2):
@@ -868,11 +855,13 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
                     c_bg = "#22c55e10" if c["pass"] else "#ef444410"
                     c_border = "#22c55e30" if c["pass"] else "#ef444430"
                     c_icon = "✅" if c["pass"] else "❌"
+                    c_status = "buy" if c["pass"] else "warning"
                     with col:
                         st.markdown(f"""
                         <div style='background:{c_bg}; border:0.5px solid {c_border}; border-radius:10px; padding:12px; margin-bottom:8px;'>
                             <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;'>
                                 <span style='font-size:12px; font-weight:600; color:{c_color};'>{c_icon} {c["name"]}</span>
+                                {status_badge(c_status)}
                             </div>
                             <div style='font-size:12px; color:{DIM}; margin-bottom:4px;'>{c["detail"]}</div>
                             <div style='font-size:11px; color:#6b7280; border-top:0.5px solid {c_border}; padding-top:6px; margin-top:6px;'>💡 {c["why"]}</div>
@@ -1271,14 +1260,4 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
 
     if st.session_state.get("ai_opinion") and st.session_state.get("ai_opinion_ticker") == display_name:
         opinion_text = st.session_state["ai_opinion"]
-        badge_color = CANDLE_UP if "매수" in opinion_text[:100] else (CANDLE_DOWN if "매도" in opinion_text[:100] else "#f59e0b")
-        badge_text = "매수" if "매수" in opinion_text[:100] else ("매도" if "매도" in opinion_text[:100] else "중립")
-        st.markdown(f"""
-        <div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:12px; padding:20px; margin-top:12px;'>
-            <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;'>
-                <div style='font-size:14px; font-weight:700;'>🤖 {display_name} AI 투자의견</div>
-                <span style='background:{badge_color}22; border:0.5px solid {badge_color}; border-radius:20px; padding:4px 14px; font-size:13px; font-weight:700; color:{badge_color};'>{badge_text}</span>
-            </div>
-            <div style='font-size:13px; line-height:2.0; white-space:pre-line; color:{TEXT};'>{opinion_text}</div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(ai_insight_card(title="AI Investment Opinion", content=f"<div style='white-space:pre-line;'>{opinion_text}</div>", confidence=None, status="neutral"), unsafe_allow_html=True)
