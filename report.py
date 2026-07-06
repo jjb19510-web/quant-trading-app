@@ -9,6 +9,7 @@ import os
 from ui_components import (
     card, CANDLE_UP, CANDLE_DOWN, DIM, TEXT, SURFACE_1, SURFACE_2, LINE, BG, ACCENT
 )
+from design.components import kpi_card
 
 # ── [전역 함수 1] 네이버 금융 수급동향 실시간 '억 원'대금 가공 크롤러 ──
 @st.cache_data(ttl=300)
@@ -413,13 +414,16 @@ def render_daily_report():
             with cols[i % 4]:
                 color = CANDLE_UP if idx["change"] >= 0 else CANDLE_DOWN
                 arrow = "▲" if idx["change"] >= 0 else "▼"
-                st.markdown(f"""
-                <div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:12px; padding:12px 16px; margin-bottom:12px; box-shadow:0 4px 24px rgba(0,0,0,0.4);'>
-                    <div style='font-size:11px; color:#9ca3af; margin-bottom:4px; font-weight:500;'>{idx["name"]}</div>
-                    <div style='font-family:JetBrains Mono; font-size:17px; font-weight:600;'>{idx["price"]:,.2f}</div>
-                    <div style='font-family:JetBrains Mono; font-size:12px; color:{color}; margin-top:2px;'>{arrow} {idx["change"]:+,.2f} ({idx["pct"]:+.2f}%)</div>
-                </div>
-                """, unsafe_allow_html=True)
+                st.markdown(
+                    kpi_card(
+                        title=idx["name"],
+                        value=f'{idx["price"]:,.2f}',
+                        delta=f'<span style="color:{color};">{arrow} {idx["change"]:+,.2f} ({idx["pct"]:+.2f}%)</span>',
+                        status=None,
+                        icon=None
+                    ),
+                    unsafe_allow_html=True
+                )
 
         # ── 글로벌 시장 → 국내 영향 AI 한줄 해석 ──
         @st.cache_data(ttl=300)
