@@ -5,14 +5,9 @@ import datetime as dt_module
 import json
 import requests as req
 from ui_components import card, SURFACE_1, SURFACE_2, LINE, DIM, TEXT, CANDLE_UP, CANDLE_DOWN, ACCENT
-from design.components import kpi_card, hero_card, ai_insight_card, status_badge
+from design.components import kpi_card, hero_card, ai_insight_card, status_badge, qf_icon
 
 GIST_FILENAME = "quantfolio_trades.json"
-
-
-def qf_icon(emoji):
-    """이모지를 qf-icon 클래스로 감싸는 헬퍼. 나중에 SVG 아이콘으로 교체할 때 이 함수만 바꾸면 됨."""
-    return f"<span class='qf-icon'>{emoji}</span>"
 
 
 def get_gist_id(token, debug=False):
