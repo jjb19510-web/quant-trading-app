@@ -9,7 +9,7 @@ import os
 from ui_components import (
     card, CANDLE_UP, CANDLE_DOWN, DIM, TEXT, SURFACE_1, SURFACE_2, LINE, BG, ACCENT
 )
-from design.components import kpi_card
+from design.components import kpi_card, ai_insight_card
 
 # ── [전역 함수 1] 네이버 금융 수급동향 실시간 '억 원'대금 가공 크롤러 ──
 @st.cache_data(ttl=300)
@@ -1232,23 +1232,13 @@ def render_daily_report():
                             raise Exception(str(ai_data))
                         summary = ai_data["choices"][0]["message"]["content"]
                         st.session_state["ai_summary"] = summary
-                        st.markdown(f"""
-                        <div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:12px; padding:20px; margin-top:12px;'>
-                            <div style='font-size:13px; font-weight:700; color:#9ca3af; margin-bottom:16px; letter-spacing:1px;'>🤖 AI 시장 분석</div>
-                            <div style='font-size:13px; line-height:2.0; white-space:pre-line; color:{TEXT};'>{summary}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
+                        st.markdown(ai_insight_card(title="AI Market Insight", content=f"<div style='white-space:pre-line;'>{summary}</div>", confidence=None, status="neutral"), unsafe_allow_html=True)
                     except Exception as e:
                         st.error(f"AI 요약 실패: {e}")
 
             # 이전 AI 요약 표시
             elif st.session_state.get("ai_summary"):
-                st.markdown(f"""
-                <div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:12px; padding:20px; margin-top:12px;'>
-                    <div style='font-size:13px; font-weight:700; color:#9ca3af; margin-bottom:16px; letter-spacing:1px;'>🤖 AI 시장 분석</div>
-                    <div style='font-size:13px; line-height:2.0; white-space:pre-line; color:{TEXT};'>{st.session_state["ai_summary"]}</div>
-                </div>
-                """, unsafe_allow_html=True)
+                st.markdown(ai_insight_card(title="AI Market Insight", content=f"<div style='white-space:pre-line;'>{st.session_state['ai_summary']}</div>", confidence=None, status="neutral"), unsafe_allow_html=True)
         else:
             st.info("뉴스를 불러오지 못했어요.")
     except Exception as e:
