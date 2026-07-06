@@ -7,6 +7,7 @@ import requests
 import datetime as dt
 from data_utils import load_krx_listing, get_krx_name_map
 from ui_components import card, ACCENT, CANDLE_UP, CANDLE_DOWN, DIM, TEXT, SURFACE_1, SURFACE_2, LINE, BG
+from design.components import hero_card
 
 
 @st.cache_data(ttl=600)
@@ -312,15 +313,17 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
         except:
             pass
 
-    st.markdown(f"""
-    <div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:12px; padding:18px; margin-bottom:20px;'>
-        <div style='font-size:13px; color:{DIM}; margin-bottom:4px;'>{raw_ticker}</div>
-        <div style='font-size:22px; font-weight:700; margin-bottom:4px;'>{display_name}</div>
-        <div style='font-family:JetBrains Mono; font-size:28px; font-weight:700;'>{curr_price:,.0f}원
-            <span style='font-size:15px; color:{chg_color}; margin-left:8px;'>{chg_arrow} {chg:+,.0f}원 ({chg_pct:+.2f}%)</span>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    stock_status = "buy" if chg > 0 else ("warning" if chg < 0 else "neutral")
+    stock_delta_html = f"<span style='color:{chg_color};'>{chg_arrow} {chg:+,.0f}원 ({chg_pct:+.2f}%)</span> · <span style='color:{DIM};'>{data_label}</span>"
+    st.markdown(
+        hero_card(
+            title=f"{display_name} ({raw_ticker})",
+            value=f"{curr_price:,.0f}원",
+            subtitle=stock_delta_html,
+            status=stock_status
+        ),
+        unsafe_allow_html=True
+    )
 
     # ══════════════════════════════════════════
     # 1. 재무제표 분석
