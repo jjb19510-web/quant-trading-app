@@ -3,6 +3,7 @@ import yfinance as yf
 import pandas as pd
 import plotly.graph_objects as go
 from ui_components import card, CANDLE_UP, CANDLE_DOWN, DIM, TEXT, SURFACE_1, LINE, BG, SURFACE_2
+from design.components import kpi_card
 
 @st.cache_data(ttl=86400)
 def get_krx_name_map():
@@ -48,15 +49,10 @@ def render_dashboard():
     def render_index_card(col, idx, margin_top=False):
         color = CANDLE_UP if idx["change"] >= 0 else CANDLE_DOWN
         arrow = "▲" if idx["change"] >= 0 else "▼"
-        mt = "margin-top:16px;" if margin_top else ""
         with col:
-            st.markdown(f"""
-            <div style='background:{SURFACE_1}; border:0.5px solid {LINE}; border-radius:12px; padding:12px 16px; margin-bottom:16px; {mt}'>
-                <div style='font-size:11px; color:#9ca3af; margin-bottom:4px; font-weight:500;'>{idx["name"]}</div>
-                <div style='font-family:JetBrains Mono; font-size:18px; font-weight:600;'>{idx["price"]:,.2f}</div>
-                <div style='font-family:JetBrains Mono; font-size:12px; color:{color}; margin-top:2px;'>{arrow} {idx["change"]:+,.2f} ({idx["pct"]:+.2f}%)</div>
-            </div>
-            """, unsafe_allow_html=True)
+            # Phase 2-2: 전체 지수 카드 kpi_card()로 통일 (코스피/코스닥/나스닥/원달러/WTI유/금/미국10년채)
+            delta_html = f"<span style='color:{color};'>{arrow} {idx['change']:+,.2f} ({idx['pct']:+.2f}%)</span>"
+            st.markdown(kpi_card(idx["name"], f"{idx['price']:,.2f}", delta=delta_html), unsafe_allow_html=True)
 
     indices = get_market_indices()
     if indices:
