@@ -2,6 +2,7 @@ import streamlit as st
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import pandas as pd
+from design import theme, components
 
 # ── 색상 테마 ──
 ACCENT = "#3b82f6"
@@ -19,6 +20,8 @@ BG = "#080a0f"
 
 
 def apply_custom_css():
+    st.markdown(theme.get_global_css(), unsafe_allow_html=True)
+    st.markdown(components.get_component_css(), unsafe_allow_html=True)
     st.markdown(f"""
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap');

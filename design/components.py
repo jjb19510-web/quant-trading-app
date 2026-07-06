@@ -16,8 +16,8 @@ from design import tokens as t
 
 def status_badge(status: str) -> str:
     label = t.STATUS_LABELS.get(status, t.STATUS_LABELS["neutral"])
-    color = t.STATUS_COLORS.get(status, t.STATUS_COLORS["neutral"])
-    return f"<span class='qf-status-badge' style='color:{color}; border-color:{color}40; background:{color}1a;'>{label}</span>"
+    css_class = status.replace("_", "-")
+    return f"<span class='qf-status-badge {css_class}'>{label}</span>"
 
 
 def kpi_card(title: str, value: str, delta: str = None, status: str = None, icon: str = None) -> str:
@@ -64,11 +64,39 @@ def get_component_css() -> str:
         display: inline-block;
         font-size: 11px;
         font-family: var(--qf-font-mono);
-        font-weight: 600;
         padding: 2px 10px;
         border-radius: 20px;
-        border: 1px solid;
         margin-left: 8px;
+      }}
+      .qf-status-badge.strong-buy {{
+        color: var(--qf-up);
+        background: rgba(239, 68, 68, 0.16);
+        border: 1px solid rgba(239, 68, 68, 0.42);
+        font-weight: 700;
+      }}
+      .qf-status-badge.buy {{
+        color: #f87171;
+        background: rgba(248, 113, 113, 0.10);
+        border: 1px solid rgba(248, 113, 113, 0.28);
+        font-weight: 600;
+      }}
+      .qf-status-badge.neutral {{
+        color: var(--qf-dim);
+        background: rgba(156, 163, 175, 0.10);
+        border: 1px solid rgba(156, 163, 175, 0.28);
+        font-weight: 600;
+      }}
+      .qf-status-badge.warning {{
+        color: var(--qf-warning);
+        background: rgba(245, 158, 11, 0.12);
+        border: 1px solid rgba(245, 158, 11, 0.32);
+        font-weight: 600;
+      }}
+      .qf-status-badge.risk {{
+        color: var(--qf-risk);
+        background: rgba(220, 38, 38, 0.16);
+        border: 1px solid rgba(220, 38, 38, 0.42);
+        font-weight: 700;
       }}
 
       .qf-kpi-card {{
