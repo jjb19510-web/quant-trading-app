@@ -437,12 +437,8 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
             (v6, "배당수익률", nv.get("div_yield","N/A")),
         ]:
             with col:
-                st.markdown(f"""
-                <div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:10px; padding:12px; text-align:center; margin-bottom:8px;'>
-                    <div style='font-size:10px; color:{DIM}; margin-bottom:4px;'>{label}</div>
-                    <div style='font-size:14px; font-weight:700; font-family:JetBrains Mono;'>{value}</div>
-                </div>
-                """, unsafe_allow_html=True)
+                value_html = f"<span style='font-family:JetBrains Mono; font-size:15px;'>{value}</span>"
+                st.markdown(kpi_card(title=label, value=value_html), unsafe_allow_html=True)
 
     except Exception as e:
         st.info(f"재무 데이터 조회 실패: {e}")

@@ -27,6 +27,7 @@ from data_utils import (
 )
 from dashboard import render_dashboard
 from portfolio import render_portfolio
+from design.components import status_badge, kpi_card
 
 # ── [안전 우회 컴파일 엔진] strategies.py 파일의 인자 수집 규격을 자동 판별하여 수수료 및 돌파전략 수동 보정 계산 수행 ──
 def safe_run_strategy(df, strategy, rsi_threshold, ma_short, ma_long, bb_period, fee_pct=0.0, open_p=None, high_p=None, low_p=None):
@@ -271,6 +272,15 @@ with tab2:
                         save_notes(st.session_state.notes)
                         st.success("저장됐어요!")
 
+        strategy_type_status = {
+            "RSI 전략 (RSI)": "neutral",
+            "이동평균선 전략 (Moving Average)": "buy",
+            "볼린저 밴드 전략 (Bollinger Bands)": "neutral",
+            "MACD 전략 (MACD)": "buy",
+            "변동성 돌파 전략 (Volatility Breakout)": "warning",
+            "복합 전략 (Combined)": "buy",
+        }
+
         with st.expander("📐 전략 설정", expanded=True):
             strategy = st.selectbox("전략 선택", [
                 "RSI 전략 (RSI)",
@@ -280,34 +290,37 @@ with tab2:
                 "변동성 돌파 전략 (Volatility Breakout)",
                 "복합 전략 (Combined)"
             ])
-            if strategy == "RSI 전략 (RSI)":
-                rsi_threshold = st.slider("RSI 기준값", 10, 70, 40)
-                ma_short, ma_long, bb_period = 20, 60, 20
-            elif strategy == "이동평균선 전략 (Moving Average)":
-                ma_short = st.slider("단기 MA", 5, 60, 20)
-                ma_long = st.slider("장기 MA", 20, 120, 60)
-                rsi_threshold, bb_period = 40, 20
-            elif strategy == "볼린저 밴드 전략 (Bollinger Bands)":
-                bb_period = st.slider("BB 기간", 5, 60, 20)
-                rsi_threshold, ma_short, ma_long = 40, 20, 60
-            elif strategy == "MACD 전략 (MACD)":
-                ma_short = st.slider("단기(Fast) EMA", 5, 40, 12)
-                ma_long = st.slider("장기(Slow) EMA", 20, 100, 26)
-                rsi_threshold, bb_period = 40, 20
-            elif strategy == "변동성 돌파 전략 (Volatility Breakout)":
-                rsi_threshold = st.slider("돌파 계수 (K)", 0.40, 0.90, 0.50, 0.05)
-                ma_short, ma_long, bb_period = 20, 60, 20
-            else:
-                rsi_threshold = st.slider("RSI 기준값", 10, 70, 40)
-                ma_short = st.slider("단기 MA", 5, 60, 20)
-                ma_long = st.slider("장기 MA", 20, 120, 60)
-                bb_period = 20
+            st.markdown(f"<div style='margin:-4px 0 12px 0;'>{status_badge(strategy_type_status.get(strategy, 'neutral'))}</div>", unsafe_allow_html=True)
+            with st.container(border=True):
+                if strategy == "RSI 전략 (RSI)":
+                    rsi_threshold = st.slider("RSI 기준값", 10, 70, 40)
+                    ma_short, ma_long, bb_period = 20, 60, 20
+                elif strategy == "이동평균선 전략 (Moving Average)":
+                    ma_short = st.slider("단기 MA", 5, 60, 20)
+                    ma_long = st.slider("장기 MA", 20, 120, 60)
+                    rsi_threshold, bb_period = 40, 20
+                elif strategy == "볼린저 밴드 전략 (Bollinger Bands)":
+                    bb_period = st.slider("BB 기간", 5, 60, 20)
+                    rsi_threshold, ma_short, ma_long = 40, 20, 60
+                elif strategy == "MACD 전략 (MACD)":
+                    ma_short = st.slider("단기(Fast) EMA", 5, 40, 12)
+                    ma_long = st.slider("장기(Slow) EMA", 20, 100, 26)
+                    rsi_threshold, bb_period = 40, 20
+                elif strategy == "변동성 돌파 전략 (Volatility Breakout)":
+                    rsi_threshold = st.slider("돌파 계수 (K)", 0.40, 0.90, 0.50, 0.05)
+                    ma_short, ma_long, bb_period = 20, 60, 20
+                else:
+                    rsi_threshold = st.slider("RSI 기준값", 10, 70, 40)
+                    ma_short = st.slider("단기 MA", 5, 60, 20)
+                    ma_long = st.slider("장기 MA", 20, 120, 60)
+                    bb_period = 20
 
         with st.expander("🎯 목표가 · 손절가 · 투입금액", expanded=False):
-            target_pct = st.number_input("목표 수익률 (%)", min_value=1, max_value=200, value=20, step=5)
-            stop_pct = st.number_input("손절 라인 (%)", min_value=1, max_value=50, value=10, step=1)
-            investment = st.number_input("투입금액 (만원)", min_value=0, value=1000, step=100)
-            st.caption(f"= {investment:,}만원 ({investment * 10000:,}원)")
+            with st.container(border=True):
+                target_pct = st.number_input("목표 수익률 (%)", min_value=1, max_value=200, value=20, step=5)
+                stop_pct = st.number_input("손절 라인 (%)", min_value=1, max_value=50, value=10, step=1)
+                investment = st.number_input("투입금액 (만원)", min_value=0, value=1000, step=100)
+            st.markdown(kpi_card(title="투입금액 요약", value=f"{investment:,}만원", delta=f"{investment * 10000:,}원 · 목표 +{target_pct}% / 손절 -{stop_pct}%"), unsafe_allow_html=True)
 
         with st.expander("📂 섹터 관리", expanded=False):
             sector_name = st.text_input("섹터 이름", placeholder="예: 반도체", key="sector_name_input")
