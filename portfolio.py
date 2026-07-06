@@ -5,9 +5,14 @@ import datetime as dt_module
 import json
 import requests as req
 from ui_components import card, SURFACE_1, SURFACE_2, LINE, DIM, TEXT, CANDLE_UP, CANDLE_DOWN, ACCENT
-from design.components import kpi_card
+from design.components import kpi_card, hero_card, ai_insight_card, status_badge
 
 GIST_FILENAME = "quantfolio_trades.json"
+
+
+def qf_icon(emoji):
+    """이모지를 qf-icon 클래스로 감싸는 헬퍼. 나중에 SVG 아이콘으로 교체할 때 이 함수만 바꾸면 됨."""
+    return f"<span class='qf-icon'>{emoji}</span>"
 
 
 def get_gist_id(token, debug=False):
@@ -293,40 +298,37 @@ def render_portfolio(KIS_AVAILABLE, get_kis_token, get_balance):
                     to_target = (target - buy) / buy * 100 if target else 0
                     to_stop = (buy - stop) / buy * 100 if stop else 0
 
+                holding_status_map = {"#22c55e": "buy", "#ef4444": "risk", "#f59e0b": "warning", "#6b7280": "neutral"}
+                trade_status = holding_status_map.get(status_color, "neutral")
+
                 st.markdown(f"""
-<div style='background:#13161f; border:0.5px solid #1e2330; border-radius:14px; padding:16px; margin-bottom:12px;'>
-    <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;'>
+<div style='background:#13161f; border:0.5px solid #1e2330; border-radius:14px; padding:16px 16px 4px; margin-bottom:8px;'>
+    <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;'>
         <div>
             <span style='font-size:16px; font-weight:700; color:#e2e8f0;'>{trade["name"]}</span>
             <span style='font-size:11px; color:#6b7280; margin-left:8px;'>{trade["code"]} · {trade["buy_date"]}</span>
         </div>
-        <div style='background:{status_bg}; border:0.5px solid {status_color}40; border-radius:20px; padding:4px 12px; font-size:11px; color:{status_color}; font-weight:600;'>{status_msg}</div>
+        {status_badge(trade_status)}
     </div>
-    <div style='display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:12px;'>
-        <div style='background:#0f1117; border-radius:8px; padding:10px; text-align:center;'>
-            <div style='font-size:10px; color:#6b7280; margin-bottom:2px;'>매수가</div>
-            <div style='font-size:13px; font-weight:600; font-family:JetBrains Mono;'>{buy:,}원</div>
-        </div>
-        <div style='background:#0f1117; border-radius:8px; padding:10px; text-align:center;'>
-            <div style='font-size:10px; color:#6b7280; margin-bottom:2px;'>현재가</div>
-            <div style='font-size:13px; font-weight:600; font-family:JetBrains Mono; color:{pnl_color};'>{f"{int(curr):,}원" if curr else "조회중"}</div>
-        </div>
-        <div style='background:#0f1117; border-radius:8px; padding:10px; text-align:center;'>
-            <div style='font-size:10px; color:#6b7280; margin-bottom:2px;'>목표가</div>
-            <div style='font-size:13px; font-weight:600; font-family:JetBrains Mono; color:#22c55e;'>{target:,}원</div>
-        </div>
-        <div style='background:#0f1117; border-radius:8px; padding:10px; text-align:center;'>
-            <div style='font-size:10px; color:#6b7280; margin-bottom:2px;'>손절가</div>
-            <div style='font-size:13px; font-weight:600; font-family:JetBrains Mono; color:#ef4444;'>{stop:,}원</div>
-        </div>
-    </div>
-    <div style='display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:#0f1117; border-radius:8px; margin-bottom:10px;'>
-        <span style='font-size:12px; color:#6b7280;'>{qty}주 · 투입 {total_cost/10000:,.0f}만원</span>
-        <span style='font-size:15px; font-weight:700; color:{pnl_color}; font-family:JetBrains Mono;'>{pnl_arrow} {abs(pnl):,.0f}원 ({pnl_pct:+.2f}%)</span>
-    </div>
-    {f'<div style="font-size:11px; color:#6b7280; margin-bottom:8px;">📝 {trade["memo"]}</div>' if trade["memo"] else ""}
+    <div style='font-size:11px; color:{status_color}; margin-bottom:8px;'>{status_msg}</div>
 </div>
                 """, unsafe_allow_html=True)
+
+                m1, m2, m3, m4 = st.columns(4)
+                with m1:
+                    st.markdown(kpi_card(title="매수가", value=f"{buy:,}원"), unsafe_allow_html=True)
+                with m2:
+                    curr_display = f"<span style='color:{pnl_color};'>{f'{int(curr):,}원' if curr else '조회중'}</span>"
+                    st.markdown(kpi_card(title="현재가", value=curr_display), unsafe_allow_html=True)
+                with m3:
+                    st.markdown(kpi_card(title="목표가", value=f"<span style='color:#22c55e;'>{target:,}원</span>"), unsafe_allow_html=True)
+                with m4:
+                    st.markdown(kpi_card(title="손절가", value=f"<span style='color:#ef4444;'>{stop:,}원</span>"), unsafe_allow_html=True)
+
+                pnl_html = f"<span style='color:{pnl_color};'>{pnl_arrow} {abs(pnl):,.0f}원 ({pnl_pct:+.2f}%)</span>"
+                st.markdown(kpi_card(title=f"{qty}주 · 투입 {total_cost/10000:,.0f}만원", value=pnl_html), unsafe_allow_html=True)
+                if trade["memo"]:
+                    st.markdown(f"<div style='font-size:11px; color:#6b7280; margin:4px 0 8px;'>{qf_icon('📝')} {trade['memo']}</div>", unsafe_allow_html=True)
 
                 now_time = dt_module.datetime.now().time()
                 time_stop = dt_module.time(14, 30)
@@ -373,26 +375,24 @@ def render_portfolio(KIS_AVAILABLE, get_kis_token, get_balance):
                     rec_color = "#6b7280"
                     rec_reason = "현재가를 확인할 수 없어요"
 
-                st.markdown(f"""
-<div style='background:#0f1117; border:1px solid {rec_color}40; border-radius:10px; padding:14px 16px; margin-bottom:10px;'>
-    <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;'>
-        <span style='font-size:13px; font-weight:700; color:{rec_color};'>{rec_action}</span>
-        <span style='font-size:14px; font-weight:700; font-family:JetBrains Mono; color:{rec_color};'>{rec_price:,}원</span>
-    </div>
-    <div style='font-size:11px; color:#6b7280; margin-bottom:10px;'>{rec_reason}</div>
-    <div style='display:flex; gap:8px; font-size:11px; color:#6b7280; flex-wrap:wrap;'>
-        <span>1단계 +3%: <b style='color:#22c55e;'>{stage1_price:,}원</b></span>
-        <span>|</span>
-        <span>2단계 +5%: <b style='color:#22c55e;'>{stage2_price:,}원</b></span>
-        <span>|</span>
-        <span>자동손절 -3%: <b style='color:#ef4444;'>{auto_stop:,}원</b></span>
-        <span>|</span>
-        <span>시간손절: <b style='color:#ef4444;'>14:30</b></span>
-    </div>
-</div>
-                """, unsafe_allow_html=True)
+                rec_status = "buy" if rec_color == "#22c55e" else ("risk" if rec_color == "#ef4444" else "neutral")
+                ai_sell_content = (
+                    f"<div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;'>"
+                    f"<span style='font-weight:700; color:{rec_color};'>{rec_action}</span>"
+                    f"<span style='font-family:JetBrains Mono; font-weight:700; color:{rec_color};'>{rec_price:,}원</span>"
+                    f"</div>"
+                    f"<div style='margin-bottom:10px;'>{rec_reason}</div>"
+                    f"<div style='display:flex; gap:8px; flex-wrap:wrap; font-size:11px; color:#6b7280;'>"
+                    f"<span>1단계 +3%: <b style='color:#22c55e;'>{stage1_price:,}원</b></span><span>|</span>"
+                    f"<span>2단계 +5%: <b style='color:#22c55e;'>{stage2_price:,}원</b></span><span>|</span>"
+                    f"<span>자동손절 -3%: <b style='color:#ef4444;'>{auto_stop:,}원</b></span><span>|</span>"
+                    f"<span>시간손절: <b style='color:#ef4444;'>14:30</b></span>"
+                    f"</div>"
+                )
+                st.markdown(ai_insight_card(title="AI 매도 전략", content=ai_sell_content, confidence=None, status=rec_status), unsafe_allow_html=True)
 
-                sc1, sc2, sc3 = st.columns([2, 1, 1])
+                sc_container = st.container(border=True)
+                sc1, sc2, sc3 = sc_container.columns([2, 1, 1])
                 with sc1:
                     sell_price = st.number_input(
                         "매도가 입력 (AI 추천가 자동 입력)",
@@ -429,22 +429,14 @@ def render_portfolio(KIS_AVAILABLE, get_kis_token, get_balance):
                     for t in closed if t.get("sell_price")
                 ) / len(closed)
 
-                st.markdown(f"""
-<div style='display:flex; gap:16px; margin-bottom:16px;'>
-    <div style='background:#13161f; border-radius:8px; padding:10px 16px;'>
-        <div style='font-size:10px; color:#6b7280;'>총 손익</div>
-        <div style='font-size:16px; font-weight:700; color:{pnl_color};'>{total_pnl:+,.0f}원</div>
-    </div>
-    <div style='background:#13161f; border-radius:8px; padding:10px 16px;'>
-        <div style='font-size:10px; color:#6b7280;'>승률</div>
-        <div style='font-size:16px; font-weight:700;'>{len(wins)}/{len(closed)} ({len(wins)/len(closed)*100:.0f}%)</div>
-    </div>
-    <div style='background:#13161f; border-radius:8px; padding:10px 16px;'>
-        <div style='font-size:10px; color:#6b7280;'>평균 수익률</div>
-        <div style='font-size:16px; font-weight:700; color:{"#22c55e" if avg_pnl_pct >= 0 else "#ef4444"};'>{avg_pnl_pct:+.2f}%</div>
-    </div>
-</div>
-                """, unsafe_allow_html=True)
+                cc1, cc2, cc3 = st.columns(3)
+                with cc1:
+                    st.markdown(kpi_card(title="총 손익", value=f"<span style='color:{pnl_color};'>{total_pnl:+,.0f}원</span>"), unsafe_allow_html=True)
+                with cc2:
+                    st.markdown(kpi_card(title="승률", value=f"{len(wins)}/{len(closed)} ({len(wins)/len(closed)*100:.0f}%)"), unsafe_allow_html=True)
+                with cc3:
+                    avg_color = "#22c55e" if avg_pnl_pct >= 0 else "#ef4444"
+                    st.markdown(kpi_card(title="평균 수익률", value=f"<span style='color:{avg_color};'>{avg_pnl_pct:+.2f}%</span>"), unsafe_allow_html=True)
 
                 closed_rows = []
                 for t in sorted(closed, key=lambda x: x.get("sell_date", ""), reverse=True):
@@ -471,7 +463,8 @@ def render_portfolio(KIS_AVAILABLE, get_kis_token, get_balance):
                     with dcol1:
                         pnl = t.get("final_pnl", 0)
                         c = "#22c55e" if pnl >= 0 else "#ef4444"
-                        st.markdown(f"<div style='font-size:12px; color:#9ca3af; padding-top:6px;'>{t['name']} ({t['buy_date'][:10]} → {t.get('sell_date','')[:10]}) · <span style='color:{c};'>{pnl:+,.0f}원</span></div>", unsafe_allow_html=True)
+                        row_badge = status_badge("buy" if pnl >= 0 else "warning")
+                        st.markdown(f"<div style='font-size:12px; color:#9ca3af; padding-top:6px;'>{t['name']} ({t['buy_date'][:10]} → {t.get('sell_date','')[:10]}) · <span style='color:{c};'>{pnl:+,.0f}원</span> {row_badge}</div>", unsafe_allow_html=True)
                     with dcol2:
                         if st.button("🗑 삭제", key=f"del_closed_{t['id']}", use_container_width=True):
                             st.session_state["daytrading"] = [x for x in st.session_state["daytrading"] if x["id"] != t["id"]]
@@ -521,8 +514,9 @@ def render_portfolio(KIS_AVAILABLE, get_kis_token, get_balance):
         ]
         for col, label, value, is_good in metrics:
             color = "#22c55e" if is_good else "#ef4444" if is_good is not None else TEXT
+            m_status = "buy" if is_good is True else ("warning" if is_good is False else "neutral")
             with col:
-                st.markdown(f"<div style='background:{SURFACE_2}; border-radius:10px; padding:12px 16px; text-align:center; margin-bottom:12px;'><div style='font-size:11px; color:{DIM}; margin-bottom:4px;'>{label}</div><div style='font-size:18px; font-weight:700; color:{color};'>{value}</div></div>", unsafe_allow_html=True)
+                st.markdown(kpi_card(title=label, value=f"<span style='color:{color};'>{value}</span>", status=m_status), unsafe_allow_html=True)
 
         # 복기 인사이트
         insights = []
