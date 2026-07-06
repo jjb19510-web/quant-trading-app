@@ -5,6 +5,7 @@ import datetime as dt_module
 import json
 import requests as req
 from ui_components import card, SURFACE_1, SURFACE_2, LINE, DIM, TEXT, CANDLE_UP, CANDLE_DOWN, ACCENT
+from design.components import kpi_card
 
 GIST_FILENAME = "quantfolio_trades.json"
 
@@ -105,29 +106,19 @@ def render_portfolio(KIS_AVAILABLE, get_kis_token, get_balance):
 
                 profit_color = "#ef4444" if total_profit >= 0 else "#3b82f6"
                 profit_arrow = "▲" if total_profit >= 0 else "▼"
-                st.markdown(f"""
-                <div style='display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px;'>
-                  <div style='background:#0f1117; border:0.5px solid #1e2330; border-radius:12px; padding:16px 20px;'>
-                    <div style='font-size:11px; color:#9ca3af; margin-bottom:6px;'>💼 총 평가금액</div>
-                    <div style='font-size:22px; font-weight:600; font-family:JetBrains Mono;'>{total_eval:,}원</div>
-                  </div>
-                  <div style='background:#0f1117; border:0.5px solid rgba(239,68,68,0.3); border-radius:12px; padding:16px 20px;'>
-                    <div style='font-size:11px; color:#9ca3af; margin-bottom:6px;'>📈 평가손익</div>
-                    <div style='font-size:22px; font-weight:600; font-family:JetBrains Mono; color:{profit_color};'>{profit_arrow} {total_profit:+,}원</div>
-                  </div>
-                  <div style='background:#0f1117; border:0.5px solid #1e2330; border-radius:12px; padding:16px 20px;'>
-                    <div style='font-size:11px; color:#9ca3af; margin-bottom:6px;'>💰 예수금 (결제대기 포함)</div>
-                    <div style='font-size:22px; font-weight:600; font-family:JetBrains Mono;'>{cash:,}원</div>
-                  </div>
-                  <div style='background:#0f1117; border:0.5px solid #1e2330; border-radius:12px; padding:16px 20px;'>
-                    <div style='font-size:11px; color:#9ca3af; margin-bottom:6px;'>🏧 실제 출금가능 (D+2 결제 후)</div>
-                    <div style='font-size:22px; font-weight:600; font-family:JetBrains Mono;'>{withdrawable:,}원</div>
-                  </div>
-                </div>
-                <div style='font-size:11px; color:#6b7280; margin-bottom:20px;'>
-                    💡 매수 체결 후 실제 대금 결제까지 2영업일(D+2)이 걸려요. 예수금은 결제 전 금액을 포함하므로, 실제 사용 가능한 금액은 '출금가능금액'을 참고하세요.
-                </div>
-                """, unsafe_allow_html=True)
+
+                p1, p2, p3, p4 = st.columns(4)
+                with p1:
+                    st.markdown(kpi_card("총 평가금액", f"{total_eval:,}원"), unsafe_allow_html=True)
+                with p2:
+                    profit_value_html = f"<span style='color:{profit_color};'>{profit_arrow} {total_profit:+,}원</span>"
+                    st.markdown(kpi_card("평가손익", profit_value_html), unsafe_allow_html=True)
+                with p3:
+                    st.markdown(kpi_card("예수금 (결제대기 포함)", f"{cash:,}원"), unsafe_allow_html=True)
+                with p4:
+                    st.markdown(kpi_card("실제 출금가능 (D+2 결제 후)", f"{withdrawable:,}원"), unsafe_allow_html=True)
+
+                st.markdown("<div style='font-size:11px; color:#6b7280; margin-bottom:20px;'>💡 매수 체결 후 실제 대금 결제까지 2영업일(D+2)이 걸려요. 예수금은 결제 전 금액을 포함하므로, 실제 사용 가능한 금액은 '출금가능금액'을 참고하세요.</div>", unsafe_allow_html=True)
 
                 card("📋 보유종목", "현재 포지션 기준")
                 holdings_list = balance_data.get("output1", [])
