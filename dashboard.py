@@ -3,6 +3,7 @@ import yfinance as yf
 import pandas as pd
 import plotly.graph_objects as go
 from ui_components import card, CANDLE_UP, CANDLE_DOWN, DIM, TEXT, SURFACE_1, LINE, BG, SURFACE_2
+from design.components import status_badge
 from design.components import kpi_card
 
 @st.cache_data(ttl=86400)
@@ -83,12 +84,21 @@ def render_dashboard():
                         chg = hist["Close"].iloc[-1] - hist["Close"].iloc[-2]
                         chg_pct = (chg / hist["Close"].iloc[-2]) * 100
                         display = name_map.get(item, item)
+                        try:
+                            from score_engine import calculate_quantfolio_score
+                            score_info = calculate_quantfolio_score(close=hist["Close"], high=hist["High"], low=hist["Low"], volume=hist["Volume"])
+                            score_label = f"{score_info['score']:.0f} · {score_info['grade']}"
+                        except Exception:
+                            score_info = None
+                            score_label = "N/A"
                         result.append({
                             "종목": f"{display} ({item})",
                             "현재가": f"{int(curr):,}원",
                             "1년 수익률": f"{ret:+.1f}%",
                             "전일비": f"{chg_pct:+.2f}%",
-                            "_ret": ret
+                            "Q-Score": score_label,
+                            "_ret": ret,
+                            "_score": score_info
                         })
                 except:
                     pass
@@ -97,8 +107,8 @@ def render_dashboard():
         with st.spinner("관심종목 수익률 조회 중..."):
             wl_data = get_watchlist_returns(tuple(st.session_state.watchlist))
         if wl_data:
-            card("📊 관심종목 수익률 순위", "1년 수익률 기준")
-            display_df = pd.DataFrame([{k: v for k, v in d.items() if k != "_ret"} for d in wl_data])
+            card("📊 관심종목 수익률 순위", "1년 수익률 기준 · Quantfolio Score 포함")
+            display_df = pd.DataFrame([{k: v for k, v in d.items() if k not in ("_ret", "_score")} for d in wl_data])
             st.dataframe(display_df, use_container_width=True, hide_index=True)
 
     # ── 거래량 급증 감지 ──
@@ -124,12 +134,18 @@ def render_dashboard():
                     display = name_map.get(item, item)
 
                     if ratio >= 2.0:
+                        try:
+                            from score_engine import calculate_quantfolio_score
+                            score_info = calculate_quantfolio_score(close=hist["Close"], high=hist["High"], low=hist["Low"], volume=hist["Volume"])
+                        except Exception:
+                            score_info = None
                         result.append({
                             "종목": display,
                             "현재가": f"{int(curr):,}원",
                             "등락률": chg_pct,
                             "거래량 배수": ratio,
-                            "_ratio": ratio
+                            "_ratio": ratio,
+                            "_score": score_info
                         })
                 except:
                     pass
@@ -145,7 +161,9 @@ def render_dashboard():
                 badge = "🚨 폭발" if ratio >= 3 else "🔥 급증"
                 color = CANDLE_UP if item["등락률"] >= 0 else CANDLE_DOWN
                 arrow = "▲" if item["등락률"] >= 0 else "▼"
-                st.markdown(f"<div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:10px; padding:12px 16px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;'><div><span style='font-size:14px; font-weight:700; color:#e2e8f0;'>{item['종목']}</span> <span style='font-size:12px; background:#ef444420; color:#ef4444; border-radius:6px; padding:2px 8px; margin-left:8px;'>{badge} {ratio:.1f}배</span></div><div style='text-align:right;'><div style='font-size:14px; font-family:JetBrains Mono;'>{item['현재가']}</div><div style='font-size:12px; color:{color}; font-family:JetBrains Mono;'>{arrow} {item['등락률']:+.2f}%</div></div></div>", unsafe_allow_html=True)
+                score_info = item.get("_score")
+                score_html = f"<span style='font-family:JetBrains Mono; font-size:11px; color:var(--qf-accent); margin-left:8px;'>Q-Score {score_info['score']:.0f}·{score_info['grade']}</span>{status_badge(score_info['status'])}" if score_info else ""
+                st.markdown(f"<div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:10px; padding:12px 16px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;'><div><span style='font-size:14px; font-weight:700; color:#e2e8f0;'>{item['종목']}</span> <span style='font-size:12px; background:#ef444420; color:#ef4444; border-radius:6px; padding:2px 8px; margin-left:8px;'>{badge} {ratio:.1f}배</span>{score_html}</div><div style='text-align:right;'><div style='font-size:14px; font-family:JetBrains Mono;'>{item['현재가']}</div><div style='font-size:12px; color:{color}; font-family:JetBrains Mono;'>{arrow} {item['등락률']:+.2f}%</div></div></div>", unsafe_allow_html=True)
         else:
             if st.session_state.watchlist:
                 st.caption("관심종목 중 거래량 급증 종목이 없어요. (20일 평균 대비 2배 미만)")
