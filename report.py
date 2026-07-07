@@ -516,6 +516,12 @@ def render_daily_report():
                     rsi_series = calculate_rsi(close)
                     rsi_val = float(rsi_series.iloc[-1])
 
+                    try:
+                        from score_engine import calculate_quantfolio_score
+                        score_info = calculate_quantfolio_score(close=close, high=high, low=low, volume=volume)
+                    except Exception:
+                        score_info = None
+
                     today_open = float(hist["Open"].iloc[-1])
                     yesterday_high = float(high.iloc[-2])
                     yesterday_low = float(low.iloc[-2])
@@ -575,6 +581,7 @@ def render_daily_report():
                         "수급(5일)": supply_str,
                         "내일 변동성 목표가": f"{int(vb_target):,}원",
                         "진입 근거": basis,
+                        "_score": score_info,
                     })
                 except:
                     pass
@@ -595,7 +602,12 @@ def render_daily_report():
                 else:
                     sig_status = "neutral"
 
-                st.markdown(f"<div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:12px; padding:14px 16px 4px; margin-bottom:8px;'><div style='display:flex; justify-content:space-between; align-items:center;'><span style='font-size:15px; font-weight:700; color:{TEXT};'>{row['종목']}</span>{status_badge(sig_status)}</div></div>", unsafe_allow_html=True)
+                score_info = row.get("_score")
+                score_badge_html = ""
+                if score_info:
+                    score_badge_html = f"<span style='font-family:JetBrains Mono; font-size:12px; font-weight:700; color:{ACCENT}; margin-left:10px;'>Q-Score {score_info['score']:.0f} · {score_info['grade']}</span>{status_badge(score_info['status'])}"
+
+                st.markdown(f"<div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:12px; padding:14px 16px 4px; margin-bottom:8px;'><div style='display:flex; justify-content:space-between; align-items:center;'><span style='font-size:15px; font-weight:700; color:{TEXT};'>{row['종목']}</span><span>{status_badge(sig_status)}{score_badge_html}</span></div></div>", unsafe_allow_html=True)
 
                 sc1, sc2, sc3, sc4 = st.columns(4)
                 with sc1:
@@ -607,7 +619,11 @@ def render_daily_report():
                 with sc4:
                     st.markdown(kpi_card(title="변동성 목표가", value=row["내일 변동성 목표가"]), unsafe_allow_html=True)
 
-                st.markdown(f"<div style='font-size:11px; color:{DIM}; margin:2px 0 16px;'>💡 {row['진입 근거']}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='font-size:11px; color:{DIM}; margin:2px 0 4px;'>💡 {row['진입 근거']}</div>", unsafe_allow_html=True)
+                if score_info:
+                    st.markdown(f"<div style='font-size:11px; color:{ACCENT}; margin:0 0 16px;'>🎯 {score_info['summary']}</div>", unsafe_allow_html=True)
+                else:
+                    st.markdown("<div style='margin-bottom:16px;'></div>", unsafe_allow_html=True)
 
         st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
 
