@@ -287,9 +287,27 @@ def render_summary_cards(invested, profit, profit_pct, final_val, excess):
     """, unsafe_allow_html=True)
 
 
+_EMOJI_TO_ICON = {
+    "🤖": "ai",
+    "📊": "market",
+    "💼": "portfolio",
+    "🔍": "search",
+    "📋": "report",
+    "🔬": "analysis",
+    "⚙️": "settings",
+    "⚠️": "warning",
+    "📈": "trade",
+}
+
+
 def card(title, sub=""):
+    display_title = title
+    for emoji, icon_key in _EMOJI_TO_ICON.items():
+        if title.startswith(emoji):
+            display_title = components.qf_icon(icon_key) + title[len(emoji):]
+            break
     st.markdown(
-        f"<div class='qf-card'><h3>{title}</h3><div class='qf-sub'>{sub}</div></div>",
+        f"<div class='qf-card'><h3>{display_title}</h3><div class='qf-sub'>{sub}</div></div>",
         unsafe_allow_html=True
     )
 
