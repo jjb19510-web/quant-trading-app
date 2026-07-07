@@ -73,6 +73,55 @@ def build_base_styles() -> str:
     """
 
 
+def build_button_styles() -> str:
+    """
+    Button System (Phase 4-3).
+    st.button()은 그대로 유지하고, Streamlit이 렌더링하는 kind="primary"/"secondary"
+    속성을 CSS로 스타일링한다. Danger/Ghost는 향후 커스텀 마커(.qf-btn-danger 등)로
+    감쌀 수 있도록 클래스만 미리 준비해둔다 (구조 준비 단계).
+    """
+    return """
+    div[data-testid="stButton"] button {
+      border-radius: var(--qf-radius-md);
+      transition: all var(--qf-duration-base) var(--qf-easing);
+      font-weight: 600;
+      padding: 0.5rem 1rem;
+    }
+    div[data-testid="stButton"] button:hover {
+      transform: translateY(-1px);
+    }
+    div[data-testid="stButton"] button[kind="primary"] {
+      background: var(--qf-accent);
+      border: none;
+      color: white;
+    }
+    div[data-testid="stButton"] button[kind="primary"]:hover {
+      filter: brightness(1.1);
+      box-shadow: var(--qf-shadow-hover);
+    }
+    div[data-testid="stButton"] button[kind="secondary"] {
+      background: var(--qf-surface-2);
+      border: 0.5px solid var(--qf-line);
+      color: var(--qf-text);
+    }
+    div[data-testid="stButton"] button[kind="secondary"]:hover {
+      border-color: var(--qf-accent);
+      background: var(--qf-surface-3);
+    }
+    /* Danger / Ghost: 구조만 준비 (향후 st.container에 이 클래스를 씌워 사용) */
+    .qf-btn-danger button {
+      background: rgba(220,38,38,0.12) !important;
+      border: 0.5px solid rgba(220,38,38,0.4) !important;
+      color: var(--qf-risk) !important;
+    }
+    .qf-btn-ghost button {
+      background: transparent !important;
+      border: 0.5px solid var(--qf-line) !important;
+      color: var(--qf-dim) !important;
+    }
+    """
+
+
 def build_animation_keyframes() -> str:
     return """
     @keyframes qf-fade-in {
@@ -102,6 +151,7 @@ def build_theme_css() -> str:
         f"<style>{FONT_IMPORTS}"
         f"{build_root_variables()}"
         f"{build_base_styles()}"
+        f"{build_button_styles()}"
         f"{build_animation_keyframes()}"
         f"</style>"
     )

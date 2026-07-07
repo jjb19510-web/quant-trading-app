@@ -343,7 +343,7 @@ with tab2:
                             st.rerun()
 
         st.markdown("<div style='margin-top:8px;'></div>", unsafe_allow_html=True)
-        analyze = st.button("🔍 분석 시작", use_container_width=True)
+        analyze = st.button("🔍 분석 시작", use_container_width=True, type="primary")
         if strategy == "변동성 돌파 전략 (Volatility Breakout)":
             optimize = False
             wf_test = False
