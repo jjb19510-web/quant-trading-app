@@ -7,7 +7,7 @@ import requests
 import datetime as dt
 from data_utils import load_krx_listing, get_krx_name_map
 from ui_components import card, ACCENT, CANDLE_UP, CANDLE_DOWN, DIM, TEXT, SURFACE_1, SURFACE_2, LINE, BG
-from design.components import hero_card, ai_insight_card, kpi_card, status_badge
+from design.components import hero_card, ai_insight_card, kpi_card, status_badge, score_card
 
 
 @st.cache_data(ttl=600)
@@ -324,6 +324,30 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
         ),
         unsafe_allow_html=True
     )
+
+    # ── Quantfolio Score™ (Phase 5-1B) ──
+    try:
+        from score_engine import calculate_quantfolio_score
+        score_result = calculate_quantfolio_score(close=close, high=high, low=low, volume=volume)
+        score_sub_components = [
+            ("Trend", score_result["components"]["trend"]),
+            ("Momentum", score_result["components"]["momentum"]),
+            ("Volume", score_result["components"]["volume"]),
+            ("Risk", score_result["components"]["risk"]),
+        ]
+        st.markdown(
+            score_card(
+                score=score_result["score"],
+                grade=score_result["grade"],
+                status=score_result["status"],
+                label=score_result["label"],
+                components=score_sub_components,
+                summary=score_result["summary"],
+            ),
+            unsafe_allow_html=True
+        )
+    except Exception as e:
+        st.caption(f"Quantfolio Score 계산 불가 ({e})")
 
     # ══════════════════════════════════════════
     # 1. 재무제표 분석

@@ -110,6 +110,30 @@ def hero_card(title: str, value: str, subtitle: str = None, status: str = None) 
     )
 
 
+def score_card(score, grade, status, label, components, summary) -> str:
+    """
+    Quantfolio Score™ 카드.
+    components: [(라벨, 값), ...] 형태의 리스트 (예: [("Trend", 88.0), ...])
+    """
+    badge_html = status_badge(status)
+    sub_rows = "".join(
+        f"<div class='qf-score-sub'><span class='qf-score-sub-label'>{name}</span><span class='qf-score-sub-value'>{value:.0f}</span></div>"
+        for name, value in components
+    )
+    return (
+        f"<div class='qf-score-card qf-fade-in'>"
+        f"<div class='qf-score-head'><span class='qf-score-title'>Quantfolio Score™</span>{badge_html}</div>"
+        f"<div class='qf-score-main'>"
+        f"<span class='qf-score-value'>{score:.0f}</span>"
+        f"<span class='qf-score-grade'>{grade}</span>"
+        f"<span class='qf-score-label'>{label}</span>"
+        f"</div>"
+        f"<div class='qf-score-subgrid'>{sub_rows}</div>"
+        f"<div class='qf-score-summary'>{summary}</div>"
+        f"</div>"
+    )
+
+
 def ai_insight_card(title: str, content: str, confidence: str = None, status: str = None) -> str:
     confidence_html = f"<span class='qf-ai-card-confidence'>AI Confidence {confidence}</span>" if confidence else ""
     badge_html = status_badge(status) if status else ""
@@ -263,6 +287,80 @@ def get_component_css() -> str:
         font-family: var(--qf-font-mono);
         font-size: 10.5px;
         color: {t.AI};
+      }}
+
+      .qf-score-card {{
+        background: var(--qf-glass-bg);
+        backdrop-filter: var(--qf-glass-blur);
+        -webkit-backdrop-filter: var(--qf-glass-blur);
+        border: 1px solid var(--qf-line);
+        border-radius: var(--qf-radius-lg);
+        padding: var(--qf-space-lg);
+        margin-bottom: var(--qf-space-md);
+      }}
+      .qf-score-head {{
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 10px;
+      }}
+      .qf-score-title {{
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--qf-dim);
+        letter-spacing: 0.03em;
+      }}
+      .qf-score-main {{
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        margin-bottom: var(--qf-space-md);
+      }}
+      .qf-score-value {{
+        font-family: var(--qf-font-mono);
+        font-size: 40px;
+        font-weight: 700;
+        color: var(--qf-accent);
+      }}
+      .qf-score-grade {{
+        font-family: var(--qf-font-mono);
+        font-size: 18px;
+        font-weight: 700;
+        color: var(--qf-text);
+      }}
+      .qf-score-label {{
+        font-size: 13px;
+        color: var(--qf-dim);
+      }}
+      .qf-score-subgrid {{
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+        margin-bottom: var(--qf-space-sm);
+      }}
+      .qf-score-sub {{
+        background: var(--qf-surface-1);
+        border-radius: var(--qf-radius-sm);
+        padding: 8px;
+        text-align: center;
+      }}
+      .qf-score-sub-label {{
+        display: block;
+        font-size: 10px;
+        color: var(--qf-dim);
+        margin-bottom: 2px;
+      }}
+      .qf-score-sub-value {{
+        display: block;
+        font-family: var(--qf-font-mono);
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--qf-text);
+      }}
+      .qf-score-summary {{
+        font-size: 12px;
+        color: var(--qf-dim);
+        line-height: 1.6;
       }}
     </style>
     """
