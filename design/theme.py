@@ -122,6 +122,41 @@ def build_button_styles() -> str:
     """
 
 
+def build_tab_styles() -> str:
+    """
+    Premium Top Tab (Phase 4-4).
+    st.tabs()의 DOM 구조는 그대로 두고, CSS로만 스타일링한다.
+    data-baseweb 속성은 Streamlit이 내부적으로 오래 사용해온 비교적 안정적인 selector.
+    """
+    return """
+    .stTabs [data-baseweb="tab-list"] {
+      gap: 4px;
+      border-bottom: 1px solid var(--qf-line);
+    }
+    .stTabs [data-baseweb="tab"] {
+      height: auto;
+      padding: 10px 18px;
+      background: transparent;
+      border-radius: var(--qf-radius-sm) var(--qf-radius-sm) 0 0;
+      color: var(--qf-dim);
+      font-weight: 600;
+      transition: all var(--qf-duration-base) var(--qf-easing);
+    }
+    .stTabs [data-baseweb="tab"]:hover {
+      color: var(--qf-text);
+      background: var(--qf-surface-2);
+    }
+    .stTabs [aria-selected="true"] {
+      color: var(--qf-accent) !important;
+      background: var(--qf-surface-2);
+    }
+    .stTabs [data-baseweb="tab-highlight"] {
+      background-color: var(--qf-accent);
+      height: 2px;
+    }
+    """
+
+
 def build_animation_keyframes() -> str:
     return """
     @keyframes qf-fade-in {
@@ -152,6 +187,7 @@ def build_theme_css() -> str:
         f"{build_root_variables()}"
         f"{build_base_styles()}"
         f"{build_button_styles()}"
+        f"{build_tab_styles()}"
         f"{build_animation_keyframes()}"
         f"</style>"
     )
