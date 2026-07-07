@@ -584,7 +584,30 @@ def render_daily_report():
             signal_rows = get_signal_report(tuple(st.session_state.watchlist))
 
         if signal_rows:
-            st.dataframe(pd.DataFrame(signal_rows), use_container_width=True, hide_index=True)
+            for row in signal_rows:
+                sig_text = row["신호"]
+                if "위험" in sig_text or "경고" in sig_text:
+                    sig_status = "risk"
+                elif "매수" in sig_text:
+                    sig_status = "buy"
+                elif "매도" in sig_text:
+                    sig_status = "warning"
+                else:
+                    sig_status = "neutral"
+
+                st.markdown(f"<div style='background:{SURFACE_2}; border:0.5px solid {LINE}; border-radius:12px; padding:14px 16px 4px; margin-bottom:8px;'><div style='display:flex; justify-content:space-between; align-items:center;'><span style='font-size:15px; font-weight:700; color:{TEXT};'>{row['종목']}</span>{status_badge(sig_status)}</div></div>", unsafe_allow_html=True)
+
+                sc1, sc2, sc3, sc4 = st.columns(4)
+                with sc1:
+                    st.markdown(kpi_card(title="RSI", value=row["RSI"]), unsafe_allow_html=True)
+                with sc2:
+                    st.markdown(kpi_card(title="거래량", value=row["거래량"]), unsafe_allow_html=True)
+                with sc3:
+                    st.markdown(kpi_card(title="수급(5일)", value=row["수급(5일)"]), unsafe_allow_html=True)
+                with sc4:
+                    st.markdown(kpi_card(title="변동성 목표가", value=row["내일 변동성 목표가"]), unsafe_allow_html=True)
+
+                st.markdown(f"<div style='font-size:11px; color:{DIM}; margin:2px 0 16px;'>💡 {row['진입 근거']}</div>", unsafe_allow_html=True)
 
         st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
 
