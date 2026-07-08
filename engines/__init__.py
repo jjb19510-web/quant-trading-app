@@ -6,3 +6,4 @@ Quantfolio Engines Package (Phase 5-3B)
 from .score_engine import calculate_quantfolio_score
 from .health_engine import calculate_portfolio_health
 from .radar_engine import calculate_radar_signal
+from .intelligence_engine import generate_intelligence_decision
