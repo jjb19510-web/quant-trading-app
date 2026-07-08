@@ -7,7 +7,7 @@ import requests
 import datetime as dt
 from data_utils import load_krx_listing, get_krx_name_map
 from ui_components import card, ACCENT, CANDLE_UP, CANDLE_DOWN, DIM, TEXT, SURFACE_1, SURFACE_2, LINE, BG
-from design.components import hero_card, ai_insight_card, kpi_card, status_badge, score_card
+from design.components import hero_card, ai_insight_card, kpi_card, status_badge, score_card, intelligence_card
 
 
 @st.cache_data(ttl=600)
@@ -348,6 +348,32 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
         )
     except Exception as e:
         st.caption(f"Quantfolio Score 계산 불가 ({e})")
+        score_result = None
+
+    # ── Intelligence Engine (Phase 5-4B) ──
+    try:
+        from engines import calculate_radar_signal, generate_intelligence_decision
+        radar_result = calculate_radar_signal(
+            close=close, high=high, low=low, volume=volume,
+            q_score=score_result["score"] if score_result else None
+        )
+        decision_result = generate_intelligence_decision(
+            score_info=score_result, radar_info=radar_result, health_info=None
+        )
+        st.markdown(
+            intelligence_card(
+                decision=decision_result["decision"],
+                confidence=decision_result["confidence"],
+                priority=decision_result["priority"],
+                status=decision_result["status"],
+                reasons=decision_result["reasons"],
+                actions=decision_result["actions"],
+                summary=decision_result["summary"],
+            ),
+            unsafe_allow_html=True
+        )
+    except Exception as e:
+        st.caption(f"AI Decision 계산 불가 ({e})")
 
     # ══════════════════════════════════════════
     # 1. 재무제표 분석

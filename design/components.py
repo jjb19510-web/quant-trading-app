@@ -167,6 +167,33 @@ def health_card(score, grade, status, components, recommendations, summary) -> s
     )
 
 
+def intelligence_card(decision, confidence, priority, status, reasons, actions, summary) -> str:
+    """
+    AI Decision Card — Intelligence Engine 결과 표시.
+    기존 score_card와 동일한 CSS 클래스(qf-score-card 등)를 재사용한다.
+    """
+    badge_html = status_badge(status)
+    reasons_html = "".join(f"<li>{r}</li>" for r in reasons)
+    actions_html = "".join(f"<li>{a}</li>" for a in actions)
+    return (
+        f"<div class='qf-score-card qf-fade-in'>"
+        f"<div class='qf-score-head'><span class='qf-score-title'>AI Decision</span>{badge_html}</div>"
+        f"<div class='qf-score-main'>"
+        f"<span class='qf-score-value' style='font-size:28px;'>{decision}</span>"
+        f"</div>"
+        f"<div class='qf-score-subgrid' style='grid-template-columns:repeat(2,1fr);'>"
+        f"<div class='qf-score-sub'><span class='qf-score-sub-label'>Confidence</span><span class='qf-score-sub-value'>{confidence}%</span></div>"
+        f"<div class='qf-score-sub'><span class='qf-score-sub-label'>Priority</span><span class='qf-score-sub-value'>{priority}</span></div>"
+        f"</div>"
+        f"<div style='font-size:11px; color:var(--qf-dim); margin-bottom:4px; font-weight:600;'>근거</div>"
+        f"<ul class='qf-health-recs'>{reasons_html}</ul>"
+        f"<div style='font-size:11px; color:var(--qf-dim); margin-bottom:4px; font-weight:600;'>추천 행동</div>"
+        f"<ul class='qf-health-recs'>{actions_html}</ul>"
+        f"<div class='qf-score-summary'>{summary}</div>"
+        f"</div>"
+    )
+
+
 def ai_insight_card(title: str, content: str, confidence: str = None, status: str = None) -> str:
     confidence_html = f"<span class='qf-ai-card-confidence'>AI Confidence {confidence}</span>" if confidence else ""
     badge_html = status_badge(status) if status else ""
