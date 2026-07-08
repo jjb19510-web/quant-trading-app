@@ -134,6 +134,39 @@ def score_card(score, grade, status, label, components, summary) -> str:
     )
 
 
+def health_card(score, grade, status, components, recommendations, summary) -> str:
+    """
+    Portfolio Health™ 카드.
+    components: {"diversification":.., "concentration":.., "cash_ratio":.., "volatility":.., "drawdown":..}
+    recommendations: [str, ...]
+    """
+    label_map = {
+        "diversification": "분산도",
+        "concentration": "집중도",
+        "cash_ratio": "현금비중",
+        "volatility": "변동성",
+        "drawdown": "손실위험",
+    }
+    badge_html = status_badge(status)
+    sub_rows = "".join(
+        f"<div class='qf-score-sub'><span class='qf-score-sub-label'>{label_map.get(k, k)}</span><span class='qf-score-sub-value'>{v:.0f}</span></div>"
+        for k, v in components.items()
+    )
+    rec_html = "".join(f"<li>{r}</li>" for r in recommendations)
+    return (
+        f"<div class='qf-score-card qf-fade-in'>"
+        f"<div class='qf-score-head'><span class='qf-score-title'>Portfolio Health™</span>{badge_html}</div>"
+        f"<div class='qf-score-main'>"
+        f"<span class='qf-score-value'>{score:.0f}</span>"
+        f"<span class='qf-score-grade'>{grade}</span>"
+        f"</div>"
+        f"<div class='qf-score-subgrid' style='grid-template-columns:repeat(5,1fr);'>{sub_rows}</div>"
+        f"<ul class='qf-health-recs'>{rec_html}</ul>"
+        f"<div class='qf-score-summary'>{summary}</div>"
+        f"</div>"
+    )
+
+
 def ai_insight_card(title: str, content: str, confidence: str = None, status: str = None) -> str:
     confidence_html = f"<span class='qf-ai-card-confidence'>AI Confidence {confidence}</span>" if confidence else ""
     badge_html = status_badge(status) if status else ""
@@ -361,6 +394,13 @@ def get_component_css() -> str:
         font-size: 12px;
         color: var(--qf-dim);
         line-height: 1.6;
+      }}
+      .qf-health-recs {{
+        margin: 0 0 var(--qf-space-sm) 0;
+        padding-left: 18px;
+        font-size: 12px;
+        color: var(--qf-text);
+        line-height: 1.8;
       }}
     </style>
     """

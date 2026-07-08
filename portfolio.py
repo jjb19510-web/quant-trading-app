@@ -5,7 +5,7 @@ import datetime as dt_module
 import json
 import requests as req
 from ui_components import card, SURFACE_1, SURFACE_2, LINE, DIM, TEXT, CANDLE_UP, CANDLE_DOWN, ACCENT
-from design.components import kpi_card, hero_card, ai_insight_card, status_badge, qf_icon
+from design.components import kpi_card, hero_card, ai_insight_card, status_badge, qf_icon, health_card
 
 GIST_FILENAME = "quantfolio_trades.json"
 
@@ -119,6 +119,36 @@ def render_portfolio(KIS_AVAILABLE, get_kis_token, get_balance):
                     st.markdown(kpi_card("실제 출금가능 (D+2 결제 후)", f"{withdrawable:,}원"), unsafe_allow_html=True)
 
                 st.markdown("<div style='font-size:11px; color:#6b7280; margin-bottom:20px;'>💡 매수 체결 후 실제 대금 결제까지 2영업일(D+2)이 걸려요. 예수금은 결제 전 금액을 포함하므로, 실제 사용 가능한 금액은 '출금가능금액'을 참고하세요.</div>", unsafe_allow_html=True)
+
+                # ── Portfolio Health™ (Phase 5-2B) ──
+                try:
+                    from health_engine import calculate_portfolio_health
+                    _health_src = balance_data.get("output1", [])
+                    holdings_for_health = [
+                        {
+                            "name": h.get("prdt_name", ""),
+                            "sector": "기타",
+                            "value": int(h.get("evlu_amt", 0)),
+                            "returns": None,
+                            "mdd": None,
+                        }
+                        for h in _health_src
+                        if int(h.get("hldg_qty", 0)) > 0
+                    ]
+                    health_result = calculate_portfolio_health(holdings_for_health, cash=cash)
+                    st.markdown(
+                        health_card(
+                            score=health_result["score"],
+                            grade=health_result["grade"],
+                            status=health_result["status"],
+                            components=health_result["components"],
+                            recommendations=health_result["recommendations"],
+                            summary=health_result["summary"],
+                        ),
+                        unsafe_allow_html=True
+                    )
+                except Exception as e:
+                    st.caption(f"Portfolio Health 계산 불가 ({e})")
 
                 card("📋 보유종목", "현재 포지션 기준")
                 holdings_list = balance_data.get("output1", [])
