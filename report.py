@@ -517,7 +517,7 @@ def render_daily_report():
                     rsi_val = float(rsi_series.iloc[-1])
 
                     try:
-                        from score_engine import calculate_quantfolio_score
+                        from engines import calculate_quantfolio_score
                         score_info = calculate_quantfolio_score(close=close, high=high, low=low, volume=volume)
                     except Exception:
                         score_info = None

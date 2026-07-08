@@ -327,7 +327,7 @@ def render_deep_analysis(KIS_AVAILABLE, get_kis_token):
 
     # ── Quantfolio Score™ (Phase 5-1B) ──
     try:
-        from score_engine import calculate_quantfolio_score
+        from engines import calculate_quantfolio_score
         score_result = calculate_quantfolio_score(close=close, high=high, low=low, volume=volume)
         score_sub_components = [
             ("Trend", score_result["components"]["trend"]),

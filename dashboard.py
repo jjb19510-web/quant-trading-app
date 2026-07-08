@@ -85,7 +85,7 @@ def render_dashboard():
                         chg_pct = (chg / hist["Close"].iloc[-2]) * 100
                         display = name_map.get(item, item)
                         try:
-                            from score_engine import calculate_quantfolio_score
+                            from engines import calculate_quantfolio_score
                             score_info = calculate_quantfolio_score(close=hist["Close"], high=hist["High"], low=hist["Low"], volume=hist["Volume"])
                             score_label = f"{score_info['score']:.0f} · {score_info['grade']}"
                         except Exception:
@@ -135,7 +135,7 @@ def render_dashboard():
 
                     if ratio >= 2.0:
                         try:
-                            from score_engine import calculate_quantfolio_score
+                            from engines import calculate_quantfolio_score
                             score_info = calculate_quantfolio_score(close=hist["Close"], high=hist["High"], low=hist["Low"], volume=hist["Volume"])
                         except Exception:
                             score_info = None

@@ -122,7 +122,7 @@ def render_portfolio(KIS_AVAILABLE, get_kis_token, get_balance):
 
                 # ── Portfolio Health™ (Phase 5-2B) ──
                 try:
-                    from health_engine import calculate_portfolio_health
+                    from engines import calculate_portfolio_health
                     _health_src = balance_data.get("output1", [])
                     holdings_for_health = [
                         {
